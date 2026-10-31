@@ -112,3 +112,5 @@ body.touch #crosshair div { inset: 9px; }
   #jobBox { width: 190px; padding: 6px 10px; }
   .hud-btn span { display: none; }
 }
+body.touch #vehicleHud { top: 128px; bottom: auto; min-width: 180px; padding: 6px 10px; font-size: 12px; }
+.tb-use { right: calc(76px + env(safe-area-inset-right)); top: 66px; bottom: auto; }

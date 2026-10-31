@@ -17,6 +17,36 @@
     "electron": "^33.2.0",
     "electron-builder": "^25.1.8",
     "esbuild": "^0.28.2",
+    "resedit": "^2.0.3",
     "three": "^0.170.0"
+  },
+  "build": {
+    "appId": "com.wreckingyard.game",
+    "productName": "Wrecking Yard",
+    "files": [
+      "electron/**",
+      "dist/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "build"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "electron/icon.png",
+      "signAndEditExecutable": false
+    },
+    "portable": {
+      "artifactName": "WreckingYard-${version}-Windows.exe"
+    },
+    "compression": "maximum",
+    "afterPack": "scripts/afterPack.cjs"
   }
 }

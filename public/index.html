@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#1a1d21">
+<title>Wrecking Yard</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game"></div>
+
+<!-- Loading / title -->
+<div id="title" class="screen">
+  <div class="title-card">
+    <div class="logo">
+      <div class="logo-stripes"></div>
+      <h1>WRECKING<span>YARD</span></h1>
+      <div class="logo-sub">Demolition &amp; Recycling Co.</div>
+    </div>
+    <div id="loadbar"><div id="loadfill"></div></div>
+    <div id="loadtext">Pouring concrete…</div>
+    <button id="playBtn" class="big-btn hidden">START SHIFT</button>
+    <div class="title-help hidden" id="titleHelp">
+      <p><b>Knock the house down, haul the rubble to the jaw crusher and get paid for every piece.</b></p>
+      <p>Spend your earnings on better tools, a bigger crusher, and a demolition excavator.</p>
+    </div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="topLeft">
+    <div id="money"><span class="cur">$</span><span id="moneyVal">0</span></div>
+    <div id="jobBox">
+      <div id="jobName">Job</div>
+      <div class="bar"><div id="jobFill"></div></div>
+      <div id="jobPct">0% cleared</div>
+    </div>
+  </div>
+  <div id="topRight">
+    <button class="hud-btn" id="shopBtn" title="Shop (B)">🛒<span>Shop</span></button>
+    <button class="hud-btn" id="helpBtn" title="Controls (H)">❔<span>Help</span></button>
+    <button class="hud-btn" id="settingsBtn" title="Settings">⚙️<span>Options</span></button>
+  </div>
+  <div id="crosshair"><div></div></div>
+  <div id="carry" class="hidden"><span id="carryIcon"></span><span id="carryVal">0/3</span></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="vehicleHud" class="hidden">
+    <div class="vh-title">TORVA TX-330 · Demolition Grapple</div>
+    <div class="vh-row"><span>Grapple</span><b id="vhGrab">OPEN</b></div>
+    <div class="vh-row"><span>Load</span><b id="vhLoad">0</b></div>
+  </div>
+  <div id="keyHints"></div>
+  <div id="toasts"></div>
+  <div id="popups"></div>
+</div>
+
+<!-- Mobile controls -->
+<div id="touch" class="hidden">
+  <div class="stick" id="stickL"><div class="knob"></div><label id="stickLLabel">MOVE</label></div>
+  <div class="stick hidden" id="stickR"><div class="knob"></div><label>SWING · BOOM</label></div>
+  <div id="tbtns-foot" class="tbtns">
+    <button data-act="hammer" class="tb tb-big">🔨</button>
+    <button data-act="pickup" class="tb">✋<small>PICK</small></button>
+    <button data-act="throw" class="tb">🧱<small>THROW</small></button>
+    <button data-act="jump" class="tb">⤒<small>JUMP</small></button>
+  </div>
+  <div id="tbtns-exc" class="tbtns hidden">
+    <button data-act="grab" class="tb tb-big">✊<small>GRAB</small></button>
+    <button data-act="stickOut" class="tb">⇱<small>ARM OUT</small></button>
+    <button data-act="stickIn" class="tb">⇲<small>ARM IN</small></button>
+    <button data-act="curlIn" class="tb">↻<small>CURL</small></button>
+    <button data-act="curlOut" class="tb">↺<small>UNCURL</small></button>
+  </div>
+  <button data-act="use" id="tbUse" class="tb tb-use hidden">ENTER</button>
+  <button data-act="cam" id="tbCam" class="tb tb-cam hidden">🎥</button>
+</div>
+
+<!-- Shop -->
+<div id="shop" class="panel hidden">
+  <div class="panel-head">
+    <h2>Yard Supply Co.</h2>
+    <div class="tabs"><button class="tab active" data-tab="tools">Upgrades</button><button class="tab" data-tab="jobs">Jobs</button></div>
+    <button class="close" data-close="shop">✕</button>
+  </div>
+  <div class="panel-body" id="shopBody"></div>
+</div>
+
+<!-- Help -->
+<div id="help" class="panel hidden">
+  <div class="panel-head"><h2>Controls</h2><button class="close" data-close="help">✕</button></div>
+  <div class="panel-body help-grid">
+    <div>
+      <h3>On foot</h3>
+      <ul>
+        <li><kbd>W A S D</kbd> walk · <kbd>Shift</kbd> run · <kbd>Space</kbd> jump</li>
+        <li><kbd>Mouse</kbd> look (click the game to lock the mouse)</li>
+        <li><kbd>Left click</kbd> swing hammer</li>
+        <li><kbd>Q</kbd> / <kbd>Right click</kbd> pick up rubble (hold)</li>
+        <li><kbd>G</kbd> throw rubble (aims at the hopper when you're close)</li>
+        <li><kbd>E</kbd> enter the excavator</li>
+        <li><kbd>B</kbd> shop · <kbd>H</kbd> help</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Excavator</h3>
+      <ul>
+        <li><kbd>W S</kbd> tracks forward / back · <kbd>A D</kbd> steer</li>
+        <li><kbd>←</kbd> <kbd>→</kbd> swing the house · <kbd>↑</kbd> <kbd>↓</kbd> boom</li>
+        <li><kbd>R</kbd> / <kbd>F</kbd> arm out / in · <kbd>Z</kbd> / <kbd>X</kbd> curl grapple</li>
+        <li><kbd>Left click</kbd> or <kbd>Space</kbd> close / open the grapple</li>
+        <li><kbd>C</kbd> cab camera · <kbd>E</kbd> climb out</li>
+      </ul>
+    </div>
+    <div>
+      <h3>How to earn</h3>
+      <ul>
+        <li>Break walls with the hammer, or rip them out with the excavator grapple.</li>
+        <li>Rubble that lands in the crusher hopper is crushed into gravel and sold.</li>
+        <li>Walls fall down when the pieces holding them up are gone, so cut low!</li>
+        <li>Clear 90% of a building to get the job bonus and unlock the next site.</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Settings -->
+<div id="settings" class="panel hidden">
+  <div class="panel-head"><h2>Options</h2><button class="close" data-close="settings">✕</button></div>
+  <div class="panel-body">
+    <div class="opt"><span>Graphics quality</span>
+      <select id="optQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
+    <div class="opt"><span>Master volume</span><input type="range" id="optVolume" min="0" max="1" step="0.05"></div>
+    <div class="opt"><span>Mouse sensitivity</span><input type="range" id="optSens" min="0.3" max="2.5" step="0.05"></div>
+    <div class="opt"><span>Invert look Y</span><input type="checkbox" id="optInvert"></div>
+    <div class="opt"><button class="small-btn" id="fullscreenBtn">Toggle fullscreen</button>
+      <button class="small-btn danger" id="resetBtn">Reset save</button></div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

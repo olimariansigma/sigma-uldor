@@ -1,0 +1,22 @@
+{
+  "name": "brickbreaker-demolition",
+  "productName": "Wrecking Yard",
+  "version": "1.0.0",
+  "description": "Wrecking Yard - a 3D demolition and crushing game",
+  "main": "electron/main.js",
+  "author": "Wrecking Yard",
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --serve",
+    "exe": "node scripts/build.mjs && electron-builder --win portable --x64",
+    "apk": "node scripts/build.mjs && bash scripts/build-apk.sh"
+  },
+  "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.14.0",
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8",
+    "esbuild": "^0.28.2",
+    "three": "^0.170.0"
+  }
+}

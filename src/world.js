@@ -4,15 +4,9 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import * as T from './textures.js';
 import { box, cyl, merge, mulberry } from './pieces.js';
 import { boxMapped } from './materials.js';
+import { SITE, terrainHeight, lakeDist } from './site.js';
 
-export const SITE = {
-  lotMin: new THREE.Vector2(-28, -30), lotMax: new THREE.Vector2(28, 24),
-  streetZ: 30.5,
-  houseCenter: new THREE.Vector3(0, 0, -7),
-  crusherPos: new THREE.Vector3(15, 0, 3), crusherRot: 0,
-  excavatorPos: new THREE.Vector3(-13, 0, 8), excavatorRot: Math.PI,
-  playerSpawn: new THREE.Vector3(4, 0.2, 15),
-};
+export { SITE };
 
 export function buildWorld(scene, renderer, physics, M) {
   const statics = []; // {pos, size, rotY}
@@ -60,28 +54,78 @@ export function buildWorld(scene, renderer, physics, M) {
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.035;
   scene.add(sun); scene.add(sun.target);
 
-  // ---------- terrain ----------
+  // ---------- terrain (heightfield with a lake bowl) ----------
   const grass = T.grassTextures();
-  const grassMat = new THREE.MeshStandardMaterial({ map: grass.map, normalMap: grass.normalMap, roughness: 0.95 });
-  grassMat.map.repeat.set(140, 140); grassMat.normalMap.repeat.set(140, 140);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(700, 700).rotateX(-Math.PI / 2), grassMat);
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  // dirt lot with soft edge
   const dirt = T.dirtTextures();
-  const lw = SITE.lotMax.x - SITE.lotMin.x + 6, ld = SITE.lotMax.y - SITE.lotMin.y + 4;
-  const mask = document.createElement('canvas'); mask.width = mask.height = 256;
-  const mctx = mask.getContext('2d');
-  mctx.fillStyle = '#000'; mctx.fillRect(0, 0, 256, 256);
-  mctx.filter = 'blur(10px)'; mctx.fillStyle = '#fff'; mctx.fillRect(16, 14, 224, 228);
-  const alphaMap = new THREE.CanvasTexture(mask);
-  const dirtMat = new THREE.MeshStandardMaterial({ map: dirt.map, normalMap: dirt.normalMap, roughness: 0.97, alphaMap, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 });
-  dirtMat.map.repeat.set(lw / 9, ld / 9); dirtMat.normalMap.repeat.set(lw / 9, ld / 9);
-  const lot = new THREE.Mesh(new THREE.PlaneGeometry(lw, ld).rotateX(-Math.PI / 2), dirtMat);
-  lot.position.set((SITE.lotMin.x + SITE.lotMax.x) / 2, 0.01, (SITE.lotMin.y + SITE.lotMax.y) / 2 - 1);
-  lot.receiveShadow = true; lot.renderOrder = -1;
-  scene.add(lot);
+  const TS = SITE.terrainSize, N = TS;
+  const tGeo = new THREE.PlaneGeometry(TS, TS, N, N).rotateX(-Math.PI / 2);
+  const tp = tGeo.attributes.position;
+  const mask = new Float32Array(tp.count * 2);
+  const rn = mulberry(77);
+  for (let i = 0; i < tp.count; i++) {
+    const x = tp.getX(i), z = tp.getZ(i);
+    tp.setY(i, terrainHeight(x, z));
+    const lx = Math.max(SITE.lotMin.x - x, x - SITE.lotMax.x, 0), lz = Math.max(SITE.lotMin.y - z, z - SITE.lotMax.y, 0);
+    const out = Math.hypot(lx, lz);
+    mask[i * 2] = THREE.MathUtils.clamp(1 - out / 3 + (rn() - 0.5) * 0.3, 0, 1);
+    const ld = lakeDist(x, z);
+    mask[i * 2 + 1] = THREE.MathUtils.clamp((1.35 - ld) / 0.3, 0, 1);
+  }
+  tGeo.setAttribute('aMask', new THREE.BufferAttribute(mask, 2));
+  tGeo.computeVertexNormals();
+  const terrainMat = new THREE.MeshStandardMaterial({ map: grass.map, normalMap: dirt.normalMap, roughness: 0.96 });
+  terrainMat.map.repeat.set(TS / 4, TS / 4); terrainMat.normalMap.repeat.set(TS / 4, TS / 4);
+  terrainMat.onBeforeCompile = (sh) => {
+    sh.uniforms.dirtMap = { value: dirt.map };
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec2 aMask;\nvarying vec2 vMask;')
+      .replace('#include <uv_vertex>', '#include <uv_vertex>\nvMask = aMask;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform sampler2D dirtMap;\nvarying vec2 vMask;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+        vec3 dc = texture2D(dirtMap, vMapUv * 0.44).rgb;
+        diffuseColor.rgb = mix(diffuseColor.rgb, dc, smoothstep(0.0, 1.0, vMask.x));
+        diffuseColor.rgb = mix(diffuseColor.rgb, dc * vec3(0.5, 0.46, 0.4), vMask.y);`);
+  };
+  terrainMat.customProgramCacheKey = () => 'terrain';
+  const terrain = new THREE.Mesh(tGeo, terrainMat);
+  terrain.receiveShadow = true;
+  scene.add(terrain);
+  // outer grass ring beyond the heightfield
+  const outerMat = new THREE.MeshStandardMaterial({ map: grass.map.clone(), roughness: 0.96 });
+  outerMat.map.repeat.set(60, 60); outerMat.map.needsUpdate = true;
+  for (const [x, z, w, d] of [[0, (TS / 2 + 400) / 2 + 0.0, 800, 400 - TS / 2], [0, -(TS / 2 + 400) / 2, 800, 400 - TS / 2], [(TS / 2 + 400) / 2, 0, 400 - TS / 2, TS], [-(TS / 2 + 400) / 2, 0, 400 - TS / 2, TS]]) {
+    const g = new THREE.Mesh(new THREE.PlaneGeometry(w, d).rotateX(-Math.PI / 2), outerMat); g.position.set(x, 0, z); g.receiveShadow = true; scene.add(g);
+  }
+  // lake water
+  const L = SITE.lake;
+  const wn = T.waterNormal();
+  wn.repeat.set(3, 4);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1, 64).rotateX(-Math.PI / 2), new THREE.MeshPhysicalMaterial({
+    color: 0x2a5a66, roughness: 0.06, metalness: 0.0, normalMap: wn, normalScale: new THREE.Vector2(0.35, 0.35), transparent: true, opacity: 0.86, envMapIntensity: 1.4, clearcoat: 1, clearcoatRoughness: 0.05 }));
+  water.scale.set(L.rx * 1.2, 1, L.rz * 1.2);
+  water.position.set(L.cx, L.water, L.cz);
+  water.receiveShadow = true;
+  scene.add(water);
+  // reeds and rocks around the lake
+  const reedGeo = merge(Array.from({ length: 5 }, (_, k) => cyl(0.008, 0.012, 1.1 + k * 0.12, 4, (k - 2) * 0.05, 0.55 + k * 0.06, (k % 2) * 0.04, null, (k - 2) * 0.08, 0, (k - 2) * 0.06)));
+  const reedMat = new THREE.MeshStandardMaterial({ color: 0x6d7a3a, roughness: 0.9 });
+  const rockGeo = new THREE.DodecahedronGeometry(0.35, 0);
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x77736a, roughness: 0.95, flatShading: true });
+  const reeds = new THREE.InstancedMesh(reedGeo, reedMat, 40), rocks = new THREE.InstancedMesh(rockGeo, rockMat, 24);
+  const mm = new THREE.Matrix4();
+  for (let i = 0; i < 40; i++) {
+    const a = rn() * Math.PI * 2, r = 1.0 + rn() * 0.12;
+    const x = L.cx + Math.cos(a) * L.rx * r, z = L.cz + Math.sin(a) * L.rz * r;
+    mm.compose(new THREE.Vector3(x, terrainHeight(x, z) - 0.1, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rn() * 6), new THREE.Vector3(1, 0.7 + rn() * 0.6, 1));
+    reeds.setMatrixAt(i, mm);
+  }
+  for (let i = 0; i < 24; i++) {
+    const a = rn() * Math.PI * 2, r = 1.12 + rn() * 0.15;
+    const x = L.cx + Math.cos(a) * L.rx * r, z = L.cz + Math.sin(a) * L.rz * r;
+    const s = 0.5 + rn() * 1.2;
+    mm.compose(new THREE.Vector3(x, terrainHeight(x, z) + 0.05, z), new THREE.Quaternion().setFromEuler(new THREE.Euler(rn() * 3, rn() * 3, rn() * 3)), new THREE.Vector3(s, s * 0.6, s));
+    rocks.setMatrixAt(i, mm);
+  }
+  shadowed(reeds); shadowed(rocks); scene.add(reeds, rocks);
 
   // ---------- street ----------
   const asph = T.asphaltTextures();
@@ -157,8 +201,8 @@ export function buildWorld(scene, renderer, physics, M) {
   neighbor(36, SITE.streetZ + 21, 11.5, 8, brickA, 0x5a3a30);
   neighbor(-46, SITE.streetZ + 20, 10, 8, brickA, 0x46494d);
   // neighbour lots on our side
-  neighbor(-44, -6, 10, 8.5, brickA, 0x3d4247, Math.PI / 2);
-  neighbor(44, -6, 11, 8, brickB, 0x6b4a3a, -Math.PI / 2);
+  neighbor(-52, -6, 10, 8.5, brickA, 0x3d4247, Math.PI / 2);
+  neighbor(52, -16, 11, 8, brickB, 0x6b4a3a, -Math.PI / 2);
 
   // ---------- distant hills ----------
   const hillGeo = new THREE.RingGeometry(300, 1100, 128, 8).rotateX(-Math.PI / 2);
@@ -182,22 +226,28 @@ export function buildWorld(scene, renderer, physics, M) {
 
   // ---------- construction site dressing ----------
   buildFence(scene, M, addStatic);
-  buildSiteOffice(scene, M, addStatic, -21, 17.5);
-  buildPortaloo(scene, M, addStatic, -14.5, 19.5);
-  buildDumpster(scene, M, addStatic, 22, 18);
+  buildSiteOffice(scene, M, addStatic, -33, 19.5);
+  buildPortaloo(scene, M, addStatic, -25.5, 21.5);
+  buildDumpster(scene, M, addStatic, 35, 19);
   buildCones(scene, M);
   buildPallets(scene, M, addStatic);
   buildSign(scene, M, addStatic);
 
   // static physics
   const body = physics.world.createRigidBody(physics.R.RigidBodyDesc.fixed());
-  physics.world.createCollider(physics.R.ColliderDesc.cuboid(400, 1, 400).setTranslation(0, -1, 0).setFriction(1.0), body);
+  // heightfield: heights[col * (rows + 1) + row], columns along x, rows along z
+  const hf = new Float32Array((N + 1) * (N + 1));
+  for (let col = 0; col <= N; col++) for (let row = 0; row <= N; row++) hf[col * (N + 1) + row] = terrainHeight(-TS / 2 + col, -TS / 2 + row);
+  const terrainCollider = physics.world.createCollider(physics.R.ColliderDesc.heightfield(N, N, hf, new physics.R.Vector3(TS, 1, TS)).setFriction(1.0), body);
+  for (const [x, z, w, d] of [[0, TS / 2 + 200, 1000, 400], [0, -TS / 2 - 200, 1000, 400], [TS / 2 + 200, 0, 400, TS], [-TS / 2 - 200, 0, 400, TS]]) {
+    physics.world.createCollider(physics.R.ColliderDesc.cuboid(w / 2, 1, d / 2).setTranslation(x, -1, z).setFriction(1.0), body);
+  }
   for (const s of statics) {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.rotY);
     physics.world.createCollider(physics.R.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z).setRotation(q), body);
   }
 
-  return { sun, hemi, sky, clouds, updateShadow(focus) {
+  return { sun, hemi, sky, clouds, water, terrainCollider, updateShadow(focus) {
     sun.position.copy(focus).addScaledVector(sunDir, 80);
     sun.target.position.copy(focus);
     // snap to texel grid to avoid shimmering
@@ -241,12 +291,12 @@ function buildTrees(scene, M) {
   for (let i = 0; i < 70; i++) {
     let x, z;
     const side = i % 4;
-    if (side === 0) { x = -34 - r() * 30; z = -40 + r() * 64; }
-    else if (side === 1) { x = 34 + r() * 30; z = -40 + r() * 64; }
-    else if (side === 2) { x = -60 + r() * 120; z = -36 - r() * 26; }
+    if (side === 0) { x = -45 - r() * 30; z = -48 + r() * 70; }
+    else if (side === 1) { x = 45 + r() * 30; z = -48 + r() * 70; }
+    else if (side === 2) { x = -75 + r() * 150; z = -42 - r() * 26; }
     else { x = -70 + r() * 140; z = SITE.streetZ + 12.5 + (r() < 0.5 ? 0 : 14) + r() * 2; if (Math.abs(((x + 46) % 20)) < 6) continue; }
-    if (Math.abs(x + 44) < 7 && Math.abs(z + 6) < 6) continue;
-    if (Math.abs(x - 44) < 7 && Math.abs(z + 6) < 6) continue;
+    if (Math.abs(x + 52) < 8 && Math.abs(z + 6) < 7) continue;
+    if (Math.abs(x - 52) < 8 && Math.abs(z + 16) < 7) continue;
     spots.push([x, z, 0.8 + r() * 0.6, r() * Math.PI * 2, Math.floor(r() * 3)]);
   }
   variants.forEach((v, vi) => {
@@ -299,7 +349,7 @@ function buildFence(scene, M, addStatic) {
   run(lotMax.x, lotMin.y, lotMax.x, lotMax.y);
   // front fence with a gate gap: two runs
   const fz = lotMax.y;
-  const gate0 = -7, gate1 = 7;
+  const [gate0, gate1] = SITE.gate;
   const fr = (a, b) => {
     const len = b - a, n = Math.round(len / panelW);
     for (let i = 0; i < n; i++) placements.push([a + (i + 0.5) * len / n, fz, 0, (len / n) / panelW]);
@@ -384,7 +434,7 @@ function buildDumpster(scene, M, addStatic, x, z) {
 
 function buildCones(scene, M) {
   const coneGeo = merge([cyl(0.03, 0.17, 0.62, 16, 0, 0.36, 0, 0xff5a10), box(0.38, 0.05, 0.38, 0, 0.025, 0, 0x1a1a1a), cyl(0.085, 0.12, 0.1, 16, 0, 0.38, 0, 0xf4f4f4), cyl(0.06, 0.075, 0.07, 16, 0, 0.53, 0, 0xf4f4f4)]);
-  const spots = [[7.5, 23], [9.5, 23.2], [11.5, 23], [-8, 23.1], [-10, 23], [8, 12], [10, 14], [12, 12.5], [-3, 21], [4, 22]];
+  const spots = [[27.5, 23], [29.5, 23.2], [6.5, 23.1], [4.5, 23], [20, 4], [22, 6], [-6, 21], [2, 22], [10, 26.5], [24, 26.5]];
   const im = new THREE.InstancedMesh(coneGeo, M.vertex, spots.length);
   const m = new THREE.Matrix4();
   spots.forEach(([x, z], i) => { m.makeTranslation(x, 0, z); im.setMatrixAt(i, m); });
@@ -399,7 +449,7 @@ function buildPallets(scene, M, addStatic) {
   const blocks = [];
   for (let ly = 0; ly < 4; ly++) for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) blocks.push(box(0.38, 0.19, 0.48, -0.4 + i * 0.4, 0.24 + ly * 0.2, -0.25 + j * 0.5, 0x9a9890 + ((i + j + ly) % 2) * 0x080808));
   const palletGeo = merge(p), blockGeo = merge(blocks);
-  for (const [x, z, r] of [[-22, 8, 0.2], [-23.5, 9.5, -0.1], [-22.6, 11.3, 0.4], [21, 13, 0.1]]) {
+  for (const [x, z, r] of [[-37, 4, 0.2], [-37.5, 6, -0.1], [-36.6, 8.2, 0.4], [-37, 10.4, 0.1]]) {
     const pm = new THREE.Mesh(palletGeo, M.vertex); pm.position.set(x, 0, z); pm.rotation.y = r; scene.add(shadowed(pm));
     const bm = new THREE.Mesh(blockGeo, M.vertex); bm.position.copy(pm.position); bm.rotation.y = r; scene.add(shadowed(bm));
     addStatic(x, 0.5, z, 1.2, 1.0, 1.1, r);
@@ -413,6 +463,6 @@ function buildSign(scene, M, addStatic) {
   const board = new THREE.Mesh(new THREE.BoxGeometry(2.6, 1.4, 0.05), [M.paintWhite, M.paintWhite, M.paintWhite, M.paintWhite,
     new THREE.MeshStandardMaterial({ map: T.labelTexture('DANGER', { w: 512, h: 280, bg: '#ffffff', color: '#c0261b', font: '900 110px Arial', italic: false, sub: 'DEMOLITION IN PROGRESS · HARD HATS' }) }), M.paintWhite]);
   board.position.y = 2.0; g.add(shadowed(board));
-  g.position.set(9, 0, 24.4); g.rotation.y = 0;
+  g.position.set(SITE.gate[0] - 3, 0, 24.4); g.rotation.y = 0;
   scene.add(g);
 }

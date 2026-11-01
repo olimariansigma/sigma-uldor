@@ -44,18 +44,22 @@ export class TypeRegistry {
     const plaster = boxMapped(new THREE.MeshStandardMaterial({ color: 0xece8de, roughness: 0.9, map: M.concrete.map }), 2, 2);
     const ceiling = boxMapped(new THREE.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.95, map: M.concrete.map }), 2, 2);
     const ridgeMat = M.shingles;
-    const def = (name, d) => this.types.set(name, { name, unit: true, tint: false, value: 2, hp: 2, hang: 2, density: 1.9, sound: 'brick', dust: 0x9a7a66, chip: 0x8a4630, ...d });
+    const def = (name, d) => this.types.set(name, { name, unit: true, tint: false, value: 2, hp: 2, hang: 2, density: 1.9, kgm3: 1900, sound: 'brick', dust: 0x9a7a66, chip: 0x8a4630, ...d });
+    // hollow concrete masonry units (cinder blocks): 400 x 200 x 200 mm, two cores; half block has one core
+    def('cmu', { parts: [{ geo: cmuGeometry(0.4), mat: M.cinder }], unit: false, size: new THREE.Vector3(0.4, 0.2, 0.2), tint: true, hp: 2, hang: 0.55, kg: 17, density: 1.4 });
+    def('cmuHalf', { parts: [{ geo: cmuGeometry(0.2), mat: M.cinder }], unit: false, size: new THREE.Vector3(0.2, 0.2, 0.2), tint: true, hp: 1, hang: 0.4, kg: 9, density: 1.4 });
+    def('cmuSolid', { parts: [{ geo: unit, mat: M.cinderSolid }], tint: true, hp: 2, hang: 0.55, kgm3: 1500, density: 1.4 });
     def('brick', { parts: [{ geo: unit, mat: M.brick }], tint: true, value: 2, hp: 2, hang: 0.75 });
     def('brickY', { parts: [{ geo: unit, mat: M.brickYellow }], tint: true, value: 2, hp: 2, hang: 0.75, dust: 0xb9a07a, chip: 0xc8a46a });
     def('block', { parts: [{ geo: unit, mat: M.block }], tint: true, value: 3, hp: 3, hang: 0.75, dust: 0x9a9890, chip: 0x8a8882 });
     def('plaster', { parts: [{ geo: unit, mat: plaster }], tint: true, value: 2, hp: 2, hang: 0.75, dust: 0xd8d4ca, chip: 0xe8e4da });
-    def('concrete', { parts: [{ geo: unit, mat: M.concrete }], value: 3, hp: 3, hang: 1.0, dust: 0xaaa8a0, chip: 0x9a9890 });
-    def('roof', { parts: [{ geo: unit, mat: [M.fascia, M.fascia, M.shingles, M.soffit, M.fascia, M.fascia] }], value: 2, hp: 1, hang: 3.2, stiff: 0.25, density: 0.9, sound: 'wood', dust: 0x6a6a6a, chip: 0x3a3c40 });
-    def('metalroof', { parts: [{ geo: unit, mat: [M.galvanized, M.galvanized, M.metalRoof, M.timber, M.galvanized, M.galvanized] }], value: 3, hp: 1, hang: 3.6, stiff: 0.25, density: 0.8, sound: 'metal', dust: 0x9a9a9a, chip: 0xa0a8b0 });
-    def('ridge', { parts: [{ geo: unit, mat: ridgeMat }], value: 1, hp: 1, hang: 3.6, stiff: 0.25, density: 0.9, sound: 'wood', dust: 0x666666, chip: 0x333333 });
-    def('floor', { parts: [{ geo: unit, mat: [M.timber, M.timber, M.floorWood, ceiling, M.timber, M.timber] }], value: 2, hp: 2, hang: 3.5, stiff: 0.4, density: 0.7, sound: 'wood', dust: 0xa08060, chip: 0x9a7048 });
-    def('slat', { parts: [{ geo: unit, mat: M.metalWall }], value: 2, hp: 1, hang: 1.2, density: 0.8, sound: 'metal', dust: 0x9a9a9a, chip: 0x9fb4c4 });
-    def('timberpost', { parts: [{ geo: unit, mat: M.timber }], value: 2, hp: 2, hang: 1.0, density: 0.7, sound: 'wood', dust: 0xa08060, chip: 0xb08858 });
+    def('concrete', { parts: [{ geo: unit, mat: M.concrete }], kgm3: 2300, value: 3, hp: 3, hang: 1.0, dust: 0xaaa8a0, chip: 0x9a9890 });
+    def('roof', { kgm3: 180, parts: [{ geo: unit, mat: [M.fascia, M.fascia, M.shingles, M.soffit, M.fascia, M.fascia] }], value: 2, hp: 1, hang: 3.2, stiff: 0.25, density: 0.9, sound: 'wood', dust: 0x6a6a6a, chip: 0x3a3c40 });
+    def('metalroof', { kgm3: 90, parts: [{ geo: unit, mat: [M.galvanized, M.galvanized, M.metalRoof, M.timber, M.galvanized, M.galvanized] }], value: 3, hp: 1, hang: 3.6, stiff: 0.25, density: 0.8, sound: 'metal', dust: 0x9a9a9a, chip: 0xa0a8b0 });
+    def('ridge', { kgm3: 300, parts: [{ geo: unit, mat: ridgeMat }], value: 1, hp: 1, hang: 3.6, stiff: 0.25, density: 0.9, sound: 'wood', dust: 0x666666, chip: 0x333333 });
+    def('floor', { kgm3: 250, parts: [{ geo: unit, mat: [M.timber, M.timber, M.floorWood, ceiling, M.timber, M.timber] }], value: 2, hp: 2, hang: 3.5, stiff: 0.4, density: 0.7, sound: 'wood', dust: 0xa08060, chip: 0x9a7048 });
+    def('slat', { kgm3: 400, parts: [{ geo: unit, mat: M.metalWall }], value: 2, hp: 1, hang: 1.2, density: 0.8, sound: 'metal', dust: 0x9a9a9a, chip: 0x9fb4c4 });
+    def('timberpost', { kgm3: 550, parts: [{ geo: unit, mat: M.timber }], value: 2, hp: 2, hang: 1.0, density: 0.7, sound: 'wood', dust: 0xa08060, chip: 0xb08858 });
 
     // props
     this.prop('sofa', [2.0, 0.85, 0.9], 15, () => {
@@ -131,18 +135,19 @@ export class TypeRegistry {
   }
 
   prop(name, size, value, build, sound) {
+    const geo = build();
     this.types.set(name, {
-      name, unit: false, tint: false, value, hp: 1, hang: 99, density: 0.5, sound, dust: 0xa09080, chip: 0x7a6a5a,
-      size: new THREE.Vector3(...size), parts: [{ geo: build(), mat: this.M.vertex }], prop: true,
+      name, unit: false, tint: false, value, kg: PROP_KG[name] || 30, dust: avgVertexColor(geo), chip: avgVertexColor(geo), hp: 1, hang: 99, density: 0.5, sound,
+      size: new THREE.Vector3(...size), parts: [{ geo, mat: this.M.vertex }], prop: true,
     });
   }
 
   get(name) { return this.types.get(name); }
 
-  window(w, h) {
-    const name = `window_${w.toFixed(2)}_${h.toFixed(2)}`;
+  window(w, h, depth = 0.3) {
+    const name = `window_${w.toFixed(2)}_${h.toFixed(2)}_${depth.toFixed(2)}`;
     if (this.types.has(name)) return name;
-    const fz = 0.05, fd = 0.12, fb = 0.075;
+    const fz = depth * 0.17, fd = Math.min(0.12, depth * 0.6), fb = 0.07;
     const frame = merge([
       box(w, fb, fd, 0, h / 2 - fb / 2, fz), box(w, fb, fd, 0, -h / 2 + fb / 2 + 0.05, fz),
       box(fb, h - 0.05, fd, -w / 2 + fb / 2, 0.025, fz), box(fb, h - 0.05, fd, w / 2 - fb / 2, 0.025, fz),
@@ -150,11 +155,11 @@ export class TypeRegistry {
       // sashes (inner frame lips)
       box(w - 0.14, 0.03, 0.05, 0, -h / 2 + 0.14, fz + 0.03), box(w - 0.14, 0.03, 0.05, 0, h / 2 - 0.09, fz + 0.03),
     ]);
-    const sill = merge([box(w + 0.14, 0.05, 0.34, 0, -h / 2 + 0.025, 0.06), box(w + 0.14, 0.02, 0.06, 0, -h / 2 + 0.005, 0.22)]);
+    const sill = merge([box(w + 0.14, 0.05, depth + 0.06, 0, -h / 2 + 0.025, 0.05), box(w + 0.14, 0.02, 0.05, 0, -h / 2 + 0.005, depth / 2 + 0.07)]);
     const glass = box(w - 0.12, h - 0.16, 0.012, 0, 0.02, fz);
     this.types.set(name, {
-      name, unit: false, tint: false, value: 5, hp: 1, hang: 0.8, density: 0.6, sound: 'glass', dust: 0xdddddd, chip: 0xcfe8f0,
-      size: new THREE.Vector3(w, h, 0.3), parts: [{ geo: frame, mat: this.M.pvc }, { geo: sill, mat: this.M.concretePlain }, { geo: glass, mat: this.M.glass, noShadow: true }],
+      name, unit: false, tint: false, value: 5, kg: 28, hp: 1, hang: 0.8, density: 0.6, sound: 'glass', dust: 0xdfe3e6, chip: 0xcfe8f0,
+      size: new THREE.Vector3(w, h, depth), parts: [{ geo: frame, mat: this.M.pvc }, { geo: sill, mat: this.M.concretePlain }, { geo: glass, mat: this.M.glass, noShadow: true }],
     });
     return name;
   }
@@ -163,14 +168,14 @@ export class TypeRegistry {
     const name = `door_${style}_${w.toFixed(2)}_${h.toFixed(2)}`;
     if (this.types.has(name)) return name;
     const fb = 0.08;
-    const frame = merge([box(w, fb, 0.2, 0, h / 2 - fb / 2, 0.0), box(fb, h, 0.2, -w / 2 + fb / 2, 0, 0), box(fb, h, 0.2, w / 2 - fb / 2, 0, 0)]);
+    const frame = merge([box(w, fb, 0.18, 0, h / 2 - fb / 2, 0.0), box(fb, h, 0.18, -w / 2 + fb / 2, 0, 0), box(fb, h, 0.18, w / 2 - fb / 2, 0, 0)]);
     const dw = w - fb * 2, dh = h - fb;
     const slab = [box(dw, dh, 0.05, 0, -fb / 2, 0.04)];
     for (const [px, py] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) slab.push(box(dw * 0.34, dh * (py > 0 ? 0.3 : 0.4), 0.02, px * dw * 0.22, py > 0 ? dh * 0.22 : -dh * 0.2, 0.07));
     const knob = merge([cyl(0.035, 0.035, 0.06, 12, dw / 2 - 0.1, -0.05, 0.1, null, Math.PI / 2), box(0.04, 0.16, 0.012, dw / 2 - 0.1, -0.05, 0.072)]);
     this.types.set(name, {
-      name, unit: false, tint: false, value: 4, hp: 2, hang: 0.9, density: 0.6, sound: 'wood', dust: 0xa08060, chip: 0x8a3a2a,
-      size: new THREE.Vector3(w, h, 0.3), parts: [{ geo: frame, mat: this.M.pvc }, { geo: merge(slab), mat: this.M.doorWood }, { geo: knob, mat: this.M.brass }],
+      name, unit: false, tint: false, value: 4, kg: 32, hp: 2, hang: 0.9, density: 0.6, sound: 'wood', dust: 0x8a4a32, chip: 0x8a3a2a,
+      size: new THREE.Vector3(w, h, 0.2), parts: [{ geo: frame, mat: this.M.pvc }, { geo: merge(slab), mat: this.M.doorWood }, { geo: knob, mat: this.M.brass }],
     });
     return name;
   }
@@ -184,7 +189,7 @@ export class TypeRegistry {
     const g = new THREE.ExtrudeGeometry(s, { depth: len, bevelEnabled: false });
     g.translate(0, 0, -len / 2); g.rotateY(Math.PI / 2);
     this.types.set(name, {
-      name, unit: false, value: 2, hp: 1, hang: 2, stiff: 0.25, density: 0.4, sound: 'metal', dust: 0x999999, chip: 0xcccccc,
+      name, unit: false, value: 2, kg: 5, hp: 1, hang: 2, stiff: 0.25, density: 0.4, sound: 'metal', dust: 0xb4b9bd, chip: 0xcccccc,
       size: new THREE.Vector3(len, 0.14, 0.16), parts: [{ geo: g, mat: this.M.galvanized }],
     });
     return name;
@@ -195,11 +200,52 @@ export class TypeRegistry {
     if (this.types.has(name)) return name;
     const g = merge([box(0.24, h, 0.02, 0, 0, 0.11), box(0.24, h, 0.02, 0, 0, -0.11), box(0.02, h, 0.2, 0, 0, 0), box(0.4, 0.03, 0.4, 0, -h / 2 + 0.015, 0)]);
     this.types.set(name, {
-      name, unit: false, value: 12, hp: 4, hang: 0.5, density: 3, sound: 'metal', dust: 0x999999, chip: 0x777777,
+      name, unit: false, value: 12, kg: 160, hp: 4, hang: 0.5, density: 3, sound: 'metal', dust: 0x2f6aa8, chip: 0x777777,
       size: new THREE.Vector3(0.24, h, 0.24), parts: [{ geo: g, mat: this.M.paintBlue }],
     });
     return name;
   }
+}
+
+const PROP_KG = { sofa: 45, fridge: 70, table: 25, bed: 55, kitchen: 85, shelf: 35, crate: 30, drum: 45, pallet: 160, tv: 28 };
+
+function avgVertexColor(g) {
+  const c = g.attributes.color; if (!c) return 0x888888;
+  let r = 0, gg = 0, b = 0; for (let i = 0; i < c.count; i++) { r += c.getX(i); gg += c.getY(i); b += c.getZ(i); }
+  return new THREE.Color(r / c.count, gg / c.count, b / c.count).getHex();
+}
+
+// Hollow concrete block: outer shell with rectangular cores, chamfered edges and darkened cores (baked AO).
+export function cmuGeometry(len) {
+  const w = len, d = 0.2, h = 0.2, shell = 0.032, web = 0.028;
+  const s = new THREE.Shape();
+  s.moveTo(-w / 2, -d / 2); s.lineTo(w / 2, -d / 2); s.lineTo(w / 2, d / 2); s.lineTo(-w / 2, d / 2); s.closePath();
+  const cores = len > 0.3 ? 2 : 1;
+  const cw = (w - 2 * shell - (cores - 1) * web) / cores, cd = d - 2 * shell;
+  for (let k = 0; k < cores; k++) {
+    const x0 = -w / 2 + shell + k * (cw + web), r = 0.012;
+    const hole = new THREE.Path();
+    hole.moveTo(x0 + r, -cd / 2); hole.lineTo(x0 + cw - r, -cd / 2); hole.quadraticCurveTo(x0 + cw, -cd / 2, x0 + cw, -cd / 2 + r);
+    hole.lineTo(x0 + cw, cd / 2 - r); hole.quadraticCurveTo(x0 + cw, cd / 2, x0 + cw - r, cd / 2);
+    hole.lineTo(x0 + r, cd / 2); hole.quadraticCurveTo(x0, cd / 2, x0, cd / 2 - r);
+    hole.lineTo(x0, -cd / 2 + r); hole.quadraticCurveTo(x0, -cd / 2, x0 + r, -cd / 2);
+    s.holes.push(hole);
+  }
+  const bev = 0.005;
+  const g = new THREE.ExtrudeGeometry(s, { depth: h - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 1, curveSegments: 2 });
+  g.rotateX(-Math.PI / 2); g.translate(0, -h / 2 + bev, 0);
+  g.scale((w - 0.002) / (w + 2 * bev), 1, (d - 0.002) / (d + 2 * bev));
+  // baked occlusion: faces inside the cores are darker, deeper = darker
+  const pos = g.attributes.position, nrm = g.attributes.normal;
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const inside = Math.abs(z) < cd / 2 + 0.002 && Math.abs(x) < w / 2 - shell + 0.002 && Math.abs(nrm.getY(i)) < 0.5;
+    const v = inside ? 0.42 + 0.25 * (Math.abs(y) / (h / 2)) : 1;
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = v;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return g;
 }
 
 export function mulberry(a) {

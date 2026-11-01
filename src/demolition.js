@@ -1,34 +1,39 @@
-// Manages every destructible piece of the current building: rendering (instanced),
-// physics (fixed collider while intact, dynamic body once loose), structural support and damage.
+// Every destructible piece of every building: instanced rendering, physics, structural support, damage,
+// network snapshots and save-game serialisation.
+//
+// authority = true  (solo / host): intact pieces are fixed colliders, loose ones are dynamic rigid bodies.
+// authority = false (multiplayer client): pieces mirror the host; loose ones are kinematic bodies that are
+//                   interpolated toward the transforms the host sends, so the local player still collides.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 export const INTACT = 0, LOOSE = 1, HELD = 2, CARRIED = 3, GONE = 4;
 
-const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _c = new THREE.Color();
+const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+const ONE = new THREE.Vector3(1, 1, 1);
 
 export class Demolition {
-  constructor(scene, physics, types, fx, audio) {
-    this.scene = scene; this.physics = physics; this.world = physics.world; this.types = types; this.fx = fx; this.audio = audio;
+  constructor(scene, physics, types, sfx, authority = true) {
+    this.scene = scene; this.physics = physics; this.world = physics.world; this.types = types;
+    this.sfx = sfx; this.authority = authority;
     this.pieces = [];
-    this.meshes = new Map(); // typeName -> [InstancedMesh per part]
+    this.buildings = [];
     this.byCollider = new Map();
-    this.group = new THREE.Group();
-    scene.add(this.group);
-    this.dirty = false;
-    this.groundY = 0;
-    this.crushed = 0; this.lost = 0; this.total = 0;
+    this.group = new THREE.Group(); scene.add(this.group);
     this.staticBody = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-    this.onCrushable = null;
+    this.dirty = new Set();
+    this.changes = [];         // [id, state, holder] since last network flush (authority)
+    this.rr = 0;               // round-robin cursor for snapshots
   }
 
-  // ---------- construction ----------
-  build(specs, groundY) {
-    this.clear();
-    this.groundY = groundY;
+  // ---------------------------------------------------------------- buildings
+  addBuilding(def, plot, specs, groundY) {
+    const b = { id: this.buildings.length, def, plot, start: this.pieces.length, count: specs.length, meshes: [], groundY, removed: false };
+    this.buildings.push(b);
     const counts = new Map();
     for (const s of specs) counts.set(s.type, (counts.get(s.type) || 0) + 1);
+    const entries = new Map();
     for (const [name, n] of counts) {
       const t = this.types.get(name);
       const parts = t.parts.map((p) => {
@@ -37,58 +42,68 @@ export class Demolition {
         im.frustumCulled = false;
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         if (p.mat === this.types.M.glass) im.renderOrder = 2;
-        this.group.add(im);
+        this.group.add(im); b.meshes.push(im);
         return im;
       });
       if (t.tint) for (const im of parts) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
-      this.meshes.set(name, { parts, next: 0 });
+      entries.set(name, { parts, next: 0 });
     }
-    const rnd = mulberry32(specs.length);
     for (const s of specs) {
       const t = this.types.get(s.type);
-      const entry = this.meshes.get(s.type);
+      const entry = entries.get(s.type);
       const size = t.unit ? s.size.clone() : t.size.clone();
+      const color = s.color ? s.color.clone() : null;
+      const kg = t.kg || Math.max(1, Math.round(size.x * size.y * size.z * (t.kgm3 || 1000)));
       const p = {
-        id: this.pieces.length, type: t, size, pos: s.pos.clone(), quat: s.quat ? s.quat.clone() : new THREE.Quaternion(),
-        state: INTACT, hp: t.hp, idx: entry.next++, parts: entry.parts, collider: null, body: null,
-        up: [], down: [], side: [], tint: 1, held: null,
+        id: this.pieces.length, b: b.id, type: t, size, pos: s.pos.clone(), quat: s.quat ? s.quat.clone() : new THREE.Quaternion(),
+        color, kg, state: INTACT, hp: t.hp, idx: entry.next++, parts: entry.parts, collider: null, body: null,
+        up: [], down: [], side: [], holder: -1, holdLocal: null, target: null, sent: null,
       };
-      if (t.tint) {
-        p.tint = 0.86 + rnd() * 0.22;
-        for (const im of p.parts) im.setColorAt(p.idx, _c.setScalar(p.tint));
-      }
+      if (t.tint) for (const im of p.parts) im.setColorAt(p.idx, color || _c.setScalar(1));
       this.pieces.push(p);
       this.writeMatrix(p);
       p.collider = this.world.createCollider(
         RAPIER.ColliderDesc.cuboid(size.x / 2 - 0.004, size.y / 2 - 0.004, size.z / 2 - 0.004)
-          .setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat).setFriction(0.9),
-        this.staticBody);
+          .setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat).setFriction(0.9), this.staticBody);
       this.byCollider.set(p.collider.handle, p);
     }
-    for (const { parts } of this.meshes.values()) for (const im of parts) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
-    this.total = this.pieces.length;
-    this.crushed = 0; this.lost = 0;
-    this.computeAdjacency();
-    this.recompute();
+    for (const im of b.meshes) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
+    this.computeAdjacency(b);
+    if (this.authority) this.recompute(b);
+    return b;
   }
 
-  clear() {
-    for (const p of this.pieces) {
-      if (p.body) this.world.removeRigidBody(p.body);
-      else if (p.collider) this.world.removeCollider(p.collider, false);
-    }
-    this.pieces = [];
-    this.byCollider.clear();
-    for (const { parts } of this.meshes.values()) for (const im of parts) { this.group.remove(im); im.dispose(); }
-    this.meshes.clear();
+  removeBuilding(bid) {
+    const b = this.buildings[bid];
+    if (!b || b.removed) return;
+    this.silent = true;
+    for (let i = b.start; i < b.start + b.count; i++) this.vanish(this.pieces[i], false);
+    this.silent = false;
+    for (const im of b.meshes) { this.group.remove(im); im.dispose(); }
+    b.meshes = []; b.removed = true;
   }
+
+  clearAll() {
+    for (const b of this.buildings) this.removeBuilding(b.id);
+    this.pieces = []; this.buildings = []; this.byCollider.clear(); this.dirty.clear(); this.changes = [];
+  }
+
+  // ---------------------------------------------------------------- helpers
+  dustColor(p) { return p.color ? p.color : _c.set(p.type.dust); }
+  chipColor(p) { return p.color ? p.color.getHex() : p.type.chip; }
 
   writeMatrix(p, scale = 1) {
-    _s.copy(p.type.unit ? p.size : _s.set(1, 1, 1)).multiplyScalar(scale);
+    _s.copy(p.type.unit ? p.size : ONE).multiplyScalar(scale);
     _m.compose(p.pos, p.quat, _s);
     for (const im of p.parts) im.setMatrixAt(p.idx, _m);
   }
+  flagParts(p) { for (const im of p.parts) im.instanceMatrix.needsUpdate = true; }
   hide(p) { for (const im of p.parts) { im.setMatrixAt(p.idx, ZERO); im.instanceMatrix.needsUpdate = true; } }
+
+  setState(p, state, holder = -1) {
+    p.state = state; p.holder = holder;
+    if (this.authority && !this.silent) this.changes.push([p.id, state, holder]);
+  }
 
   aabb(p) {
     const hx = p.size.x / 2, hy = p.size.y / 2, hz = p.size.z / 2;
@@ -100,129 +115,129 @@ export class Demolition {
     return { min, max };
   }
 
-  computeAdjacency() {
-    const eps = 0.03, cell = 1.5;
+  computeAdjacency(b) {
+    const eps = 0.02, cell = 1.2;
     const grid = new Map();
-    const boxes = this.pieces.map((p) => this.aabb(p));
-    const key = (x, y, z) => x + ',' + y + ',' + z;
-    boxes.forEach((b, i) => {
-      for (let x = Math.floor(b.min.x / cell); x <= Math.floor(b.max.x / cell); x++)
-        for (let y = Math.floor(b.min.y / cell); y <= Math.floor(b.max.y / cell); y++)
-          for (let z = Math.floor(b.min.z / cell); z <= Math.floor(b.max.z / cell); z++) {
-            const k = key(x, y, z); if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i);
+    const list = this.pieces.slice(b.start, b.start + b.count);
+    const boxes = list.map((p) => this.aabb(p));
+    boxes.forEach((bx, i) => {
+      for (let x = Math.floor(bx.min.x / cell); x <= Math.floor(bx.max.x / cell); x++)
+        for (let y = Math.floor(bx.min.y / cell); y <= Math.floor(bx.max.y / cell); y++)
+          for (let z = Math.floor(bx.min.z / cell); z <= Math.floor(bx.max.z / cell); z++) {
+            const k = x + ',' + y + ',' + z; if (!grid.has(k)) grid.set(k, []); grid.get(k).push(i);
           }
     });
     const seen = new Set();
-    for (const list of grid.values()) {
-      for (let a = 0; a < list.length; a++) for (let b = a + 1; b < list.length; b++) {
-        const i = list[a], j = list[b];
-        const pk = i < j ? i * 100000 + j : j * 100000 + i;
-        if (seen.has(pk)) continue; seen.add(pk);
+    for (const cellList of grid.values()) {
+      for (let a = 0; a < cellList.length; a++) for (let c = a + 1; c < cellList.length; c++) {
+        const i = cellList[a], j = cellList[c];
+        const key = i < j ? i * 131072 + j : j * 131072 + i;
+        if (seen.has(key)) continue; seen.add(key);
         const A = boxes[i], B = boxes[j];
         if (A.min.x > B.max.x + eps || B.min.x > A.max.x + eps || A.min.y > B.max.y + eps || B.min.y > A.max.y + eps || A.min.z > B.max.z + eps || B.min.z > A.max.z + eps) continue;
-        const pi = this.pieces[i], pj = this.pieces[j];
-        if (B.min.y >= A.max.y - 0.06) { pi.up.push(pj); pj.down.push(pi); }
-        else if (A.min.y >= B.max.y - 0.06) { pj.up.push(pi); pi.down.push(pj); }
+        const pi = list[i], pj = list[j];
+        if (B.min.y >= A.max.y - 0.05) { pi.up.push(pj); pj.down.push(pi); }
+        else if (A.min.y >= B.max.y - 0.05) { pj.up.push(pi); pi.down.push(pj); }
         else { pi.side.push(pj); pj.side.push(pi); }
       }
     }
-    this.boxes = boxes;
-    this.centers = new Float32Array(this.pieces.length * 2);
-    this.pieces.forEach((p, i) => { this.centers[i * 2] = (boxes[i].min.x + boxes[i].max.x) / 2; this.centers[i * 2 + 1] = (boxes[i].min.z + boxes[i].max.z) / 2; });
+    list.forEach((p, i) => { p.minY = boxes[i].min.y; p.cx = (boxes[i].min.x + boxes[i].max.x) / 2; p.cz = (boxes[i].min.z + boxes[i].max.z) / 2; });
   }
 
-  // Dijkstra over the support graph. Resting on a supported piece costs nothing; spanning sideways or hanging
-  // costs metres / (how far that piece type can cantilever). Anything whose total exceeds 1 falls.
-  recompute() {
-    const n = this.pieces.length;
+  // Dijkstra over the support graph. Resting on a supported piece costs nothing; spanning sideways or
+  // hanging costs metres / (how far that piece type can cantilever). Anything whose total exceeds 1 falls.
+  recompute(b) {
+    const n = b.count, s0 = b.start;
     const dist = new Float64Array(n).fill(1e9);
     const heap = new MinHeap();
-    const C = this.centers;
-    for (const p of this.pieces) {
-      if (p.state !== INTACT) continue;
-      if (this.boxes[p.id].min.y <= this.groundY + 0.06) { dist[p.id] = 0; heap.push(p.id, 0); }
+    for (let i = 0; i < n; i++) {
+      const p = this.pieces[s0 + i];
+      if (p.state === INTACT && p.minY <= b.groundY + 0.06) { dist[i] = 0; heap.push(i, 0); }
     }
     while (heap.size) {
-      const [id, d] = heap.pop();
-      if (d > dist[id]) continue;
-      const p = this.pieces[id];
-      // d is the fraction (0..1) of a piece's own cantilever capacity that is used up
+      const [i, d] = heap.pop();
+      if (d > dist[i]) continue;
+      const p = this.pieces[s0 + i];
       const relax = (q, metres) => {
         if (q.state !== INTACT) return;
-        const nd = d + metres / q.type.hang;
-        if (nd < dist[q.id] && nd <= 1) { dist[q.id] = nd; heap.push(q.id, nd); }
+        const nd = d + metres / q.type.hang, qi = q.id - s0;
+        if (nd < dist[qi] && nd <= 1) { dist[qi] = nd; heap.push(qi, nd); }
       };
-      const span = (q) => Math.hypot(C[q.id * 2] - C[id * 2], C[q.id * 2 + 1] - C[id * 2 + 1]) * Math.max(p.type.stiff || 1, q.type.stiff || 1);
+      const span = (q) => Math.hypot(q.cx - p.cx, q.cz - p.cz) * Math.max(p.type.stiff || 1, q.type.stiff || 1);
       for (const q of p.up) relax(q, 0);
       for (const q of p.side) relax(q, span(q) + 0.05);
       for (const q of p.down) relax(q, span(q) + 0.3);
     }
     let fell = 0; const at = new THREE.Vector3();
-    for (const p of this.pieces) {
-      if (p.state === INTACT && dist[p.id] > 1) {
-        this.detach(p, null, true);
-        at.add(p.pos); fell++;
-      }
+    for (let i = 0; i < n; i++) {
+      const p = this.pieces[s0 + i];
+      if (p.state === INTACT && dist[i] > 1) { this.detach(p, null, true); at.add(p.pos); fell++; }
     }
-    if (fell > 5 && this.audio) this.audio.collapse(Math.min(1, fell / 50), at.divideScalar(fell));
-    if (fell > 5 && this.fx) this.fx.dust(at, 0xa08a78, Math.min(14, 3 + fell / 6), 2.5, { size: 1.6, life: 3.5, alpha: 0.4 });
+    if (fell > 5) {
+      at.divideScalar(fell);
+      this.sfx.collapse(Math.min(1, fell / 60), at);
+      this.sfx.dust(at, 0xa8a49c, Math.min(16, 3 + fell / 8), 2.5, { size: 1.6, life: 3.5, alpha: 0.4 });
+    }
     return fell;
   }
-  centerOf() { return null; }
 
-  // ---------- state changes ----------
+  // ---------------------------------------------------------------- state changes (authority)
+  makeBody(p, kinematic) {
+    const desc = kinematic ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic().setLinearDamping(0.05).setAngularDamping(0.25).setCanSleep(true);
+    const body = this.world.createRigidBody(desc.setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat));
+    const cd = RAPIER.ColliderDesc.cuboid(p.size.x / 2 - 0.006, p.size.y / 2 - 0.006, p.size.z / 2 - 0.006)
+      .setDensity(p.type.density).setFriction(0.85).setRestitution(0.05);
+    if (!kinematic) cd.setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS).setContactForceEventThreshold(p.kg * 25 + 20);
+    const col = this.world.createCollider(cd, body);
+    p.body = body; p.collider = col;
+    this.byCollider.set(col.handle, p);
+  }
+
   detach(p, impulse = null, collapse = false) {
     if (p.state !== INTACT) return;
     this.byCollider.delete(p.collider.handle);
     this.world.removeCollider(p.collider, false);
-    const body = this.world.createRigidBody(
-      RAPIER.RigidBodyDesc.dynamic().setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat)
-        .setLinearDamping(0.05).setAngularDamping(0.25).setCanSleep(true));
-    const col = this.world.createCollider(
-      RAPIER.ColliderDesc.cuboid(p.size.x / 2 - 0.006, p.size.y / 2 - 0.006, p.size.z / 2 - 0.006)
-        .setDensity(p.type.density).setFriction(0.85).setRestitution(0.05)
-        .setActiveEvents(RAPIER.ActiveEvents.CONTACT_FORCE_EVENTS)
-        .setContactForceEventThreshold(14 * p.size.x * p.size.y * p.size.z * p.type.density * 30 + 4),
-      body);
-    p.body = body; p.collider = col; p.state = LOOSE;
-    this.byCollider.set(col.handle, p);
-    if (impulse) body.applyImpulse(impulse, true);
-    if (collapse) {
-      // tiny nudge so collapsing stacks don't stay perfectly balanced
-      const m = body.mass();
-      body.applyImpulse({ x: (Math.random() - 0.5) * m * 0.6, y: 0, z: (Math.random() - 0.5) * m * 0.6 }, true);
-      body.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 0.05, y: 0, z: (Math.random() - 0.5) * m * 0.05 }, true);
+    this.makeBody(p, !this.authority);
+    this.setState(p, LOOSE);
+    if (this.authority) {
+      const body = p.body;
+      if (impulse) body.applyImpulse(impulse, true);
+      if (collapse) {
+        const m = body.mass();
+        body.applyImpulse({ x: (Math.random() - 0.5) * m * 0.6, y: 0, z: (Math.random() - 0.5) * m * 0.6 }, true);
+        body.applyTorqueImpulse({ x: (Math.random() - 0.5) * m * 0.03, y: 0, z: (Math.random() - 0.5) * m * 0.03 }, true);
+      }
+      this.dirty.add(p.b);
     }
-    if (p.type.tint) for (const im of p.parts) { im.setColorAt(p.idx, _c.setScalar(p.tint)); im.instanceColor.needsUpdate = true; }
-    this.dirty = true;
+    if (p.type.tint) { for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; } }
   }
 
   damage(p, amount, point, dir, force = 4) {
+    const chip = this.chipColor(p);
     if (p.state === INTACT) {
       p.hp -= amount;
-      this.fx.chips(point, dir, p.type.chip, 5);
-      this.fx.dust(point, p.type.dust, 2, 0.6);
+      this.sfx.chips(point, dir, chip, 5);
+      this.sfx.dust(point, chip, 2, 0.5);
       if (p.hp <= 0) {
-        const m = p.size.x * p.size.y * p.size.z * p.type.density;
+        const m = p.body ? p.body.mass() : p.size.x * p.size.y * p.size.z * p.type.density;
         this.detach(p, { x: dir.x * force * m, y: Math.max(0.2, dir.y) * force * m * 0.5, z: dir.z * force * m });
-        if (p.type.sound === 'glass') { this.fx.glass(p.pos); this.audio && this.audio.glass(p.pos); }
+        if (p.type.sound === 'glass') this.sfx.glass(p.pos);
         return true;
       }
       if (p.type.tint) {
         const f = 0.55 + 0.45 * (p.hp / p.type.hp);
-        for (const im of p.parts) { im.setColorAt(p.idx, _c.setScalar(p.tint * f)); im.instanceColor.needsUpdate = true; }
+        for (const im of p.parts) { im.setColorAt(p.idx, _c.copy(p.color).multiplyScalar(f)); im.instanceColor.needsUpdate = true; }
       }
       return false;
-    } else if (p.state === LOOSE) {
+    } else if (p.state === LOOSE && p.body) {
       const m = p.body.mass();
       p.body.applyImpulseAtPoint({ x: dir.x * force * m * 0.6, y: (dir.y + 0.4) * force * m * 0.6, z: dir.z * force * m * 0.6 }, point, true);
-      this.fx.dust(point, p.type.dust, 1, 0.4);
+      this.sfx.dust(point, chip, 1, 0.4);
       return true;
     }
     return false;
   }
 
-  // Excavator / splash: break every intact piece overlapping a sphere.
   breakSphere(center, radius, push, maxCount = 12) {
     const shape = new RAPIER.Ball(radius);
     const hits = [];
@@ -234,22 +249,31 @@ export class Demolition {
     for (const p of hits) {
       const m = p.size.x * p.size.y * p.size.z * p.type.density;
       this.detach(p, push ? { x: push.x * m, y: push.y * m, z: push.z * m } : null);
-      if (p.type.sound === 'glass') { this.fx.glass(p.pos); this.audio && this.audio.glass(p.pos); }
+      if (p.type.sound === 'glass') this.sfx.glass(p.pos);
     }
     if (hits.length) {
-      this.fx.dust(center, hits[0].type.dust, 3 + hits.length, 1.2);
-      this.audio && this.audio.impact(hits[0].type.sound, Math.min(1, 0.4 + hits.length * 0.1), center);
+      this.sfx.dust(center, this.chipColor(hits[0]), 3 + hits.length, 1.0);
+      this.sfx.chips(center, push || new THREE.Vector3(), this.chipColor(hits[0]), 4 + hits.length);
+      this.sfx.impact(hits[0].type.sound, Math.min(1, 0.4 + hits.length * 0.1), center);
     }
     return hits;
   }
 
+  intactNear(center, radius, max = 12) {
+    const hits = [];
+    this.world.intersectionsWithShape(center, { x: 0, y: 0, z: 0, w: 1 }, new RAPIER.Ball(radius), (c) => {
+      const p = this.byCollider.get(c.handle);
+      if (p && p.state === INTACT) hits.push(p);
+      return hits.length < max;
+    }, RAPIER.QueryFilterFlags.ONLY_FIXED);
+    return hits;
+  }
+
   piecesInSphere(center, radius, states = [LOOSE]) {
-    const out = [];
-    const r2 = radius * radius;
+    const out = [], r2 = radius * radius;
     for (const p of this.pieces) {
       if (!states.includes(p.state)) continue;
-      const pos = p.state === INTACT ? p.pos : p.body.translation();
-      const dx = pos.x - center.x, dy = pos.y - center.y, dz = pos.z - center.z;
+      const dx = p.pos.x - center.x, dy = p.pos.y - center.y, dz = p.pos.z - center.z;
       if (dx * dx + dy * dy + dz * dz < r2) out.push(p);
     }
     return out;
@@ -257,76 +281,180 @@ export class Demolition {
 
   pieceFromCollider(c) { return this.byCollider.get(c.handle); }
 
-  // Grapple: piece follows a kinematic target
-  hold(p) {
+  // machine grabs: piece becomes kinematic and follows the attachment
+  hold(p, machineId, local) {
     if (p.state === INTACT) this.detach(p);
     if (p.state !== LOOSE) return false;
     p.body.setBodyType(RAPIER.RigidBodyType.KinematicPositionBased, true);
-    p.state = HELD;
+    p.holdLocal = local;
+    this.setState(p, HELD, machineId);
     return true;
   }
   release(p, vel) {
     if (p.state !== HELD) return;
     p.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     if (vel) p.body.setLinvel(vel, true);
-    p.state = LOOSE;
+    p.holdLocal = null;
+    this.setState(p, LOOSE);
+  }
+  moveHeld(p, pos, quat) {
+    p.pos.copy(pos); p.quat.copy(quat);
+    if (p.body) { p.body.setNextKinematicTranslation(pos); p.body.setNextKinematicRotation(quat); }
+    this.writeMatrix(p); this.flagParts(p);
   }
 
-  // Player carrying: body is disabled while in the arms
-  carry(p) {
+  // player carrying: body disabled while in the arms
+  carry(p, playerId) {
     if (p.state !== LOOSE) return false;
     p.body.setEnabled(false);
-    p.state = CARRIED;
+    this.setState(p, CARRIED, playerId);
     return true;
   }
   throwPiece(p, pos, vel, spin) {
     if (p.state !== CARRIED) return;
+    p.pos.copy(pos);
     p.body.setTranslation(pos, true);
     p.body.setLinvel(vel, true);
     p.body.setAngvel(spin || { x: 0, y: 0, z: 0 }, true);
     p.body.setEnabled(true);
     p.body.enableCcd(true);
-    p.state = LOOSE;
+    this.setState(p, LOOSE);
   }
   placeCarried(p, pos, quat, scale) {
     p.pos.copy(pos); p.quat.copy(quat);
-    this.writeMatrix(p, scale);
-    for (const im of p.parts) im.instanceMatrix.needsUpdate = true;
+    this.writeMatrix(p, scale); this.flagParts(p);
   }
 
-  consume(p) {
-    if (p.state === GONE || p.state === INTACT) return;
-    this.byCollider.delete(p.collider.handle);
-    this.world.removeRigidBody(p.body);
+  vanish(p, crushed = true) {
+    if (p.state === GONE) return;
+    if (p.body) { this.byCollider.delete(p.collider.handle); this.world.removeRigidBody(p.body); }
+    else if (p.collider) { this.byCollider.delete(p.collider.handle); this.world.removeCollider(p.collider, false); }
     p.body = null; p.collider = null;
-    p.state = GONE;
+    this.setState(p, GONE);
     this.hide(p);
-    this.crushed++;
   }
 
-  // ---------- per frame ----------
-  update() {
-    if (this.dirty) { this.dirty = false; this.recompute(); }
-    const touched = new Set();
-    for (const p of this.pieces) {
-      if (p.state !== LOOSE && p.state !== HELD) continue;
-      const b = p.body;
-      if (b.isSleeping()) continue;
-      const t = b.translation(), r = b.rotation();
-      if (t.y < -15) {
-        this.byCollider.delete(p.collider.handle);
-        this.world.removeRigidBody(b); p.body = null; p.collider = null; p.state = GONE; this.hide(p); this.lost++;
-        continue;
+  // ---------------------------------------------------------------- per frame
+  update(dt) {
+    if (this.authority) {
+      for (const bid of this.dirty) this.recompute(this.buildings[bid]);
+      this.dirty.clear();
+      const touched = new Set();
+      for (const p of this.pieces) {
+        if (p.state !== LOOSE) continue;
+        const b = p.body;
+        if (b.isSleeping()) continue;
+        const t = b.translation(), r = b.rotation();
+        if (t.y < -20) { this.vanish(p); continue; }
+        p.pos.set(t.x, t.y, t.z); p.quat.set(r.x, r.y, r.z, r.w);
+        this.writeMatrix(p);
+        touched.add(p.parts);
       }
-      p.pos.set(t.x, t.y, t.z); p.quat.set(r.x, r.y, r.z, r.w);
-      this.writeMatrix(p);
-      touched.add(p.parts);
+      for (const parts of touched) for (const im of parts) im.instanceMatrix.needsUpdate = true;
+    } else {
+      // mirror: interpolate loose pieces toward the host transforms
+      const a = 1 - Math.exp(-dt * 14);
+      const touched = new Set();
+      for (const p of this.pieces) {
+        if (p.state !== LOOSE || !p.target) continue;
+        p.pos.lerp(p.target.pos, a); p.quat.slerp(p.target.quat, a);
+        if (p.pos.distanceToSquared(p.target.pos) < 1e-7) { p.pos.copy(p.target.pos); p.quat.copy(p.target.quat); p.target = null; }
+        if (p.body) { p.body.setNextKinematicTranslation(p.pos); p.body.setNextKinematicRotation(p.quat); }
+        this.writeMatrix(p); touched.add(p.parts);
+      }
+      for (const parts of touched) for (const im of parts) im.instanceMatrix.needsUpdate = true;
     }
-    for (const parts of touched) for (const im of parts) im.instanceMatrix.needsUpdate = true;
   }
 
-  get progress() { return this.total ? (this.crushed + this.lost) / this.total : 0; }
-  remaining() { return this.pieces.filter((p) => p.state !== GONE); }
+  // ---------------------------------------------------------------- network (host side)
+  takeChanges() { const c = this.changes; this.changes = []; return c; }
+
+  // pack loose pieces that moved since they were last sent: [id, px,py,pz, qx,qy,qz,qw]*
+  packMoving(max = 260) {
+    const out = [];
+    const n = this.pieces.length;
+    let count = 0;
+    for (let k = 0; k < n && count < max; k++) {
+      const i = (this.rr + k) % n;
+      const p = this.pieces[i];
+      if (p.state !== LOOSE) continue;
+      const s = p.sent;
+      if (s && Math.abs(s[0] - p.pos.x) + Math.abs(s[1] - p.pos.y) + Math.abs(s[2] - p.pos.z) < 0.002 &&
+          Math.abs(s[3] - p.quat.x) + Math.abs(s[4] - p.quat.y) + Math.abs(s[5] - p.quat.z) + Math.abs(s[6] - p.quat.w) < 0.002) continue;
+      p.sent = [p.pos.x, p.pos.y, p.pos.z, p.quat.x, p.quat.y, p.quat.z, p.quat.w];
+      out.push(p.id, ...p.sent);
+      count++;
+      if (count >= max) this.rr = (i + 1) % n;
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- network (client side)
+  applyChange(id, state, holder, extra) {
+    const p = this.pieces[id];
+    if (!p || p.state === state && p.holder === holder) return;
+    if (state === GONE) { this.vanish(p); return; }
+    if (p.state === INTACT && state !== INTACT) this.detach(p);
+    if (extra && extra.pos) { p.pos.fromArray(extra.pos); p.quat.fromArray(extra.quat); p.target = null; if (p.body) { p.body.setTranslation(p.pos, true); p.body.setRotation(p.quat, true); } this.writeMatrix(p); this.flagParts(p); }
+    if (p.body) p.body.setEnabled(state === LOOSE);
+    p.state = state; p.holder = holder;
+    if (state === HELD) p.holdLocal = extra && extra.local ? new THREE.Matrix4().fromArray(extra.local) : new THREE.Matrix4();
+    if (state === LOOSE) p.holdLocal = null;
+  }
+  applyTransforms(arr) {
+    for (let i = 0; i + 7 < arr.length; i += 8) {
+      const p = this.pieces[arr[i]];
+      if (!p || p.state !== LOOSE) continue;
+      if (!p.target) p.target = { pos: new THREE.Vector3(), quat: new THREE.Quaternion() };
+      p.target.pos.set(arr[i + 1], arr[i + 2], arr[i + 3]);
+      p.target.quat.set(arr[i + 4], arr[i + 5], arr[i + 6], arr[i + 7]);
+    }
+  }
+
+  // ---------------------------------------------------------------- save / sync
+  serializePieces() {
+    const states = [], hp = [], xf = {}, holders = {};
+    for (const p of this.pieces) {
+      states.push(p.state);
+      hp.push(p.hp === p.type.hp ? 0 : Math.round(p.hp * 10) / 10);
+      if (p.state === LOOSE || p.state === HELD || p.state === CARRIED) xf[p.id] = [...p.pos.toArray(), ...p.quat.toArray()].map((v) => Math.round(v * 1e4) / 1e4);
+      if (p.state === HELD || p.state === CARRIED) holders[p.id] = [p.holder, p.holdLocal ? p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) : null];
+    }
+    return { states, hp, xf, holders };
+  }
+
+  // forSave: carried / held pieces come back as loose rubble
+  restorePieces(data, forSave) {
+    data.states.forEach((st, i) => {
+      const p = this.pieces[i];
+      if (!p) return;
+      if (data.hp[i]) p.hp = data.hp[i];
+      if (st === INTACT) return;
+      if (st === GONE) { this.vanish(p); return; }
+      const x = data.xf[i];
+      if (x) { p.pos.fromArray(x, 0); p.quat.fromArray(x, 3); }
+      if (p.state === INTACT) {
+        this.byCollider.delete(p.collider.handle); this.world.removeCollider(p.collider, false);
+        this.makeBody(p, !this.authority);
+        p.state = LOOSE;
+        if (p.type.tint) for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; }
+      }
+      this.writeMatrix(p); this.flagParts(p);
+      const h = data.holders && data.holders[i];
+      if (!forSave && h && (st === HELD || st === CARRIED)) {
+        p.state = st; p.holder = h[0];
+        p.holdLocal = h[1] ? new THREE.Matrix4().fromArray(h[1]) : null;
+        if (p.body) p.body.setEnabled(false);
+      }
+    });
+    if (this.authority) for (const b of this.buildings) if (!b.removed) this.recompute(b);
+  }
+
+  stats() {
+    let intact = 0, loose = 0, gone = 0;
+    for (const p of this.pieces) { if (this.buildings[p.b].removed) continue; if (p.state === INTACT) intact++; else if (p.state === GONE) gone++; else loose++; }
+    return { intact, loose, gone, total: intact + loose + gone };
+  }
 }
 
 class MinHeap {
@@ -346,8 +474,4 @@ class MinHeap {
     }
     return top;
   }
-}
-
-function mulberry32(a) {
-  return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }

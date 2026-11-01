@@ -1,40 +1,46 @@
 # Wrecking Yard
 
-A 3D demolition game. Knock down a brick house piece by piece, haul the rubble to a tracked jaw crusher, and get paid for every piece it crushes. Spend the money on better hammers, more carrying strength, a faster crusher, a gravel sorter, and a demolition excavator with a grapple. Then move on to bigger jobs.
+A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 10 excavators to spawn and cross-play multiplayer between PC and phones.
 
 ## Download
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | [`release/WreckingYard-1.0.0-Windows.exe`](release/WreckingYard-1.0.0-Windows.exe): portable, no install. Double-click to play. |
-| Android 7.0+ | [`release/WreckingYard-1.0.0-Android.apk`](release/WreckingYard-1.0.0-Android.apk): allow "install unknown apps", then open the APK. |
+| Windows 10/11 (64-bit) | [`release/WreckingYard-2.0.0-Windows.exe`](release/WreckingYard-2.0.0-Windows.exe): portable, no install |
+| Android 7.0+ | [`release/WreckingYard-2.0.0-Android.apk`](release/WreckingYard-2.0.0-Android.apk): installs over v1.0 |
 
-The Windows exe is not code-signed, so SmartScreen may warn you the first time. Click **More info → Run anyway**.
+The Windows exe is not code-signed, so SmartScreen may warn you the first time. Click **More info → Run anyway**. On Android, allow "install unknown apps" for your browser or file manager.
 
-## How to play
+## What's in it
 
-1. **Smash** the walls with your hammer. Bricks with nothing holding them up fall down, so cut low and let gravity help.
-2. **Pick up** the rubble and **throw** it into the yellow hopper on the crusher. Throws aim themselves when you face the crusher. You can also climb the stairs to the platform.
-3. Every crushed piece earns money. Furniture, windows, and steel are worth more than bricks.
-4. Buy the **excavator** in the shop. Its grapple tears walls apart and carries a whole load of rubble to the hopper.
-5. Clear 90 % of a building for the job bonus, then unlock the next site in **Shop → Jobs**.
+* **Cinder-block buildings.** Every hollow two-core block is its own physics object and has its own paint colour. Cut the bottom out of a wall and the structural solver brings down whatever is no longer supported. There are five buildings (Cinder Bungalow, Rainbow House, Block Warehouse, Pixel Tower, Colour Wall) on two plots, and you can rebuild them at any time.
+* **Realistic crushing.** Blocks dropped in the hopper are crushed, and the material rides the conveyor in the block's own colour. It falls off the head drum and builds a layered stockpile: the oldest dust is at the bottom, the newest on top. The total kg and the colour mix are shown on screen.
+* **Cement.** Put dust and water in the pan mixer. Each colour you pour in swirls around the tub, and the paddles blend them into one cement colour. The right ratio is about 1 L of water per 3 kg of dust.
+* **Road repair.** Pour cement into the potholes. Each patch takes the cement's colour and dries over time. The breaker excavator can make new potholes.
+* **10 excavators.** Spawn up to 10 at once:
+  * TORVA TX330 (grapple)
+  * KESTREL K35 mini on rubber tracks
+  * VANTOR HR450 high reach (shear, tilting cab)
+  * MERIDIAN MW180 on wheels
+  * TORVA TX700 70 t (rock bucket)
+  * BRUNO BX220 (hydraulic breaker)
+  * HALDEN MH24 material handler (raised cab, orange-peel grab)
+  * AQUAMOLE AMX amphibious with a water tank (it floats in the lake)
+  * GRANITE GP300 (pulverizer)
+  * LIMEWORKS LC200 (concrete skip)
+* **Multiplayer.** Press **Multiplayer → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device.
+* **Save slots.** There are five save slots plus an autosave. A save contains every block, machine, the dust pile, the mixer and the road.
+
+## Controls
 
 | | Keyboard / mouse | Touch |
 |---|---|---|
-| Move / look | WASD + mouse, Shift to run, Space to jump | left stick, drag to look |
+| Move / look | WASD + mouse, Shift run, Space jump | left stick, drag to look |
 | Hammer | Left click | 🔨 |
 | Pick up / throw | Q or right click / G | ✋ / 🧱 |
-| Enter / exit excavator | E | ENTER / EXIT |
-| Excavator | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl, Click/Space grapple, C cab camera | drive stick, swing/boom stick, arm & curl buttons |
-| Shop / help | B / H | 🛒 / ❔ |
-
-Progress saves automatically.
-
-## Jobs
-
-* **Maple St. Bungalow**: single-storey red brick, gable roof, chimney, furnished rooms.
-* **Oak Ave. Family House**: two storeys of buff brick, wooden upper floor, big chimney.
-* **Dockside Warehouse**: concrete-block walls, roller doors, steel columns, tin roof, pallets and crates.
+| Use (drive, bucket, mixer, pothole) | E | context button |
+| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump, Click/Space tool, C cab camera | drive stick, swing/boom stick, buttons |
+| Menus | B spawn, M multiplayer, H help | top-right buttons |
 
 ## Building from source
 
@@ -42,18 +48,17 @@ Requirements: Node 18+. The APK build also needs JDK 17+ and Android build-tools
 
 ```bash
 npm install
-npm run dev     # builds dist/ and serves it on http://localhost:8080
+npm run dev     # builds dist/ and serves http://localhost:8080
 npm run exe     # Windows portable exe  -> build/
 npm run apk     # Android APK (signed)  -> build/
 ```
 
-`scripts/build-apk.sh` builds the APK directly with `aapt2`, `javac`, `d8`, `zipalign` and `apksigner`, with no Gradle. Point `ANDROID_SDK`, `BUILD_TOOLS` and `ANDROID_JAR` at your SDK if it isn't in `/opt/android-sdk`.
-
 ## Tech
 
-* **Three.js**: PBR rendering, soft shadows, sky and image-based lighting. Every texture (bricks, shingles, concrete, wood, grass, gravel, and so on) is generated procedurally at startup, so the game ships with no image assets.
-* **Rapier** physics (WASM): each brick, roof panel, window, and piece of furniture is a separate rigid body once it breaks loose. A support graph decides what collapses when you knock out what's holding it up.
-* Sound is synthesized with the Web Audio API.
-* Electron wraps the Windows build and a native WebView wraps the Android build.
+* Three.js rendering. All textures are generated procedurally at startup.
+* Rapier physics (WASM), including the heightfield terrain with the lake bowl.
+* PeerJS (WebRTC) peer-to-peer multiplayer. The host simulates the world and clients mirror it.
+* Web Audio synthesized sound.
+* Electron for Windows and a native WebView shell for Android.
 
-All machines and brands in the game (TORVA excavator, GRITLINE crusher) are fictional.
+All machines and brands in the game are fictional.

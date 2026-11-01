@@ -57,7 +57,10 @@ export function materials() {
   const corr = T.corrugatedTextures([176, 184, 190]);
   const tread = T.treadPlateTextures();
 
+  const cind = T.cinderTextures();
   M = {
+    cinder: boxMapped(new THREE.MeshStandardMaterial({ map: cind.map, normalMap: cind.normalMap, roughnessMap: cind.roughnessMap, roughness: 1, vertexColors: true, normalScale: new THREE.Vector2(1.3, 1.3) }), 0.42, 0.42),
+    cinderSolid: boxMapped(new THREE.MeshStandardMaterial({ map: cind.map, normalMap: cind.normalMap, roughnessMap: cind.roughnessMap, roughness: 1 }), 0.42, 0.42),
     brick: boxMapped(new THREE.MeshStandardMaterial({ map: brick.map, normalMap: brick.normalMap, roughnessMap: brick.roughnessMap, roughness: 1, normalScale: new THREE.Vector2(1.2, 1.2) }), 0.66, 0.3, brick.variants),
     brickYellow: boxMapped(new THREE.MeshStandardMaterial({ map: brickY.map, normalMap: brickY.normalMap, roughnessMap: brickY.roughnessMap, roughness: 1 }), 0.66, 0.3, brickY.variants),
     block: boxMapped(new THREE.MeshStandardMaterial({ map: block.map, normalMap: block.normalMap, roughnessMap: block.roughnessMap, roughness: 1 }), 0.66, 0.3, block.variants),

@@ -16,10 +16,12 @@ export class Crusher {
     scene.add(this.root);
     this.pos = pos.clone().add(new THREE.Vector3(0, 2.5, -3));
     this.colliders = [];
-    this.rate = 1; this.mult = 1;
+    this.rate = 3;
     this.timer = 0; this.load = 0; this.spin = 0;
-    this.totalEarned = 0; this.crushedCount = 0;
-    this.stock = 0;
+    this.crushedCount = 0; this.totalKg = 0;
+    this.layers = [];            // stockpile layers bottom -> top: {kg, c: THREE.Color (linear)}
+    this.tally = new Map();      // all-time kg per colour hex (for the HUD)
+    this.belt = [];              // material riding the conveyor
     this.hopperBox = { min: new THREE.Vector3(-1.4, 1.9, -6.9), max: new THREE.Vector3(1.4, 4.3, -2.2) };
     this.feedTarget = new THREE.Vector3(0, 3.0, -4.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY).add(pos);
     this.platformPoint = new THREE.Vector3(-2.2, 2.5, -4.4).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY).add(pos);
@@ -269,18 +271,35 @@ export class Crusher {
 
     // ---------------- stockpile ----------------
     const gTex = T.gravelTextures();
-    const pileMat = new THREE.MeshStandardMaterial({ map: gTex.map, normalMap: gTex.normalMap, roughness: 1 });
-    pileMat.map = gTex.map.clone(); pileMat.map.repeat.set(4, 2); pileMat.map.needsUpdate = true;
-    const pileGeo = new THREE.ConeGeometry(1, 1, 40, 6);
+    const pileMat = new THREE.MeshStandardMaterial({ map: gTex.map.clone(), normalMap: gTex.normalMap, roughness: 1, vertexColors: true });
+    pileMat.map.repeat.set(5, 3); pileMat.map.needsUpdate = true;
+    pileMat.color.setScalar(1.7);
+    const pileGeo = new THREE.ConeGeometry(1, 1, 56, 14);
     const pp = pileGeo.attributes.position;
-    for (let i = 0; i < pp.count; i++) { const y = pp.getY(i); if (y > -0.49 && y < 0.49) { const s = 1 + (Math.random() - 0.5) * 0.12; pp.setX(i, pp.getX(i) * s); pp.setZ(i, pp.getZ(i) * s); } }
+    this.pileNoise = new Float32Array(pp.count);
+    for (let i = 0; i < pp.count; i++) {
+      const y = pp.getY(i);
+      const a = Math.atan2(pp.getZ(i), pp.getX(i));
+      if (y > -0.49 && y < 0.49) { const s = 1 + Math.sin(a * 5 + y * 7) * 0.04 + (Math.random() - 0.5) * 0.08; pp.setX(i, pp.getX(i) * s); pp.setZ(i, pp.getZ(i) * s); }
+      this.pileNoise[i] = Math.sin(a * 7 + y * 11) * 0.05 + Math.sin(a * 17) * 0.025 + (Math.random() - 0.5) * 0.04;
+    }
     pileGeo.computeVertexNormals();
+    pileGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(pp.count * 3).fill(0.6), 3));
     this.pile = this.add(pileGeo, pileMat);
     this.pile.position.set(0, 0, 9.35);
-    this.setPile(0.15);
+    this.pileLocal = new THREE.Vector3(0, 0, 9.35);
+    this.updatePile();
+    // material riding on the belt / falling off the head drum
+    const rockGeo = new THREE.DodecahedronGeometry(0.06, 0);
+    this.beltRocks = new THREE.InstancedMesh(rockGeo, new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), 600);
+    this.beltRocks.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(600 * 3), 3);
+    this.beltRocks.frustumCulled = false; this.beltRocks.castShadow = true;
+    for (let i = 0; i < 600; i++) this.beltRocks.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
+    this.scene.add(this.beltRocks);
+    this.convTail = new THREE.Vector3(0, 0.78, -1.5); this.convHead = new THREE.Vector3(0, 3.86, 8.6);
 
     // sign on the platform railing, facing the house
-    const hl = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshStandardMaterial({ map: T.labelTexture('$ DROP RUBBLE HERE $', { w: 1024, h: 212, color: '#16171a', bg: '#f2b705', font: '900 104px Arial' }), roughness: 0.5 }));
+    const hl = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.5), new THREE.MeshStandardMaterial({ map: T.labelTexture('▼ DROP RUBBLE HERE ▼', { w: 1024, h: 212, color: '#16171a', bg: '#f2b705', font: '900 104px Arial' }), roughness: 0.5 }));
     hl.position.set(px0 - 0.03, py + 0.8, (pz0 + pz1) / 2); hl.rotation.y = -Math.PI / 2; this.root.add(hl);
     const hlBack = this.add(box(0.03, 0.56, 2.46, px0 - 0.005, py + 0.8, (pz0 + pz1) / 2), M.paintYellow);
     // tracks collider
@@ -288,9 +307,130 @@ export class Crusher {
     this.root.updateMatrixWorld(true);
   }
 
-  setPile(r) {
-    this.pile.scale.set(r * 2.2, r * 1.15, r * 2.2);
-    this.pile.position.y = r * 1.15 / 2 - 0.05;
+  get pileKg() { let k = 0; for (const l of this.layers) k += l.kg; return k; }
+
+  // 34 degree angle of repose, bulk density 1500 kg/m3
+  pileDims() {
+    const v = Math.max(0.02, this.pileKg / 1500);
+    const r = Math.max(0.35, Math.cbrt(v / 0.7068));
+    return { r, h: r * 0.675 };
+  }
+
+  pileWorld() { return this.root.localToWorld(this.pileLocal.clone()); }
+  pileSurfaceY(x, z) {
+    const c = this.pileWorld(), { r, h } = this.pileDims();
+    const d = Math.hypot(x - c.x, z - c.z);
+    return d > r ? 0 : h * (1 - d / r);
+  }
+
+  deposit(kg, color) {
+    const top = this.layers[this.layers.length - 1];
+    const close = top && Math.abs(top.c.r - color.r) + Math.abs(top.c.g - color.g) + Math.abs(top.c.b - color.b) < 0.04;
+    if (close) { top.c.lerp(color, kg / (top.kg + kg)); top.kg += kg; }
+    else this.layers.push({ kg, c: color.clone() });
+    if (this.layers.length > 80) { const a = this.layers.shift(), b2 = this.layers[0]; b2.c.lerp(a.c, a.kg / (a.kg + b2.kg)); b2.kg += a.kg; }
+    this.pileDirty = true;
+  }
+
+  // scoop from the top of the pile; returns {kg, color}
+  take(kg) {
+    let got = 0; const col = new THREE.Color(0, 0, 0); const parts = [];
+    while (got < kg && this.layers.length) {
+      const top = this.layers[this.layers.length - 1];
+      const t = Math.min(top.kg, kg - got);
+      col.r += top.c.r * t; col.g += top.c.g * t; col.b += top.c.b * t;
+      parts.push({ kg: t, color: top.c.clone() });
+      top.kg -= t; got += t;
+      if (top.kg <= 0.01) this.layers.pop();
+    }
+    this.pileDirty = true;
+    if (got > 0) col.multiplyScalar(1 / got);
+    return { kg: got, color: col, parts };
+  }
+
+  updatePile() {
+    this.pileDirty = false;
+    const { r, h } = this.pileDims();
+    const empty = this.pileKg < 1;
+    this.pile.visible = !empty;
+    this.pile.scale.set(r, h, r);
+    this.pile.position.y = h / 2 - 0.04;
+    const g = this.pile.geometry, pos = g.attributes.position, col = g.attributes.color;
+    const total = this.pileKg || 1;
+    const cum = []; let acc = 0;
+    for (const l of this.layers) { acc += l.kg; cum.push(acc / total); }
+    for (let i = 0; i < pos.count; i++) {
+      const t = THREE.MathUtils.clamp(pos.getY(i) + 0.5, 0, 1);
+      let c = 1 - Math.pow(1 - t, 3) + this.pileNoise[i];
+      c = THREE.MathUtils.clamp(c, 0, 0.9999);
+      let k = 0; while (k < cum.length - 1 && cum[k] < c) k++;
+      const lc = this.layers[k] ? this.layers[k].c : null;
+      if (lc) col.setXYZ(i, lc.r, lc.g, lc.b); else col.setXYZ(i, 0.5, 0.5, 0.5);
+    }
+    col.needsUpdate = true;
+  }
+
+  // a crushed piece: chunks of its colour go onto the belt, the kg arrives at the pile when they land
+  crushVisual(kg, color, at, fx, audio) {
+    const n = Math.max(3, Math.min(14, Math.round(kg / 4)));
+    for (let i = 0; i < n; i++) this.belt.push({ s: -i * 0.09 - Math.random() * 0.05, kg: kg / n, base: color.clone(), c: color.clone().multiplyScalar(0.85 + Math.random() * 0.3), fall: null, x: (Math.random() - 0.5) * 0.5 });
+    if (this.belt.length > 590) this.belt.splice(0, this.belt.length - 590).forEach((b) => this.deposit(b.kg, b.base));
+    const jawW = this.root.localToWorld(new THREE.Vector3(0, 2.4, -2.3));
+    fx.dust(jawW, color.getHex(), 3, 0.7, { alpha: 0.4 });
+    fx.dust(this.root.localToWorld(new THREE.Vector3(0, 0.9, -1.0)), color.getHex(), 2, 0.5, { alpha: 0.35 });
+    if (at) fx.dust(at, color.getHex(), 2, 0.6, { alpha: 0.3 });
+    audio.crunch(jawW);
+    this.load = 1;
+    this.crushedCount++;
+    this.totalKg += kg;
+    const hex = color.getHex();
+    this.tally.set(hex, (this.tally.get(hex) || 0) + kg);
+  }
+
+  updateBelt(dt, fx) {
+    const len = this.convHead.distanceTo(this.convTail);
+    const dir = this.convHead.clone().sub(this.convTail).normalize();
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), v = new THREE.Vector3(), sc = new THREE.Vector3();
+    const speed = 1.6;
+    let i = 0;
+    const keep = [];
+    for (const b of this.belt) {
+      if (!b.fall) {
+        b.s += speed * dt;
+        if (b.s >= len) {
+          // thrown off the head drum
+          const p = this.root.localToWorld(this.convHead.clone().add(new THREE.Vector3(b.x * 0.6, 0.12, 0.1)));
+          const vel = dir.clone().multiplyScalar(speed).applyQuaternion(this.root.quaternion);
+          vel.x += (Math.random() - 0.5) * 0.4; vel.z += (Math.random() - 0.5) * 0.3;
+          b.fall = { p, v: vel };
+        }
+      }
+      if (b.fall) {
+        b.fall.v.y -= 9.8 * dt; b.fall.p.addScaledVector(b.fall.v, dt);
+        if (b.fall.p.y <= this.pileSurfaceY(b.fall.p.x, b.fall.p.z) + 0.05) {
+          this.deposit(b.kg, b.base);
+          if (Math.random() < 0.15) fx.dust(b.fall.p, b.c.getHex(), 1, 0.4, { alpha: 0.3, size: 0.8 });
+          continue;
+        }
+        v.copy(b.fall.p);
+      } else {
+        const s = Math.max(0, b.s);
+        v.copy(this.convTail).addScaledVector(dir, s); v.x += b.x * (s > 0 ? 1 : 0.2); v.y += 0.07;
+        if (b.s < 0) v.y -= 0.6; // still inside the jaw chamber
+        this.root.localToWorld(v);
+      }
+      keep.push(b);
+      q.setFromEuler(new THREE.Euler(b.s * 3, b.s * 2, 0));
+      sc.setScalar(0.7 + Math.min(1.6, b.kg / 3) * 0.6);
+      m.compose(v, q, sc);
+      this.beltRocks.setMatrixAt(i, m); this.beltRocks.setColorAt(i, b.c); i++;
+    }
+    this.belt = keep;
+    for (let k = i; k < (this.lastBeltCount || 0); k++) this.beltRocks.setMatrixAt(k, m.makeScale(0, 0, 0));
+    this.lastBeltCount = i;
+    this.beltRocks.instanceMatrix.needsUpdate = true;
+    if (this.beltRocks.instanceColor) this.beltRocks.instanceColor.needsUpdate = true;
+    if (this.pileDirty) { this.pileTimer = (this.pileTimer || 0) - dt; if (this.pileTimer <= 0) { this.pileTimer = 0.25; this.updatePile(); } }
   }
 
   buildPhysics() {
@@ -311,33 +451,20 @@ export class Crusher {
     return l.x > this.hopperBox.min.x && l.x < this.hopperBox.max.x && l.y > this.hopperBox.min.y && l.y < this.hopperBox.max.y && l.z > this.hopperBox.min.z && l.z < this.hopperBox.max.z;
   }
 
-  update(dt, demo, fx, audio, onCash) {
-    // gather pieces in the hopper
-    const inside = [];
-    for (const p of demo.pieces) if (p.state === LOOSE && this.inHopper(p.pos)) inside.push(p);
-    this.queue = inside.length;
-    this.timer += dt;
-    const interval = 1 / this.rate;
-    if (inside.length && this.timer >= interval) {
-      this.timer = 0;
-      // crush the piece closest to the jaw
-      inside.sort((a, b) => this.toLocal(b.pos).z - this.toLocal(a.pos).z);
-      const p = inside[0];
-      const value = Math.round(p.type.value * this.mult * 10) / 10;
-      const at = p.pos.clone();
-      demo.consume(p);
-      this.crushedCount++;
-      this.totalEarned += value;
-      this.stock += p.size.x * p.size.y * p.size.z;
-      this.setPile(Math.min(2.6, 0.15 + Math.cbrt(this.stock) * 0.7));
-      fx.dust(at, p.type.dust, 3, 0.8, { alpha: 0.35 });
-      const jawW = this.root.localToWorld(new THREE.Vector3(0, 2.4, -2.3));
-      fx.dust(jawW, 0x9a948a, 2, 0.6, { alpha: 0.3 });
-      audio.crunch(jawW);
-      this.load = 1;
-      this.gravelBurst = 1.0;
-      onCash(value, at);
-    } else if (!inside.length) this.timer = Math.min(this.timer, interval);
+  // authority: actually consume pieces from the hopper; onCrush(piece) does the bookkeeping + networking
+  update(dt, demo, fx, audio, onCrush) {
+    if (onCrush) {
+      const inside = [];
+      for (const p of demo.pieces) if (p.state === LOOSE && this.inHopper(p.pos)) inside.push(p);
+      this.queue = inside.length;
+      this.timer += dt;
+      const interval = 1 / this.rate;
+      if (inside.length && this.timer >= interval) {
+        this.timer = 0;
+        inside.sort((a, b) => this.toLocal(b.pos).z - this.toLocal(a.pos).z);
+        onCrush(inside[0]);
+      } else if (!inside.length) this.timer = Math.min(this.timer, interval);
+    }
     this.load = Math.max(0, this.load - dt * 0.6);
 
     // animation
@@ -349,13 +476,7 @@ export class Crusher {
     this.feeder.position.set(0, vib * (0.5 + this.load), vib * 2);
     this.jaw.position.y = Math.sin(performance.now() * 0.07) * 0.006 * (0.3 + this.load);
     this.beacon.material.emissiveIntensity = 0.4 + Math.max(0, Math.sin(performance.now() * 0.012)) * 2.0;
-    if (this.gravelBurst > 0) {
-      this.gravelBurst -= dt;
-      if (Math.random() < 0.6) {
-        const hp = this.root.localToWorld(this.headPoint.clone());
-        fx.chips(hp, new THREE.Vector3(0, 0, -0.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), this.root.rotation.y), 0x8e877c, 3, 0.07, 1.2);
-      }
-    }
+    this.updateBelt(dt, fx);
     this.screenTimer = (this.screenTimer || 0) - dt;
     if (this.screenTimer <= 0) { this.screenTimer = 0.4; this.drawScreen(); }
   }
@@ -366,15 +487,29 @@ export class Crusher {
     c.fillStyle = '#5dff8a'; c.font = 'bold 18px monospace';
     c.fillText('GRITLINE JC-110', 10, 22);
     c.font = '15px monospace';
-    c.fillText(`RATE   ${(this.rate * 60).toFixed(0)} pcs/min`, 10, 48);
-    c.fillText(`QUEUE  ${this.queue || 0}`, 10, 68);
-    c.fillText(`SORTER x${this.mult.toFixed(1)}`, 10, 88);
-    c.fillText(`TOTAL  $${Math.floor(this.totalEarned)}`, 10, 108);
+    c.fillText(`RATE   ${(this.rate * 60).toFixed(0)} pcs/min`, 10, 46);
+    c.fillText(`QUEUE  ${this.queue || 0}`, 10, 64);
+    c.fillText(`TOTAL  ${fmtKg(this.totalKg)}`, 10, 82);
+    c.fillText(`PILE   ${fmtKg(this.pileKg)}`, 10, 100);
+    // colour bar of the pile, bottom -> top
+    const tot = this.pileKg; let x = 10;
+    if (tot > 0) for (const l of this.layers) { const w = (l.kg / tot) * 236; c.fillStyle = '#' + l.c.getHexString(); c.fillRect(x, 108, Math.max(1, w), 12); x += w; }
     c.fillStyle = this.load > 0.1 ? '#ffb000' : '#2a5a3a';
     c.fillRect(220, 10, 24, 24);
     this.screenTex.needsUpdate = true;
   }
+
+  serialize() {
+    return { layers: this.layers.map((l) => [Math.round(l.kg * 10) / 10, +l.c.r.toFixed(4), +l.c.g.toFixed(4), +l.c.b.toFixed(4)]), totalKg: this.totalKg, count: this.crushedCount, tally: [...this.tally.entries()] };
+  }
+  restore(d) {
+    this.layers = d.layers.map(([kg, r, g, b]) => ({ kg, c: new THREE.Color(r, g, b) }));
+    this.totalKg = d.totalKg || 0; this.crushedCount = d.count || 0; this.tally = new Map(d.tally || []);
+    this.belt = []; this.updatePile();
+  }
 }
+
+export function fmtKg(kg) { return kg >= 1000 ? (kg / 1000).toFixed(kg >= 10000 ? 1 : 2) + ' t' : Math.round(kg) + ' kg'; }
 
 export function tube(a, b, r, seg = 10) {
   const d = b.clone().sub(a), len = d.length();

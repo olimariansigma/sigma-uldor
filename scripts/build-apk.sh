@@ -7,6 +7,8 @@ SDK="${ANDROID_SDK:-/opt/android-sdk}"
 BT="${BUILD_TOOLS:-$SDK/android-14}"          # build-tools 34 zip extracts to android-14
 PLATFORM="${ANDROID_JAR:-$SDK/android-34/android.jar}"
 OUT="$ROOT/android/build"
+VERSION="$(node -p "require('$ROOT/package.json').version")"
+APK="$ROOT/build/WreckingYard-$VERSION-Android.apk"
 rm -rf "$OUT" && mkdir -p "$OUT/res" "$OUT/classes" "$OUT/assets/game" "$OUT/gen"
 
 # icons
@@ -32,5 +34,5 @@ if [ ! -f "$KS" ]; then
 fi
 mkdir -p "$ROOT/build"
 "$BT/apksigner" sign --ks "$KS" --ks-pass pass:wreckingyard --key-pass pass:wreckingyard --ks-key-alias wreckingyard \
-  --out "$ROOT/build/WreckingYard-1.0.0-Android.apk" "$OUT/aligned.apk"
-"$BT/apksigner" verify "$ROOT/build/WreckingYard-1.0.0-Android.apk" && echo "APK ready: build/WreckingYard-1.0.0-Android.apk"
+  --out "$APK" "$OUT/aligned.apk"
+"$BT/apksigner" verify "$APK" && echo "APK ready: $APK"

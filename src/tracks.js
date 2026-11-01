@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { box, cyl, merge } from './pieces.js';
 
-export function buildTrackUnit(M, { length = 4.4, radius = 0.38, width = 0.6, rollers = 7, frameColor = null, pitch = 0.19 } = {}) {
+export function buildTrackUnit(M, { length = 4.4, radius = 0.38, width = 0.6, rollers = 7, frameColor = null, pitch = 0.19, rubber = false, noFrame = false } = {}) {
   const group = new THREE.Group();
   const cy = radius + 0.07;
   const R = radius + 0.035;
@@ -13,14 +13,19 @@ export function buildTrackUnit(M, { length = 4.4, radius = 0.38, width = 0.6, ro
 
   // shoe geometry (local: y = outward normal, z = along track)
   const sl = realPitch * 0.94;
-  const shoe = merge([
+  const shoe = rubber ? merge([
+    box(width, 0.05, sl * 1.02, 0, 0, 0),
+    box(width * 0.42, 0.04, 0.05, -width * 0.24, 0.04, 0, null, 0, 0.35, 0),   // chevron lugs
+    box(width * 0.42, 0.04, 0.05, width * 0.24, 0.04, 0, null, 0, -0.35, 0),
+    box(0.06, 0.05, sl * 0.6, 0, -0.045, 0),
+  ]) : merge([
     box(width, 0.04, sl, 0, 0, 0),
     box(width, 0.045, 0.035, 0, 0.04, -sl * 0.15),          // grouser bar
     box(0.07, 0.07, sl * 1.05, -width * 0.22, -0.05, 0),  // link rails
     box(0.07, 0.07, sl * 1.05, width * 0.22, -0.05, 0),
     cyl(0.03, 0.03, width * 0.5, 8, 0, -0.06, sl / 2, null, 0, 0, Math.PI / 2), // pin
   ]);
-  const shoes = new THREE.InstancedMesh(shoe, M.trackSteel, n);
+  const shoes = new THREE.InstancedMesh(shoe, rubber ? M.rubber : M.trackSteel, n);
   shoes.castShadow = true; shoes.receiveShadow = true;
   shoes.frustumCulled = false;
   group.add(shoes);
@@ -110,7 +115,7 @@ export function buildTrackUnit(M, { length = 4.4, radius = 0.38, width = 0.6, ro
   fg.translate(0, cy - 0.02, -zc + 0.05);
   const frame = new THREE.Mesh(fg, frameColor || M.blackPaint);
   frame.castShadow = true; frame.receiveShadow = true;
-  group.add(frame);
+  if (!noFrame) group.add(frame);
   // track guard plates
   const guard = new THREE.Mesh(merge([box(0.03, 0.18, 2 * zc - 0.4, -fw / 2 - 0.02, cy - R + 0.2, 0), box(0.03, 0.18, 2 * zc - 0.4, fw / 2 + 0.02, cy - R + 0.2, 0)]), frameColor || M.blackPaint);
   group.add(guard);

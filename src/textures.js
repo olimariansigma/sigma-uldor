@@ -521,3 +521,143 @@ export function skyCloudTexture() {
     return t;
   });
 }
+
+// ---------- v2 additions ----------
+// Light cast-concrete (cinder block). Kept bright so per-block paint colours read true.
+export function cinderTextures() {
+  return cached('cinder', () => {
+    const S = 512;
+    const n = fbm(S, S, 6, 4, 141), f = fbm(S, S, 160, 2, 142), g = fbm(S, S, 40, 2, 143);
+    const c = canvas(S, S), ctx = c.getContext('2d'), img = ctx.createImageData(S, S);
+    const h = new Float32Array(S * S), ro = new Float32Array(S * S);
+    for (let i = 0; i < S * S; i++) {
+      const pore = f[i] > 0.74 ? (f[i] - 0.74) * 4 : 0;
+      let m = 0.86 + (n[i] - 0.5) * 0.16 + (g[i] - 0.5) * 0.1 - pore * 0.55;
+      const v = 232 * m;
+      img.data[i * 4] = v; img.data[i * 4 + 1] = v * 0.99; img.data[i * 4 + 2] = v * 0.96; img.data[i * 4 + 3] = 255;
+      h[i] = 0.6 + (g[i] - 0.5) * 0.3 - pore * 0.8;
+      ro[i] = 0.82 + pore * 0.15;
+    }
+    ctx.putImageData(img, 0, 0);
+    return { map: toTex(c), normalMap: toTex(heightToNormal(h, S, S, 2.4), { srgb: false }), roughnessMap: toTex(grayToCanvas(ro, S, S), { srgb: false }) };
+  });
+}
+
+export function faceTexture() {
+  return cached('face', () => {
+    const c = canvas(256, 256), x = c.getContext('2d');
+    x.clearRect(0, 0, 256, 256);
+    x.fillStyle = '#111';
+    x.beginPath(); x.ellipse(92, 104, 13, 20, 0, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.ellipse(164, 104, 13, 20, 0, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#fff';
+    x.beginPath(); x.arc(96, 97, 5, 0, Math.PI * 2); x.fill();
+    x.beginPath(); x.arc(168, 97, 5, 0, Math.PI * 2); x.fill();
+    x.strokeStyle = '#111'; x.lineWidth = 9; x.lineCap = 'round';
+    x.beginPath(); x.arc(128, 132, 46, 0.18 * Math.PI, 0.82 * Math.PI); x.stroke();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  });
+}
+
+// Torso texture laid out as a strip: [front | right | back | left] -> used with custom UVs
+export function shirtTexture(shirt = '#2f6db5', jacket = '#141416') {
+  return cached('shirt' + shirt + jacket, () => {
+    const W = 512, H = 256, c = canvas(W, H), x = c.getContext('2d');
+    const r = rng(shirt.length * 7);
+    // front
+    x.fillStyle = shirt; x.fillRect(0, 0, 256, 256);
+    // dark graphic print on the shirt
+    x.fillStyle = 'rgba(10,20,40,0.85)';
+    x.save(); x.translate(128, 140);
+    for (let k = 0; k < 9; k++) { x.rotate(0.7); x.beginPath(); x.ellipse(18 + r() * 14, 0, 26 + r() * 10, 6 + r() * 5, r() * 2, 0, Math.PI * 2); x.fill(); }
+    x.restore();
+    // open jacket over the shirt
+    x.fillStyle = jacket;
+    x.beginPath(); x.moveTo(0, 0); x.lineTo(92, 0); x.lineTo(70, 90); x.lineTo(76, 256); x.lineTo(0, 256); x.closePath(); x.fill();
+    x.beginPath(); x.moveTo(256, 0); x.lineTo(164, 0); x.lineTo(186, 90); x.lineTo(180, 256); x.lineTo(256, 256); x.closePath(); x.fill();
+    // collar fold + zip line + pockets
+    x.strokeStyle = 'rgba(255,255,255,0.12)'; x.lineWidth = 3;
+    x.beginPath(); x.moveTo(92, 0); x.lineTo(70, 90); x.lineTo(76, 256); x.stroke();
+    x.beginPath(); x.moveTo(164, 0); x.lineTo(186, 90); x.lineTo(180, 256); x.stroke();
+    x.beginPath(); x.moveTo(20, 170); x.lineTo(56, 170); x.stroke(); x.beginPath(); x.moveTo(200, 170); x.lineTo(236, 170); x.stroke();
+    // neck
+    x.fillStyle = shirt; x.beginPath(); x.moveTo(100, 0); x.quadraticCurveTo(128, 30, 156, 0); x.fill();
+    // back / sides: all jacket with seams
+    x.fillStyle = jacket; x.fillRect(256, 0, 256, 256);
+    x.strokeStyle = 'rgba(255,255,255,0.08)'; x.beginPath(); x.moveTo(384, 0); x.lineTo(384, 256); x.stroke();
+    // fabric noise
+    const img = x.getImageData(0, 0, W, H);
+    for (let i = 0; i < W * H; i++) { const k = (r() - 0.5) * 14; img.data[i * 4] += k; img.data[i * 4 + 1] += k; img.data[i * 4 + 2] += k; }
+    x.putImageData(img, 0, 0);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = maxAniso; return t;
+  });
+}
+
+export function pantsTexture() {
+  return cached('pants', () => {
+    const S = 128, c = canvas(S, S), x = c.getContext('2d');
+    const n = fbm(S, S, 32, 2, 77);
+    const img = x.createImageData(S, S);
+    for (let i = 0; i < S * S; i++) { const m = 0.7 + n[i] * 0.6; img.data[i * 4] = 28 * m; img.data[i * 4 + 1] = 34 * m; img.data[i * 4 + 2] = 30 * m; img.data[i * 4 + 3] = 255; }
+    x.putImageData(img, 0, 0);
+    return toTex(c);
+  });
+}
+
+export function waterNormal() {
+  return cached('waterN', () => {
+    const S = 256;
+    const h = fbm(S, S, 8, 4, 301);
+    return toTex(heightToNormal(h, S, S, 6), { srgb: false });
+  });
+}
+
+export function potholeTexture() {
+  return cached('pothole', () => {
+    const S = 256, c = canvas(S, S), x = c.getContext('2d');
+    const n = fbm(S, S, 6, 4, 401), f = fbm(S, S, 90, 2, 402);
+    const img = x.createImageData(S, S);
+    for (let yy = 0; yy < S; yy++) for (let xx = 0; xx < S; xx++) {
+      const i = yy * S + xx;
+      const d = Math.hypot(xx - S / 2, yy - S / 2) / (S / 2);
+      const edge = d + (n[i] - 0.5) * 0.45;
+      let a = edge < 0.78 ? 1 : edge < 0.92 ? (0.92 - edge) / 0.14 : 0;
+      const stone = f[i] > 0.62;
+      const v = (edge < 0.7 ? 34 : 52) * (0.7 + n[i] * 0.6) * (stone ? 1.8 : 1);
+      img.data[i * 4] = v * 1.02; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v * 0.95; img.data[i * 4 + 3] = a * 255;
+    }
+    x.putImageData(img, 0, 0);
+    // cracks radiating outward
+    const r = rng(9);
+    x.strokeStyle = 'rgba(15,15,15,0.9)'; x.lineWidth = 2;
+    for (let k = 0; k < 9; k++) {
+      let px = S / 2, py = S / 2, a = r() * Math.PI * 2;
+      x.beginPath(); x.moveTo(px + Math.cos(a) * 80, py + Math.sin(a) * 80);
+      for (let s = 0; s < 6; s++) { a += (r() - 0.5) * 0.9; px += Math.cos(a) * 10; py += Math.sin(a) * 10; x.lineTo(px + Math.cos(a) * 80, py + Math.sin(a) * 80); }
+      x.stroke();
+    }
+    const t = toTex(c, { repeat: false }); return t;
+  });
+}
+
+// Smooth trowelled cement with an irregular alpha edge (tinted per patch).
+export function cementPatchTexture() {
+  return cached('cementPatch', () => {
+    const S = 256, c = canvas(S, S), x = c.getContext('2d');
+    const n = fbm(S, S, 6, 4, 501), f = fbm(S, S, 120, 2, 502);
+    const img = x.createImageData(S, S);
+    const h = new Float32Array(S * S);
+    for (let yy = 0; yy < S; yy++) for (let xx = 0; xx < S; xx++) {
+      const i = yy * S + xx;
+      const d = Math.hypot(xx - S / 2, yy - S / 2) / (S / 2);
+      const edge = d + (n[i] - 0.5) * 0.4;
+      const a = edge < 0.8 ? 1 : edge < 0.9 ? (0.9 - edge) / 0.1 : 0;
+      const swirl = Math.sin(Math.atan2(yy - S / 2, xx - S / 2) * 3 + d * 14 + n[i] * 6) * 0.5 + 0.5;
+      const v = 235 * (0.88 + swirl * 0.06 + (f[i] - 0.5) * 0.08);
+      img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = a * 255;
+      h[i] = swirl * 0.3 + f[i] * 0.2;
+    }
+    x.putImageData(img, 0, 0);
+    return { map: toTex(c, { repeat: false }), normalMap: toTex(heightToNormal(h, S, S, 1.5), { repeat: false, srgb: false }) };
+  });
+}

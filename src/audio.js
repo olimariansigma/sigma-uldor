@@ -127,6 +127,22 @@ export class Audio {
     const d = this.out(null);
     [523, 659, 784, 1046].forEach((f, i) => this.tone(d, { t: i * 0.09, dur: 0.4, f, type: 'triangle', gain: 0.15 }));
   }
+  splash(pos, s = 0.5) {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    if (this.lastSplash && now - this.lastSplash < 0.12) return;
+    this.lastSplash = now;
+    const d = this.out(pos, 5);
+    this.noiseBurst(d, { dur: 0.25 + Math.random() * 0.2, f: 900 + Math.random() * 600, q: 0.7, gain: 0.25 * s, attack: 0.02 });
+    this.tone(d, { dur: 0.08, f: 500 + Math.random() * 300, f2: 900, gain: 0.04 * s });
+  }
+  breaker(pos, s = 1) {
+    if (!this.ctx) return;
+    const d = this.out(pos, 6);
+    this.noiseBurst(d, { dur: 0.06, f: 2400, q: 1.5, gain: 0.45 * s });
+    this.tone(d, { dur: 0.05, f: 180, f2: 90, type: 'square', gain: 0.12 * s });
+    this.noiseBurst(d, { dur: 0.1, f: 600, q: 1, gain: 0.25 * s });
+  }
   click() { if (this.ctx) this.tone(this.out(null), { dur: 0.05, f: 900, type: 'square', gain: 0.04 }); }
   denied() { if (this.ctx) { const d = this.out(null); this.tone(d, { dur: 0.12, f: 220, type: 'square', gain: 0.06 }); this.tone(d, { t: 0.12, dur: 0.2, f: 160, type: 'square', gain: 0.06 }); } }
   pickup(pos) { if (this.ctx) { const d = this.out(pos, 3); this.noiseBurst(d, { dur: 0.08, f: 900, q: 2, gain: 0.2 }); this.tone(d, { dur: 0.06, f: 300, f2: 420, type: 'triangle', gain: 0.08 }); } }

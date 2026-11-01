@@ -15,7 +15,7 @@ export class Input {
 
     const map = {
       KeyW: 'fwd', ArrowUp: 'up', KeyS: 'back', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'sleft', KeyD: 'right', ArrowRight: 'sright',
-      ShiftLeft: 'sprint', ShiftRight: 'sprint', Space: 'jump', KeyQ: 'pickup', KeyG: 'throw', KeyE: 'use', KeyB: 'shop', KeyH: 'help', KeyC: 'cam',
+      ShiftLeft: 'sprint', ShiftRight: 'sprint', Space: 'jump', KeyQ: 'pickup', KeyG: 'throw', KeyE: 'use', KeyB: 'shop', KeyM: 'multi', KeyH: 'help', KeyC: 'cam',
       KeyR: 'stickOut', KeyF: 'stickIn', KeyZ: 'curlIn', KeyX: 'curlOut', Escape: 'esc', Enter: 'use',
     };
     this.map = map;
@@ -32,7 +32,7 @@ export class Input {
 
     canvas.addEventListener('mousedown', (e) => {
       if (this.touch) return;
-      if (!this.locked && this.enabled) { canvas.requestPointerLock && canvas.requestPointerLock(); }
+      if (!this.locked && this.enabled && canvas.requestPointerLock) { try { const r = canvas.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* ignore */ } }
       const a = e.button === 0 ? 'lmb' : e.button === 2 ? 'rmb' : null;
       if (a) { this.mouse.add(a); this.pressedSet.add(a); }
     });

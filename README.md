@@ -1,15 +1,19 @@
 # Wrecking Yard
 
-A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 25 machines to spawn (16 excavators, 6 road and site machines and 3 eight-wheel tipper trucks) and cross-play multiplayer between PC and phones.
+A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 25 machines to spawn (16 excavators, 6 road and site machines and 3 tipper trucks in three sizes), a truck intake line that compacts blocks into cubes for the crusher, and cross-play multiplayer between PC and phones.
 
-## Download
+## Download: the launcher
+
+Get the launcher from the **[latest release](https://github.com/olimariansigma/sigma-uldor/releases/latest)**:
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | `WreckingYard-3.5.0-Windows.exe` (about 156 MB): portable, no install |
-| Android 7.0+ | `WreckingYard-3.5.0-Android.apk` (about 108 MB): installs over older versions, saves are kept |
+| Windows 10/11 (64-bit) | `WreckingYard-Launcher-Windows.exe` (about 75 MB): portable, no install |
+| Android 7.0+ | `WreckingYard-Launcher.apk` (about 0.25 MB): installs over the old Wrecking Yard app, saves are kept |
 
-Since v3.4 the builds are bigger than GitHub's 100 MB file limit (HD texture pack), so they aren't stored in the repository: build them with `npm run exe` / `npm run apk` (they land in `build/`) or use the copies shared with you.
+The launcher shows every published version of the game. **Check for updates** looks for a new one, and you can download, play or delete any version, old ones included. Saves are shared between versions. Each game version is a GitHub release with a `WreckingYard-game-<version>.zip` (the built game, about 80 MB); the launcher downloads it once and then plays offline.
+
+Publishing a new version: push a tag `vX.Y.Z` (or run the **Release** workflow by hand); `.github/workflows/release.yml` builds the game zip and the Windows launcher and attaches them, plus the Android launcher APK from `launcher/android`.
 
 The Windows exe is not code-signed, so SmartScreen may warn you the first time. Click **More info → Run anyway**. On Android, allow "install unknown apps" for your browser or file manager.
 
@@ -21,6 +25,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 * **Cement.** Put dust in the pan mixer and add any amount of water (lake water or the hose button). Each colour swirls around the tub and the paddles blend it all into cement in a couple of seconds.
 * **Cement trowel.** Take cement from the mixer onto your trowel (hotbar slot 2). Click the ground to lay cement tiles anywhere in the yard (they dry from dark to their final colour), or click a pothole to fill it. Tiles are saved and shared in multiplayer.
 * **Road repair.** Pour cement into the potholes, or load the paver and drive over them. Each patch takes the cement's colour and dries over time. Then roll it with the tandem roller to compact it to a perfect finish (⭐ on the HUD). The breaker excavator can make new potholes.
+* **Truck intake line.** Behind the crusher there's a ground-level tip funnel with a wheel-stop: back a truck up to it and tip. A walled belt carries the blocks into the BP-40 compactor, which presses every 5 blocks into a strapped cube (you can see the fragments of each block in it), and a cleated incline belt lifts the cubes into the crusher hopper, where they become dust in the blocks' own colours.
 * **25 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders.
   * Excavators:
     * TORVA TX330 (rotating sorting grapple)
@@ -46,11 +51,11 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * TORVA DZ80 bulldozer with ripper
     * KESTREL TD6 tracked dumper with a slewing, tipping skip
     * VANTOR CC250 crawler crane with a wrecking ball
-  * Tipper trucks (8x4: four axles, the front two steer, twin tyres on the back):
-    * VELKA R410 XT: white cab, heavy XT bumper with a skid plate, off-road tyres, half-pipe body
-    * VELKA S650 V8: metallic silver high-roof cab, chrome grille and roof light bar, polished rims, brushed aluminium half-pipe body
-    * VELKA G370: yellow cab with a square steel box body
-    * Load them with any excavator or loader. Blocks ride along in the body (steering gets gentler at speed so the load doesn't slide out), then Z tips the body up on its front cylinder, the tailgate swings open and the load slides out the back. One R410 is parked in the yard by default.
+  * Tipper trucks, each in three sizes (pick the size in the showroom): Small 4x2, Medium 6x4, Big 8x4:
+    * VELKA R410 XT (medium by default): white cab, heavy XT bumper with a skid plate, off-road tyres, half-pipe body
+    * VELKA S650 V8 (big by default): metallic silver high-roof cab, chrome grille and roof light bar, polished rims, brushed aluminium half-pipe body
+    * VELKA G370 (small by default): yellow cab with a square steel box body
+    * Load them with any excavator or loader. Blocks ride along in the body (steering gets gentler at speed so the load doesn't slide out), then Z tips the body up on its front cylinder, the high-lift tailgate swings up and the load slides out the back. One R410 is parked in the yard by default.
 * **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 25 with the arrows, then press **Spawn**.
 * **Solid machines.** Machines stop at walls instead of passing through them. Keep driving or pressing the arm, blade or bucket against a wall and the blocks it touches crack (they darken) and break loose; heavy machines and fast hits break them sooner. Arms and buckets can't sink into the ground.
 * **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device.
@@ -73,6 +78,8 @@ Requirements: Node 18+. The APK build also needs JDK 17+ and Android build-tools
 
 ```bash
 npm install
+# launchers: cd launcher/desktop && npm install && npm run dist   (Windows launcher -> launcher/desktop/out)
+#            bash scripts/build-launcher-apk.sh                  (Android launcher -> launcher/android)
 npm run dev     # builds dist/ and serves http://localhost:8080
 npm run exe     # Windows portable exe  -> build/
 npm run apk     # Android APK (signed)  -> build/

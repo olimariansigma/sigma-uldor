@@ -7,3 +7,10 @@ android/build/
 # release builds are over GitHub's 100 MB file limit since the HD texture pack; they are shared separately
 release/*.apk
 release/*.exe
+
+# launcher build output (the Android launcher APK in launcher/android is committed on purpose)
+launcher/desktop/ui/
+launcher/desktop/icon.png
+launcher/desktop/out/
+launcher/desktop/node_modules/
+android/build-launcher/

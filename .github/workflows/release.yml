@@ -1,0 +1,117 @@
+# Publishes Wrecking Yard game versions as GitHub releases for the launchers.
+# Every release carries WreckingYard-game-<version>.zip (the built web game). The newest one also carries the
+# launchers: the Windows launcher (built here) and the Android launcher APK (committed in launcher/android,
+# signed with the app's key).
+#
+#  - Push a tag "v3.7.0" to publish that commit as version 3.7.0 (with launchers).
+#  - Or run the workflow by hand: "builds" is a JSON list of {"version": "3.4.0", "ref": "<commit>"} to publish
+#    (old versions too), "latest" is the version that gets the launchers and the Latest badge (optional).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      builds:
+        description: 'JSON list of {"version":"x.y.z","ref":"<commit/branch/tag>"} to publish'
+        required: true
+        default: '[]'
+      latest:
+        description: 'Version that gets the launchers and is marked Latest (leave empty for none)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.p.outputs.matrix }}
+      latest: ${{ steps.p.outputs.latest }}
+    steps:
+      - id: p
+        env:
+          BUILDS: ${{ inputs.builds }}
+          LATEST: ${{ inputs.latest }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            V="${GITHUB_REF_NAME#v}"
+            echo "matrix=[{\"version\":\"$V\",\"ref\":\"$GITHUB_SHA\"}]" >> "$GITHUB_OUTPUT"
+            echo "latest=$V" >> "$GITHUB_OUTPUT"
+          else
+            echo "matrix=$(echo "$BUILDS" | jq -c .)" >> "$GITHUB_OUTPUT"
+            echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          fi
+
+  game:
+    needs: plan
+    if: needs.plan.outputs.matrix != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install
+        run: npm ci --no-audit --no-fund --ignore-scripts || npm install --no-audit --no-fund --ignore-scripts
+      - name: Build the game
+        run: node scripts/build.mjs
+      - name: Zip
+        run: cd dist && zip -qr9 "../WreckingYard-game-${{ matrix.version }}.zip" .
+      - name: Release notes
+        run: |
+          git log -1 --format=%B "${{ matrix.ref }}" | grep -v -i -E '^(Co-Authored-By|Claude-Session|https://claude.ai)' > notes.md
+          echo "" >> notes.md
+          echo "Play it with the Wrecking Yard launcher (Windows / Android): download it from the latest release." >> notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ needs.plan.outputs.latest }}
+        run: |
+          V="${{ matrix.version }}"; TAG="v$V"
+          SHA="$(git rev-parse "${{ matrix.ref }}^{commit}")"
+          FLAG="--latest=false"; [ "$V" = "$LATEST" ] && FLAG="--latest"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --target "$SHA" --title "Wrecking Yard $V" --notes-file notes.md $FLAG || sleep 5
+          fi
+          gh release upload "$TAG" "WreckingYard-game-$V.zip" --clobber
+
+  launchers:
+    needs: [plan, game]
+    if: needs.plan.outputs.latest != ''
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the Windows launcher
+        working-directory: launcher/desktop
+        run: |
+          npm install --no-audit --no-fund
+          npm run dist
+      - name: Attach the launchers to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.plan.outputs.latest }}
+        run: |
+          gh release upload "v$V" launcher/desktop/out/WreckingYard-Launcher-Windows.exe launcher/android/WreckingYard-Launcher.apk --clobber
+          gh release edit "v$V" --latest

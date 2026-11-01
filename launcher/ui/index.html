@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f1114">
+<title>Wrecking Yard Launcher</title>
+<link rel="stylesheet" href="launcher.css">
+</head>
+<body>
+<div class="bg"></div>
+<main>
+  <header>
+    <img class="logo" src="logo.png" alt="Wrecking Yard" draggable="false">
+    <div class="sub">LAUNCHER</div>
+  </header>
+
+  <section class="hero card">
+    <div class="hero-text">
+      <div class="label">Ready to play</div>
+      <div class="ver" id="heroVer">—</div>
+      <div class="status" id="status">Starting…</div>
+    </div>
+    <div class="hero-btns">
+      <button class="btn primary xl" id="playBtn" disabled>PLAY</button>
+      <button class="btn dark" id="checkBtn">CHECK FOR UPDATES</button>
+    </div>
+  </section>
+
+  <section class="card list">
+    <div class="list-head">
+      <h2>Versions</h2>
+      <span class="hint">Download any version, including old ones. Your saves are shared between versions.</span>
+    </div>
+    <div id="versions"></div>
+  </section>
+
+  <footer>
+    <span id="appInfo"></span>
+    <a href="#" id="ghLink">All releases on GitHub</a>
+  </footer>
+</main>
+<script src="launcher.js"></script>
+</body>
+</html>

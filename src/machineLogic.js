@@ -394,8 +394,9 @@ function roller(m, dt, W) {
     for (const h of W.road.holes) {
       if (h.filled < h.need || h.comp >= 1) continue;
       if (Math.hypot(c.x - h.x, c.z - h.z) < h.r + 0.7) {
-        h.comp = Math.min(1, h.comp + dt * Math.abs(m.speed) * (m.vibrating ? 0.6 : 0.3));
+        h.comp = Math.min(1, h.comp + dt * Math.abs(m.speed) * (m.vibrating ? 0.45 : 0.2));
         W.road.refresh(h);
+        if (Math.random() < dt * 4) W.sfx.dust(new THREE.Vector3(c.x, 0.15, c.z), h.dry < 0.75 ? 0xf0f0ee : 0x6a6a68, 1, 0.8, { alpha: 0.2, size: 0.6 });
         W.onRoad();
         if (h.comp >= 1) W.tellDriver(m, '⭐ Pothole compacted to a perfect finish!');
       }
@@ -411,6 +412,8 @@ function paver(m, dt, W) {
   if (h < 0) return;
   const used = W.road.fill(h, Math.min(m.payload.kg, 300 * dt), m.payload.color);
   if (used > 0) {
+    // the screed lays a smooth, pre-compacted mat; the roller finishes it
+    const hh = W.road.holes[h]; if (hh.comp < 0.3) { hh.comp = 0.3; W.road.refresh(hh); }
     setPay(m, 'cement', m.payload.kg - used, null, W);
     W.onRoad();
     if (Math.random() < 0.3) W.sfx.dust(sp, m.payload.color.getHex(), 1, 0.6, { alpha: 0.25 });

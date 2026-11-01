@@ -88,6 +88,7 @@ export class Audio {
       this.glass(pos, s * 0.4);
     }
   }
+  tamp(pos) { this.hammer(pos, true); }
   hammer(pos, hit = true) {
     if (!this.ctx) return;
     const d = this.out(pos, 4);

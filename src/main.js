@@ -463,6 +463,10 @@ class Game {
   doAct(pid, name, d) {
     const demo = this.demo, pl = this.players.get(pid);
     switch (name) {
+      case 'tamp': {
+        if (this.road.tamp(d.hole)) { this.events.push(['road', this.road.serialize()]); this.onRoadChanged && this.onRoadChanged(); }
+        break;
+      }
       case 'hit': {
         const p = demo.pieces[d.id]; if (!p || p.state === GONE) return;
         const point = v3(d.point), dir = v3(d.dir);
@@ -1222,7 +1226,7 @@ class Game {
       }
     }
     this.mixer.update(dt);
-    this.road.update(dt);
+    this.road.update(dt, this.fx);
     this.slabs.update(dt);
     this.updatePlayers(dt);
     this.fx.update(dt, this.camera);

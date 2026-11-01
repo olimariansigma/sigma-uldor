@@ -124,7 +124,22 @@ export class Player {
   strike(aim) {
     const g = this.game;
     const p = this.aimPiece(aim);
-    if (!p) { g.audio.hammer(this.pos, false); return; }
+    if (!p) {
+      // hammer on a fresh road patch: tamp the hot mix down
+      if (aim.dir.y < -0.05) {
+        const t = (0.05 - aim.origin.y) / aim.dir.y;
+        const pt = new THREE.Vector3(aim.origin.x + aim.dir.x * t, 0.05, aim.origin.z + aim.dir.z * t);
+        const hole = t > 0 && pt.distanceTo(this.pos) < 3.2 ? g.road.nearest(pt, 0.4, false) : -1;
+        if (hole >= 0 && g.road.holes[hole].filled > 0 && g.road.holes[hole].comp < 0.6) {
+          g.act('tamp', { hole });
+          g.audio.tamp(pt);
+          g.fx.dust(pt, 0x555555, 2, 0.4, { alpha: 0.3 });
+          this.shake = 0.12;
+          return;
+        }
+      }
+      g.audio.hammer(this.pos, false); return;
+    }
     g.act('hit', { id: p.id, point: this.aimPoint.toArray(), dir: [aim.dir.x, aim.dir.y, aim.dir.z] });
     g.audio.hammer(this.aimPoint, true);
     this.shake = 0.18;

@@ -654,6 +654,31 @@ export function potholeTexture() {
 }
 
 // Smooth trowelled cement with an irregular alpha edge (tinted per patch).
+// hot-mix patch material: dark binder with packed stone aggregate (light grey so the patch colour tints it)
+export function asphaltMixTexture() {
+  return cached('asphaltMix', () => {
+    const S = 256, c = canvas(S, S), x = c.getContext('2d');
+    const f = fbm(S, S, 40, 3, 611);
+    const img = x.createImageData(S, S), h = new Float32Array(S * S);
+    for (let i = 0; i < S * S; i++) { const v = 62 + (f[i] - 0.5) * 22; img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; h[i] = f[i] * 0.2; }
+    // aggregate: overlapping chips of different sizes and shades (wrapped so the texture tiles)
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    for (let k = 0; k < 1300; k++) {
+      const cx = rnd() * S, cy = rnd() * S, r = 1.5 + Math.pow(rnd(), 2) * 6, sh = 0.7 + rnd() * 0.6, ang = rnd() * 3, el = 0.55 + rnd() * 0.45;
+      for (let yy = -8; yy <= 8; yy++) for (let xx = -8; xx <= 8; xx++) {
+        const u = (xx * Math.cos(ang) + yy * Math.sin(ang)) / r, w = (-xx * Math.sin(ang) + yy * Math.cos(ang)) / (r * el);
+        const d = u * u + w * w; if (d > 1) continue;
+        const px = ((Math.floor(cx) + xx) % S + S) % S, py = ((Math.floor(cy) + yy) % S + S) % S, i = py * S + px;
+        const v = Math.min(255, (105 + rnd() * 55) * sh * (1 - d * 0.3));
+        img.data[i * 4] = v; img.data[i * 4 + 1] = v * 0.98; img.data[i * 4 + 2] = v * 0.95;
+        h[i] = Math.max(h[i], 0.35 + (1 - d) * 0.5 * sh);
+      }
+    }
+    x.putImageData(img, 0, 0);
+    return { map: toTex(c, { repeat: true }), normalMap: toTex(heightToNormal(h, S, S, 2.2), { repeat: true, srgb: false }) };
+  });
+}
+
 export function cementPatchTexture() {
   return cached('cementPatch', () => {
     const S = 256, c = canvas(S, S), x = c.getContext('2d');

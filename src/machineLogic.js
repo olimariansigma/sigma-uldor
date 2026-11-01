@@ -54,14 +54,14 @@ export function machineInteract(m, dt, W) {
     m.bigT = (m.bigT || 0) - dt;
     if (m.bigT <= 0) {
       m.bigT = 0.1;
+      // never change the physics world inside a query callback (Rapier throws, and every later frame fails):
+      // collect the pieces first, break them afterwards
+      const cracked = new Set();
       const crack = (b, amount) => {
         const { p, q } = m.shapePose(b);
         W.physics.world.intersectionsWithShape(p, q, b.outer || b.shape, (c) => {
           const piece = demo.pieceFromCollider(c);
-          if (piece && piece.state === LOOSE && demo.isBig(piece)) {
-            piece.crack = (piece.crack || 0) + amount;
-            if (piece.crack >= 1) demo.shatter(piece, 0.8);
-          }
+          if (piece && piece.state === LOOSE && demo.isBig(piece)) { piece.crack = (piece.crack || 0) + amount; if (piece.crack >= 1) cracked.add(piece); }
           return true;
         }, RAPIER.QueryFilterFlags.EXCLUDE_FIXED);
       };
@@ -70,6 +70,7 @@ export function machineInteract(m, dt, W) {
         for (const b of m.breakShapes) crack(b, 0.1 * power * (0.4 + mv));
         for (const b of m.blockShapes) crack(b, 0.08 * power * Math.min(1, Math.abs(m.speed)));
       }
+      for (const piece of cracked) if (piece.state === LOOSE) demo.shatter(piece, 0.8);
     }
     // driving the body / tracks / blade into a wall
     if ((m.pushBody || 0) > 0.02 || Math.abs(m.speed) > 0.2) {

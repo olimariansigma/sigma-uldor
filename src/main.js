@@ -1113,7 +1113,11 @@ class Game {
     requestAnimationFrame((tt) => this.loop(tt));
     const dt = Math.min(0.05, (t - this.last) / 1000);
     this.last = t;
-    this.tick(dt);
+    // one bad frame must never freeze the game: keep rendering and say what went wrong (once)
+    try { this.tick(dt); } catch (e) {
+      console.error(e);
+      if (!this.errShown) { this.errShown = true; try { this.ui.toast('⚠️ Game error: ' + (e && e.message ? e.message : e) + ' (please report it)'); } catch (e2) { /* ignore */ } }
+    }
     if (this.showroom.active) { this.showroom.render(this.renderer, dt); this.input.endFrame(); return; }
     if (this.debugCam) { this.camera.position.set(...this.debugCam[0]); this.camera.lookAt(...this.debugCam[1]); }
     this.renderer.render(this.scene, this.camera);

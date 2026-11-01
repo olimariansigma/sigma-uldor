@@ -225,6 +225,7 @@ class Game {
       collapse(s, p) { g.audio.collapse(s, p); emit(['fx', 'x', s, A(p)]); },
       splash(p, s) { g.audio.splash(p, s); emit(['fx', 's', A(p), s]); },
       breaker(p, s) { g.audio.breaker(p, s); emit(['fx', 'b', A(p), s]); },
+      clank(p, s) { g.audio.clank(p, s); emit(['fx', 'k', A(p), s]); },
     };
   }
   playFx(e) {
@@ -237,6 +238,7 @@ class Game {
       case 'x': this.audio.collapse(e[2], V(e[3])); break;
       case 's': this.audio.splash(V(e[2]), e[3]); break;
       case 'b': this.audio.breaker(V(e[2]), e[3]); break;
+      case 'k': this.audio.clank(V(e[2]), e[3]); break;
     }
   }
 
@@ -1246,7 +1248,16 @@ class Game {
     this.audio.setListener(this.camera.position, yaw);
     let loud = this.driving;
     if (!loud) { let bd = 1e9; for (const m of machList) if (m.driver >= 0) { const d = m.pos.distanceTo(this.camera.position); if (d < bd) { bd = d; loud = m; } } }
-    this.audio.updateLoops(this.crusher, loud ? { pos: loud.pos, running: true, rpm: loud.rpm, hyd: loud.hyd } : { pos: this.camera.position, running: false, rpm: 0, hyd: 0 });
+    // every running machine nearby gets its own engine / tracks / hydraulics voice from the recordings
+    const voices = (this._voiceList = this._voiceList || []); voices.length = 0;
+    for (const m of machList) {
+      const sp = m.spec, f = m.family;
+      voices.push({ pos: m.pos, running: m.driver >= 0, rpm: m.rpm, hyd: m.hyd, speed: m.speed, turn: m.turn, vmax: sp.speed, tons: sp.tons || 20,
+        tracked: ['steel', 'rubber', 'pontoon'].includes(sp.under) || ['dozer', 'crane', 'paver', 'dumper'].includes(f),
+        breaker: !!m.breakerActive, vibrating: !!m.vibrating, beep: ['truck', 'loader', 'dumper', 'roller'].includes(f) && m.speed < -0.3 });
+    }
+    const sampled = this.audio.updateMachines(voices);
+    this.audio.updateLoops(this.crusher, sampled ? null : loud ? { pos: loud.pos, running: true, rpm: loud.rpm, hyd: loud.hyd } : { pos: this.camera.position, running: false, rpm: 0, hyd: 0 });
     const focus = this.mode === 'foot' ? this.player.pos : this.driving.root.position;
     this.env.updateShadow(new THREE.Vector3(Math.round(focus.x), 0, Math.round(focus.z)));
     this.env.water.material.normalMap.offset.x += dt * 0.01; this.env.water.material.normalMap.offset.y += dt * 0.006;

@@ -25,6 +25,9 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 * **Cement.** Put dust in the pan mixer and add any amount of water (lake water or the hose button). Each colour swirls around the tub and the paddles blend it all into cement in a couple of seconds.
 * **Cement trowel.** Take cement from the mixer onto your trowel (hotbar slot 2). Click the ground to lay cement tiles anywhere in the yard (they dry from dark to their final colour), or click a pothole to fill it. Tiles are saved and shared in multiplayer.
 * **Road repair.** Pour cement into the potholes, or load the paver and drive over them. Each patch takes the cement's colour and dries over time. Then roll it with the tandem roller to compact it to a perfect finish (⭐ on the HUD). The breaker excavator can make new potholes.
+* **Real machine sounds.** Engines, tracks, the hydraulic breaker, stones, footsteps and bucket clanks are real field recordings (a 5 t Volvo excavator's engine at idle and working, rubber tracks, a telehandler's diesel, a jackhammer on a mini excavator). Every running machine near you gets its own engine voice: idle crossfades into the working engine as you move the joysticks or drive, pitch follows the revs and the size of the machine, with a hydraulic pump whine and relief hiss on top, track clatter when it drives and a reverse beeper on trucks and loaders.
+* **Breakable big pieces.** Roof, floor and door panels break into rubble chunks: hit them three times with the hammer, close a claw on them, push them with an arm or bucket, or drop them on the crusher hopper or in the truck intake. The chunks keep the panel's colour and weight.
+* **Pothole repair like the real thing.** The hot mix goes in as a loose, steaming heap standing proud of the road. Each pass of the roller (or tamping with the hammer) presses it down until it is flush and smooth; the paver lays a pre-compacted mat.
 * **Truck intake line.** Behind the crusher there's a ground-level tip funnel with a wheel-stop: back a truck up to it and tip. A walled belt carries the blocks into the BP-40 compactor, which presses every 5 blocks into a strapped cube (you can see the fragments of each block in it), and a cleated incline belt lifts the cubes into the crusher hopper, where they become dust in the blocks' own colours.
 * **25 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders.
   * Excavators:
@@ -94,5 +97,7 @@ python3 tools/gen_textures.py   # regenerate the HD texture pack in public/tex (
 * PeerJS (WebRTC) peer-to-peer multiplayer. The host simulates the world and clients mirror it.
 * Web Audio synthesized sound.
 * Electron for Windows and a native WebView shell for Android.
+
+Sound recordings: [BigSoundBank](https://bigsoundbank.com) (Joseph Sardin), released as CC0 / public domain; cut into loops and one-shots by `tools/make_sfx.py`.
 
 All machines and brands in the game are fictional. Fonts: Russo One and Rubik (SIL Open Font License, see `public/fonts`).

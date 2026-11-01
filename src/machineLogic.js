@@ -243,6 +243,7 @@ function grab(m, demo, gp, sfx, capScale) {
     m.held.push({ p, local });
   }
   if (all.length) { sfx.impact(all[0].type.sound, 0.8, gp); sfx.dust(gp, demo.chipColor(all[0]), 4, 0.8); }
+  if (sfx.clank) sfx.clank(gp, all.length ? 1 : 0.6);
 }
 
 function scoop(m, demo, gp, r, room) {

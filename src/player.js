@@ -69,6 +69,13 @@ export class Player {
     this.center.set(np.x, np.y, np.z);
     this.pos.set(np.x, np.y - HALF - RAD, np.z);
 
+    // footsteps on the gravel
+    const hs = Math.hypot(this.vel.x, this.vel.z);
+    if (this.grounded && hs > 0.6) {
+      this.stepAcc = (this.stepAcc || 0) + hs * dt;
+      const run = hs > 5.5;
+      if (this.stepAcc > (run ? 1.05 : 0.78)) { this.stepAcc = 0; g.audio.step(this.pos, run); }
+    }
     const moving = wish.lengthSq() > 0.01;
     if (moving || this.swingT >= 0 || carried.length) {
       const target = this.swingT >= 0 || !moving ? camYaw + Math.PI : Math.atan2(wish.x, wish.z);

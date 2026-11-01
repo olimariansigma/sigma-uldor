@@ -33,6 +33,20 @@ for (const f of fs.readdirSync(path.join(root, 'public'))) {
     }
   }
 }
+// Recorded sound effects (public/sfx, made by tools/make_sfx.py): one script holding every clip as base64 plus the
+// one-shot bank offsets, for the same reason as the textures (fetching local files is blocked on file://).
+{
+  const sfxDir = path.join(dist, 'sfx');
+  if (fs.existsSync(sfxDir)) {
+    const out = { clips: {}, banks: {} };
+    for (const f of fs.readdirSync(sfxDir)) {
+      if (f.endsWith('.ogg')) out.clips[f.replace(/\.ogg$/, '')] = fs.readFileSync(path.join(sfxDir, f)).toString('base64');
+      if (f === 'banks.json') out.banks = JSON.parse(fs.readFileSync(path.join(sfxDir, f), 'utf8'));
+      fs.rmSync(path.join(sfxDir, f));
+    }
+    fs.writeFileSync(path.join(sfxDir, 'sfx.js'), `window.__SFX=${JSON.stringify(out)};`);
+  }
+}
 await esbuild.build({
   entryPoints: [path.join(root, 'src/main.js')],
   bundle: true,

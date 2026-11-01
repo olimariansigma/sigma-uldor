@@ -93,7 +93,8 @@ jobs:
 
   launchers:
     needs: [plan, game]
-    if: needs.plan.outputs.latest != ''
+    # also runs when no game builds were requested (to refresh the launchers on an existing release)
+    if: always() && needs.plan.outputs.latest != '' && needs.game.result != 'failure' && needs.game.result != 'cancelled'
     runs-on: windows-latest
     defaults:
       run:

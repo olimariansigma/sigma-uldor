@@ -119,7 +119,9 @@ public class MainActivity extends Activity {
                 JSONObject e = new JSONObject();
                 try {
                     e.put("type", "releases");
-                    HttpURLConnection c = open(API);
+                    HttpURLConnection c = open(API + "&t=" + System.currentTimeMillis());
+                    c.setUseCaches(false);
+                    c.setRequestProperty("Cache-Control", "no-cache");
                     c.setRequestProperty("Accept", "application/vnd.github+json");
                     int code = c.getResponseCode();
                     if (code != 200) throw new Exception("GitHub answered " + code);

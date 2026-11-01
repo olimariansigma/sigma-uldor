@@ -94,7 +94,8 @@ function createLauncher() {
 ipcMain.handle('info', () => ({ platform: 'Windows', launcher: app.getVersion() }));
 ipcMain.handle('installed', () => installed());
 ipcMain.handle('releases', async () => {
-  const r = await net.fetch(API, { headers: { 'User-Agent': 'WreckingYard-Launcher', Accept: 'application/vnd.github+json' } });
+  // always ask GitHub (its answers carry a 60 s cache header: a fresh release would not show up yet)
+  const r = await net.fetch(`${API}&t=${Date.now()}`, { cache: 'no-store', headers: { 'User-Agent': 'WreckingYard-Launcher', Accept: 'application/vnd.github+json', 'Cache-Control': 'no-cache' } });
   if (!r.ok) throw new Error('GitHub answered ' + r.status);
   return r.text();
 });

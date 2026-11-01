@@ -167,6 +167,8 @@ class Game {
         setTimeout(() => this.ui.toast('🌐 <b>Multiplayer</b>: host a game and share the code with friends', true, 6000), 12500);
         this.prefs.seenTips = true; this.savePrefs();
       }
+      // compile every material now (not when it first comes into view), so play starts without hitches
+      try { this.renderer.compile(this.scene, this.camera); } catch (e) { /* older drivers: compile lazily */ }
       this.last = performance.now();
       if (!this.running) { this.running = true; requestAnimationFrame((t) => this.loop(t)); }
     };
@@ -1154,6 +1156,9 @@ class Game {
     if (this.mode === 'foot') {
       this.updateCamera(dt);
       this.player.update(dt, input, this.cam.yaw, this.aimRay());
+      // place the camera again on the player's new position: a camera one frame behind makes the character
+      // jump away and back on every uneven frame (most visible during the hitches right after launch)
+      this.updateCamera(0);
       if (input.pressed('tool1')) this.selectTool('hammer');
       if (input.pressed('tool2')) this.selectTool('trowel');
       // trowel: hold click / the action button to lay cement tiles where you aim

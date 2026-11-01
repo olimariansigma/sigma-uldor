@@ -20,7 +20,7 @@ export function buildExcavator(m) {
   arm(m);
   m.colliderSets.push({ obj: m.under, boxes: m.underBoxes, chassis: true }, { obj: m.upper, boxes: m.upperBoxes, chassis: true });
   m.bakeList.push(m.under, m.upper, m.boomG, m.stickG, m.cabShell || m.upper, m.att.group);
-  const lim = sp.boom === 'long' ? { boom: [-1.35, 0.35], stick: [0.5, 2.7], curl: [-0.8, 1.9] } : sp.boom === 'straight' ? { boom: [-1.1, 0.5], stick: [0.4, 2.6], curl: [-0.8, 2.0] } : { boom: [-0.95, 0.62], stick: [0.35, 2.55], curl: [-0.9, 2.1] };
+  const lim = sp.boom === 'long' ? { boom: [-1.5, 0.35], stick: [0.35, 2.7], curl: [-0.9, 1.9] } : sp.boom === 'straight' ? { boom: [-1.32, 0.5], stick: [0.3, 2.6], curl: [-0.9, 2.0] } : { boom: [-1.25, 0.62], stick: [0.25, 2.55], curl: [-1.0, 2.1] };
   m.rig = {
     family: 'excavator', drive: sp.under === 'wheels' || sp.under === 'spider' ? 'car' : 'tank', swing: true,
     limits: { swing: null, ...lim }, rates: { swing: 0.7, boom: 0.5, stick: 0.7, curl: 1.1 },
@@ -39,7 +39,7 @@ export function buildExcavator(m) {
 function tracks(m) {
   const sp = m.spec, K = m.mats, g = sp.gauge || 1.19, rubber = sp.under === 'rubber';
   for (const s of [-1, 1]) {
-    const tu = buildTrackUnit(null, { length: 4.45, radius: 0.38, width: rubber ? 0.5 : 0.6, rollers: rubber ? 5 : 7, frameColor: rubber ? K.accent : K.under, rubber, mats: K });
+    const tu = buildTrackUnit(null, { length: 4.45, radius: 0.38, width: rubber ? 0.5 : 0.6, rollers: rubber ? 5 : 7, frameColor: rubber ? K.accent : K.under, rubber, mats: K, side: s });
     tu.group.position.x = s * g; tu.group.rotation.y = s > 0 ? 0 : 0; m.under.add(tu.group); m.tracks.push(tu);
   }
   carbody(m, g);
@@ -109,7 +109,7 @@ function pontoons(m) {
     const hull = new THREE.ExtrudeGeometry(prof, { depth: 1.2, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 2 });
     hull.rotateY(-Math.PI / 2); hull.translate(s * 2.0 + 0.6, 0, 0);
     add(U, hull, K.paint);
-    const tu = buildTrackUnit(null, { length: 7.9, radius: 0.72, width: 1.36, rollers: 0, noFrame: true, pitch: 0.3, mats: K });
+    const tu = buildTrackUnit(null, { length: 7.9, radius: 0.72, width: 1.36, rollers: 0, noFrame: true, pitch: 0.3, mats: K, side: s });
     tu.group.position.x = s * 2.0; U.add(tu.group); m.tracks.push(tu);
     const ribs = [];
     for (let z = -3; z <= 3; z += 0.75) ribs.push(bx(0.025, 1.0, 0.06, s * 2.0 + s * 0.64, 0.85, z));
@@ -155,7 +155,7 @@ function spider(m) {
 function robotUnder(m) {
   const K = m.mats, U = m.under;
   for (const s of [-1, 1]) {
-    const tu = buildTrackUnit(null, { length: 2.6, radius: 0.28, width: 0.36, rollers: 4, frameColor: K.dark, rubber: true, mats: K });
+    const tu = buildTrackUnit(null, { length: 2.6, radius: 0.28, width: 0.36, rollers: 4, frameColor: K.dark, rubber: true, mats: K, side: s });
     tu.group.position.x = s * 0.62; U.add(tu.group); m.tracks.push(tu);
   }
   add(U, mergeG([rbox(1.0, 0.32, 1.9, 0.05, 0, 0.62, 0), cy(0.52, 0.55, 0.1, 36, 0, 0.88, 0)]), K.dark);

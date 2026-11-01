@@ -6,9 +6,11 @@ import { mergeG, boltCircle, boltRow, hose, bake } from './detail.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
-export function buildTrackUnit(M, { length = 4.4, radius = 0.38, width = 0.6, rollers = 7, frameColor = null, pitch = 0.19, rubber = false, noFrame = false, mats = null } = {}) {
+export function buildTrackUnit(M, { length = 4.4, radius = 0.38, width = 0.6, rollers = 7, frameColor = null, pitch = 0.19, rubber = false, noFrame = false, mats = null, side = 1 } = {}) {
   const mat = mats || { dark: M.darkSteel, steel: M.steel, under: M.blackPaint, rubber: M.rubber, black: M.blackPaint };
   const group = new THREE.Group();
+  // the travel motor / hoses sit on the unit's -x (inner) side: mirror the left-hand unit so both face inwards
+  if (side < 0) group.scale.x = -1;
   const cy = radius + 0.07, R = radius + 0.035, zc = length / 2 - radius - 0.04;
   const P = 4 * zc + 2 * Math.PI * R;
   const n = Math.round(P / pitch), realPitch = P / n, sl = realPitch * 0.94;

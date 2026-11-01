@@ -118,7 +118,7 @@ export function buildRoller(m) {
 // --------------------------------------------------------------------------- asphalt paver
 export function buildPaver(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
-  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 3.0, radius: 0.32, width: 0.4, rollers: 5, rubber: true, frameColor: K.dark, mats: K }); tu.group.position.set(s * 0.95, 0, 0.2); U.add(tu.group); m.tracks.push(tu); }
+  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 3.0, radius: 0.32, width: 0.4, rollers: 5, rubber: true, frameColor: K.dark, mats: K, side: s }); tu.group.position.set(s * 0.95, 0, 0.2); U.add(tu.group); m.tracks.push(tu); }
   add(U, mergeG([rbox(2.2, 0.55, 3.6, 0.06, 0, 0.95, 0.2), rbox(2.3, 0.1, 3.6, 0.03, 0, 1.25, 0.2)]), K.paint);
   // engine hood with grilles and exhaust
   add(U, mergeG([rbox(2.0, 0.8, 1.2, 0.12, 0, 1.7, -0.2)]), K.paint);
@@ -212,7 +212,7 @@ export function buildLoader(m) {
   const g = [shell(back, 0.04, W)];
   for (const s of [-1, 1]) g.push(sidePlate([...back, [1.15, -0.45], [0.2, 0.95]], 0.035, s * W / 2 - (s > 0 ? 0.035 : 0)));
   add(bucket, mergeG(g), K.paint);
-  add(bucket, mergeG([bx(W + 0.04, 0.05, 0.25, 0, -0.47, 1.12, 0.05), bx(W, 0.06, 0.08, 0, 0.88, -0.22), bx(0.5, 0.55, 0.1, 0.4, 0.45, -0.25), bx(0.5, 0.55, 0.1, -0.4, 0.45, -0.25), boltRow(V(-W / 2 + 0.1, -0.44, 1.05), V(W / 2 - 0.1, -0.44, 1.05), 14, V(0, 1, 0), 0.013, 0.01)]), K.dark);
+  add(bucket, mergeG([bx(W + 0.04, 0.05, 0.25, 0, -0.47, 1.12, 0.05), bx(W, 0.06, 0.08, 0, 0.88, -0.22), bx(0.12, 0.6, 0.22, 0.42, 0.42, -0.5), bx(0.12, 0.6, 0.22, -0.42, 0.42, -0.5), boltRow(V(-W / 2 + 0.1, -0.44, 1.05), V(W / 2 - 0.1, -0.44, 1.05), 14, V(0, 1, 0), 0.013, 0.01)]), K.dark);
   bucket.position.set(0, 0.3, -0.05);
   m.att = { group: bucket, kind: 'loader', jaws: [], probes: [{ obj: anchor(bucket, 0, -0.45, 1.1), r: 0.45 }, { obj: anchor(bucket, 1.2, -0.4, 1.0), r: 0.35 }, { obj: anchor(bucket, -1.2, -0.4, 1.0), r: 0.35 }],
     colliders: [{ obj: m.attach, boxes: [[0, -0.22, 0.45, W, 0.1, 1.3], [0, 0.25, -0.3, W, 1.2, 0.12], [-W / 2, 0.15, 0.3, 0.08, 1.0, 1.3], [W / 2, 0.15, 0.3, 0.08, 1.0, 1.3]] }],
@@ -225,7 +225,7 @@ export function buildLoader(m) {
   for (const p of m.att.probes) m.probes.push(p);
   for (const s of [-1, 1]) cylinder(m, anchor(F, s * 0.5, 0.95, 0.9), anchor(m.armG, s * 0.62, -0.2, 1.6), 0.12, 0.07);
   cylinder(m, anchor(F, 0, 1.45, 1.15), anchor(m.bell, 0, 0.42, 0), 0.13, 0.075);
-  m.linkA = anchor(m.bell, 0, -0.42, 0); m.linkB = anchor(bucket, 0, 0.75, -0.3);
+  m.linkA = anchor(m.bell, 0, -0.42, 0); m.linkB = anchor(bucket, 0, 0.72, -0.45);
   m.link = new THREE.Mesh(mergeG([bx(0.16, 1, 0.12, 0, 0.5, 0)]), K.paint); m.link.userData.keep = true; m.link.castShadow = true; m.upper.add(m.link);
   m.seat = m.seat; m.door = anchor(U, 1.2, 0, -0.6);
   m.colliderSets.push({ obj: U, boxes: [[0, 1.3, -1.9, 2.4, 2.0, 3.8]], chassis: true }, { obj: F, boxes: [[0, 1.1, 1.3, 2.4, 1.4, 2.2]], chassis: true }, { obj: m.armG, boxes: [[0, 0, 1.5, 1.4, 0.35, 3.0]], breaks: true });
@@ -245,7 +245,7 @@ export function buildLoader(m) {
 // --------------------------------------------------------------------------- bulldozer
 export function buildDozer(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
-  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 4.0, radius: 0.48, width: 0.62, rollers: 7, frameColor: K.under, mats: K }); tu.group.position.x = s * 1.25; U.add(tu.group); m.tracks.push(tu); }
+  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 4.0, radius: 0.48, width: 0.62, rollers: 7, frameColor: K.under, mats: K, side: s }); tu.group.position.x = s * 1.25; U.add(tu.group); m.tracks.push(tu); }
   add(U, mergeG([rbox(1.9, 0.6, 3.6, 0.08, 0, 1.15, -0.1), rbox(1.7, 0.95, 1.9, 0.16, 0, 1.9, 0.75), rbox(2.0, 0.1, 3.4, 0.03, 0, 1.47, -0.2), rbox(1.6, 0.7, 0.9, 0.08, 0, 1.75, -1.55)]), K.paint);
   grille(U, 1.3, 0.75, 0, 1.95, 1.71, 0);
   grille(U, 1.3, 0.45, 0.851, 2.05, 0.75, Math.PI / 2); grille(U, 1.3, 0.45, -0.851, 2.05, 0.75, -Math.PI / 2);
@@ -288,7 +288,7 @@ export function buildDozer(m) {
 // --------------------------------------------------------------------------- tracked dumper with a slewing, tipping skip
 export function buildDumper(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U;
-  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 3.0, radius: 0.32, width: 0.45, rollers: 5, rubber: true, frameColor: K.dark, mats: K }); tu.group.position.x = s * 0.82; U.add(tu.group); m.tracks.push(tu); }
+  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 3.0, radius: 0.32, width: 0.45, rollers: 5, rubber: true, frameColor: K.dark, mats: K, side: s }); tu.group.position.x = s * 0.82; U.add(tu.group); m.tracks.push(tu); }
   add(U, mergeG([rbox(1.3, 0.45, 2.8, 0.06, 0, 0.85, 0), rbox(1.6, 0.85, 0.9, 0.12, 0, 1.45, 1.15)]), K.paint);
   grille(U, 1.1, 0.4, 0, 1.5, 1.601, 0);
   add(U, mergeG([cy(0.06, 0.06, 0.5, 12, 0.55, 2.05, 1.3), cy(0.07, 0.065, 0.05, 12, 0.55, 2.31, 1.3)]), K.black);
@@ -326,7 +326,7 @@ export function buildDumper(m) {
 // --------------------------------------------------------------------------- crawler crane with wrecking ball
 export function buildCrane(m) {
   const K = m.mats, U0 = new THREE.Group(); m.model.add(U0); m.under = U0;
-  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 5.4, radius: 0.42, width: 0.8, rollers: 9, frameColor: K.under, mats: K }); tu.group.position.x = s * 1.75; U0.add(tu.group); m.tracks.push(tu); }
+  for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 5.4, radius: 0.42, width: 0.8, rollers: 9, frameColor: K.under, mats: K, side: s }); tu.group.position.x = s * 1.75; U0.add(tu.group); m.tracks.push(tu); }
   add(U0, mergeG([rbox(2.8, 0.55, 2.2, 0.06, 0, 0.8, 0), cy(1.1, 1.15, 0.16, 48, 0, 1.12, 0), boltCircle(V(0, 1.2, 0), 1.0, 30, V(0, 1, 0), 0.016)]), K.under);
   m.upper = new THREE.Group(); m.upper.position.y = 1.2; m.model.add(m.upper);
   const U = m.upper;

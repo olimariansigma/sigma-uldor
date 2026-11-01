@@ -6,8 +6,8 @@ A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble t
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | [`release/WreckingYard-3.0.0-Windows.exe`](release/WreckingYard-3.0.0-Windows.exe): portable, no install |
-| Android 7.0+ | [`release/WreckingYard-3.0.0-Android.apk`](release/WreckingYard-3.0.0-Android.apk): installs over v1 and v2, saves are kept |
+| Windows 10/11 (64-bit) | [`release/WreckingYard-3.1.0-Windows.exe`](release/WreckingYard-3.1.0-Windows.exe): portable, no install |
+| Android 7.0+ | [`release/WreckingYard-3.1.0-Android.apk`](release/WreckingYard-3.1.0-Android.apk): installs over older versions, saves are kept |
 
 The Windows exe is not code-signed, so SmartScreen may warn you the first time. Click **More info → Run anyway**. On Android, allow "install unknown apps" for your browser or file manager.
 
@@ -40,8 +40,9 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * TORVA DZ80 bulldozer with ripper
     * KESTREL TD6 tracked dumper with a slewing, tipping skip
     * VANTOR CC250 crawler crane with a wrecking ball
+* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 20 with the arrows, then press **Spawn**.
 * **Solid machines.** Arms, buckets, blades and the wrecking ball knock out any block they touch instead of passing through walls. Buckets scoop loose rubble, and machines can drive up onto building foundations.
-* **Multiplayer.** Press **Multiplayer → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device.
+* **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device.
 * **Save slots.** There are five save slots plus an autosave. A save contains every block, machine, the dust pile, the mixer and the road.
 
 ## Controls
@@ -53,7 +54,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 | Pick up / throw | Q or right click / G | ✋ / 🧱 |
 | Use (drive, bucket, mixer, pothole) | E | context button |
 | Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump, Click/Space tool, C cab camera (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
-| Menus | B spawn, M multiplayer, H help | top-right buttons |
+| Menus | B spawn, M online, H help | top-right buttons |
 
 ## Building from source
 
@@ -64,6 +65,7 @@ npm install
 npm run dev     # builds dist/ and serves http://localhost:8080
 npm run exe     # Windows portable exe  -> build/
 npm run apk     # Android APK (signed)  -> build/
+npm run art     # re-render menu art (machine/building pictures, logo, title image) with Playwright
 ```
 
 ## Tech
@@ -74,4 +76,4 @@ npm run apk     # Android APK (signed)  -> build/
 * Web Audio synthesized sound.
 * Electron for Windows and a native WebView shell for Android.
 
-All machines and brands in the game are fictional.
+All machines and brands in the game are fictional. Fonts: Russo One and Rubik (SIL Open Font License, see `public/fonts`).

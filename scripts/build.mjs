@@ -12,6 +12,13 @@ fs.mkdirSync(dist, { recursive: true });
 for (const f of fs.readdirSync(path.join(root, 'public'))) {
   fs.cpSync(path.join(root, 'public', f), path.join(dist, f), { recursive: true });
 }
+// fonts must be inlined: browsers refuse font files fetched from file:// pages (Electron / Android WebView)
+{
+  const css = path.join(dist, 'style.css');
+  let text = fs.readFileSync(css, 'utf8');
+  text = text.replace(/url\((fonts\/[^)]+\.woff2)\)/g, (m, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(root, 'public', f)).toString('base64')})`);
+  fs.writeFileSync(css, text);
+}
 await esbuild.build({
   entryPoints: [path.join(root, 'src/main.js')],
   bundle: true,

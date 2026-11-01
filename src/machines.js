@@ -2,7 +2,7 @@
 // up groups, colliders and a "rig" that maps the five control channels (swing, boom, stick, curl, open) onto it.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { machineMaterials, weathered, bake } from './detail.js';
+import { machineMaterials, weathered, bake, restPositions } from './detail.js';
 import { buildExcavator } from './mx-excavator.js';
 import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, stepCrane } from './mx-vehicles.js';
 import { terrainHeight, SITE } from './site.js';
@@ -62,6 +62,7 @@ export class Machine {
     for (const o of this.extraMeshes) if (o.isGroup) bake(o);
     this.buildPhysics();
     this.pose();
+    restPositions(this.root, this.extraMeshes);
     this.syncBodies(true);
     this.prevProbe = this.probes.map((p) => p.obj.getWorldPosition(new THREE.Vector3()));
     this.lastGp = this.grabPoint.getWorldPosition(new THREE.Vector3());
@@ -119,8 +120,9 @@ export class Machine {
 
   // ======================================================================= physics
   buildPhysics() {
-    const W = this.ctx.physics.world, s = this.s;
     this.blockShapes = []; this.breakShapes = [];
+    if (this.ctx.preview) return; // showroom / thumbnails: visuals only
+    const W = this.ctx.physics.world, s = this.s;
     for (const set of this.colliderSets) {
       const body = W.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
       for (const [x, y, z, sx, sy, sz, rx = 0] of set.boxes) {
@@ -134,8 +136,7 @@ export class Machine {
     }
   }
   destroy() {
-    const W = this.ctx.physics.world;
-    for (const { body } of this.bodies) W.removeRigidBody(body);
+    if (!this.ctx.preview) for (const { body } of this.bodies) this.ctx.physics.world.removeRigidBody(body);
     this.ctx.scene.remove(this.root);
     for (const o of this.extraMeshes) this.ctx.scene.remove(o);
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });

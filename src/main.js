@@ -14,6 +14,8 @@ import { Mixer } from './mixer.js';
 import { Road } from './road.js';
 import { Machine, MACHINES, controlsFor } from './machines.js';
 import { machineInteract, releaseAll } from './machineLogic.js';
+import { Showroom } from './showroom.js';
+import { renderLogo } from './logo3d.js';
 import { Player } from './player.js';
 import { Avatar, SHIRTS } from './avatar.js';
 import { Input } from './input.js';
@@ -47,7 +49,8 @@ class Game {
     progress(0.05, 'Starting physics engine…');
     await RAPIER.init();
     await frame();
-    const renderer = new THREE.WebGLRenderer({ antialias: q !== 'low', powerPreference: 'high-performance' });
+    this.thumbMode = new URLSearchParams(location.search).has('thumbs');
+    const renderer = new THREE.WebGLRenderer({ antialias: q !== 'low', powerPreference: 'high-performance', preserveDrawingBuffer: this.thumbMode });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.shadowMap.enabled = true;
@@ -97,6 +100,7 @@ class Game {
     this.input = new Input(renderer.domElement);
     this.input.sensitivity = this.prefs.sens; this.input.invertY = this.prefs.invert;
     this.ui = new UI(this);
+    this.showroom = new Showroom(this);
     this.newWorld();
     this.mode = 'foot'; this.driving = null;
     this.cam = { yaw: 0.2, pitch: -0.22, dist: 4.4, exYaw: 0, exPitch: -0.3, exDist: 12, cab: false, cabYaw: 0, cabPitch: -0.1 };
@@ -110,11 +114,31 @@ class Game {
     this.setupTitle(touch);
   }
 
+  // live 3D title backdrop: slow cinematic orbit around the yard behind the menu
+  startTitleScene() {
+    if (this.thumbMode) return;
+    this.titleLive = true;
+    const t0 = performance.now();
+    const loop = (t) => {
+      if (!this.titleLive) return;
+      requestAnimationFrame(loop);
+      const k = (t - t0) / 1000, a = 2.2 + k * 0.035;
+      this.camera.position.set(2 + Math.sin(a) * 27, 7.5 + Math.sin(k * 0.13) * 1.8, -7 + Math.cos(a) * 27);
+      this.camera.lookAt(0, 2.2, -8);
+      for (const m of this.machines.values()) m.idle(1 / 60, false);
+      this.renderer.render(this.scene, this.camera);
+    };
+    requestAnimationFrame(loop);
+    setTimeout(() => $('title').classList.add('live'), 300);
+  }
+
   setupTitle(touch) {
-    $('loadbar').classList.add('hidden'); $('loadtext').classList.add('hidden');
+    $('loadwrap').classList.add('hidden');
     $('titleMenu').classList.remove('hidden');
     $('nameInput').value = this.myName;
+    this.startTitleScene();
     const start = () => {
+      this.titleLive = false;
       this.setName($('nameInput').value);
       $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
       if (touch) { document.body.classList.add('touch'); $('touch').classList.remove('hidden'); this.input.bindTouchUI(); }
@@ -944,10 +968,24 @@ class Game {
     const dt = Math.min(0.05, (t - this.last) / 1000);
     this.last = t;
     this.tick(dt);
+    if (this.showroom.active) { this.showroom.render(this.renderer, dt); this.input.endFrame(); return; }
     if (this.debugCam) { this.camera.position.set(...this.debugCam[0]); this.camera.lookAt(...this.debugCam[1]); }
     this.renderer.render(this.scene, this.camera);
     this.input.endFrame();
   }
+
+  // build-time asset generation (scripts/thumbs.cjs): transparent machine renders + 3D logo
+  makeThumbs(w, h) {
+    const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
+    r.setPixelRatio(1); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    const out = {};
+    for (const sp of MACHINES) out[sp.id] = this.showroom.thumbnail(r, sp.id, w, h);
+    this.showroom.close(); r.dispose();
+    return out;
+  }
+  makeLogo(fontJson, w, h) { return renderLogo(fontJson, w, h); }
+  buildingDefs() { return BUILDINGS.map((b) => b.id); }
 
   // run the simulation without rendering (used by automated tests)
   fastForward(seconds) { for (let i = 0; i < seconds * 60; i++) this.tick(1 / 60); }

@@ -3,10 +3,26 @@ import * as THREE from 'three';
 import { MACHINES, controlsFor } from './machines.js';
 import { BUILDINGS } from './buildings.js';
 import { fmtKg } from './crusher.js';
+import { ic, iconize, fillIcons } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
 const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings'];
 const hex = (c) => '#' + c.getHexString();
+const THUMB = (id) => `thumbs/m_${id}.webp`;
+const TOOL = { grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
+  breaker: 'Hydraulic breaker', orangepeel: 'Orange-peel grab', pulverizer: 'Pulverizer', tank: 'Water tank', skip: 'Concrete skip' };
+const FAMILY = { roller: ['Tandem roller', 'Twin vibrating drums', 'Articulated drums'], paver: ['Paver', 'Hopper + screed', 'Rubber tracks'], loader: ['Wheel loader', '3 m bucket', 'Articulated wheels'],
+  dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'] };
+const UNDER = { steel: 'Steel tracks', rubber: 'Rubber tracks', wheels: 'Wheels + outriggers', pontoon: 'Floating pontoons', spider: 'Walking legs', robot: 'Remote tracks' };
+const TONS = { tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
+export function machineInfo(sp) {
+  if (sp.family === 'excavator') {
+    const type = sp.under === 'robot' ? 'Demolition robot' : sp.under === 'spider' ? 'Walking excavator' : sp.under === 'wheels' ? 'Wheeled excavator' : sp.under === 'pontoon' ? 'Amphibious excavator' : sp.boom === 'long' ? 'High-reach demolition' : sp.scale < 0.6 ? 'Mini excavator' : 'Crawler excavator';
+    return { type, tool: TOOL[sp.attach] || 'Attachment', drive: UNDER[sp.under] || 'Tracks', tons: TONS[sp.id], speed: sp.speed };
+  }
+  const f = FAMILY[sp.family] || ['Machine', 'Tool', 'Tracks'];
+  return { type: f[0], tool: f[1], drive: f[2], tons: TONS[sp.id], speed: sp.speed };
+}
 
 export class UI {
   constructor(game) {
@@ -22,18 +38,22 @@ export class UI {
     document.querySelectorAll('#spawn .tab').forEach((t) => t.addEventListener('click', () => { this.tab = t.dataset.tab; this.renderSpawn(); }));
     for (const id of ['spawnBtn', 'multiBtn', 'saveBtn', 'helpBtn', 'settingsBtn']) $(id).addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     this.cache = {};
+    fillIcons();
+    this.setupShowroom();
   }
 
-  isOpen() { return PANELS.some((id) => !$(id).classList.contains('hidden')); }
+  isOpen() { return PANELS.some((id) => !$(id).classList.contains('hidden')) || !!(this.game.showroom && this.game.showroom.active); }
   toggle(id) { if ($(id).classList.contains('hidden')) this.open(id); else this.close(id); }
+  syncOpen() { document.body.classList.toggle('panel-open', PANELS.some((o) => !$(o).classList.contains('hidden'))); }
   open(id) {
     for (const o of PANELS) if (o !== id) $(o).classList.add('hidden');
     $(id).classList.remove('hidden');
+    this.syncOpen();
     this.refreshPanel(id);
     this.game.input.releaseLock();
     this.game.audio.click();
   }
-  close(id) { $(id).classList.add('hidden'); this.game.audio.click(); }
+  close(id) { $(id).classList.add('hidden'); this.syncOpen(); this.game.audio.click(); }
   refreshPanel(id) {
     if (id === 'spawn') this.renderSpawn();
     if (id === 'multi') this.renderMulti();
@@ -43,7 +63,7 @@ export class UI {
   refreshOpen() { for (const id of ['spawn', 'multi', 'save', 'mixerPanel']) if (!$(id).classList.contains('hidden')) this.refreshPanel(id); }
 
   btn(label, cls, fn, disabled = false) {
-    const b = document.createElement('button'); b.className = 'buy ' + (cls || ''); b.innerHTML = label; b.disabled = disabled;
+    const b = document.createElement('button'); b.className = 'buy ' + (cls || ''); b.innerHTML = iconize(label); b.disabled = disabled;
     b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
     return b;
   }
@@ -55,27 +75,30 @@ export class UI {
     const body = $('spawnBody'); body.innerHTML = '';
     if (this.tab === 'machines') {
       const n = g.machines.size;
-      const head = document.createElement('div'); head.className = 'sect'; head.textContent = `Machines on site: ${n} / 20`;
+      const head = document.createElement('div'); head.className = 'sect'; head.textContent = `Machines on site ${n} / 20 · tap one to inspect it in 3D`;
       body.appendChild(head);
-      const grid = document.createElement('div'); grid.className = 'cards';
-      let lastFam = null;
+      let lastFam = null, grid = null;
       for (const sp of MACHINES) {
         const fam = sp.family === 'excavator' ? 'Excavators' : 'Road & site machines';
-        if (fam !== lastFam) { lastFam = fam; const h = document.createElement('div'); h.className = 'sect'; h.style.gridColumn = '1 / -1'; h.textContent = fam + ` (${MACHINES.filter((x) => (x.family === 'excavator') === (fam === 'Excavators')).length})`; grid.appendChild(h); }
-        const c = document.createElement('div'); c.className = 'card';
-        c.innerHTML = `<div class="top"><div class="ico">${sp.icon}</div><div><b>${sp.name}</b></div></div><div class="desc">${sp.desc}</div>`;
-        const sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = '#' + new THREE.Color(sp.paint).getHexString(); c.querySelector('.top').appendChild(sw);
-        const row = document.createElement('div'); row.className = 'row';
-        row.appendChild(this.btn('Spawn here', '', () => { g.act('spawnMachine', { spec: sp.id, near: g.player.pos.toArray(), yaw: g.cam.yaw + Math.PI }); this.close('spawn'); }, n >= 20));
-        c.appendChild(row); grid.appendChild(c);
+        if (fam !== lastFam) {
+          lastFam = fam;
+          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${MACHINES.filter((x) => (x.family === 'excavator') === (fam === 'Excavators')).length})`; body.appendChild(h);
+          grid = document.createElement('div'); grid.className = 'cards'; body.appendChild(grid);
+        }
+        const info = machineInfo(sp);
+        const c = document.createElement('div'); c.className = 'mcard';
+        c.innerHTML = `<div class="shot"><img src="${THUMB(sp.id)}" alt="" loading="lazy" draggable="false"></div>
+          <span class="chip">${info.tool}</span><span class="paint" style="background:#${new THREE.Color(sp.paint).getHexString()}"></span>
+          <div class="meta"><div class="brand">${sp.brand}</div><div class="model">${sp.model}</div><div class="desc">${info.type} · ${info.tons} t</div></div>`;
+        c.addEventListener('click', () => this.openShowroom(sp.id));
+        grid.appendChild(c);
       }
-      body.appendChild(grid);
       if (n) {
-        const h2 = document.createElement('div'); h2.className = 'sect'; h2.style.marginTop = '14px'; h2.textContent = 'Spawned machines'; body.appendChild(h2);
+        const h2 = document.createElement('div'); h2.className = 'sect'; h2.style.marginTop = '16px'; h2.textContent = 'On site now'; body.appendChild(h2);
         for (const m of g.machines.values()) {
           const row = document.createElement('div'); row.className = 'slot';
-          row.innerHTML = `<div class="ico" style="font-size:24px">${m.spec.icon}</div><div class="info"><b>${m.spec.name}</b><br>${m.driver >= 0 ? '🧑 driven by ' + g.playerName(m.driver) : 'parked'}</div>`;
-          row.appendChild(this.btn('Remove', 'red', () => { g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, m.driver >= 0 && m.driver !== g.myId));
+          row.innerHTML = `<img class="thumb" src="${THUMB(m.spec.id)}" alt=""><div class="info"><b>${m.spec.brand} ${m.spec.model}</b><br>${m.driver >= 0 ? ic('user', 'inl') + 'driven by ' + g.playerName(m.driver) : 'parked'}</div>`;
+          row.appendChild(this.btn(ic('trash', 'inl') + 'Remove', 'red', () => { g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, m.driver >= 0 && m.driver !== g.myId));
           body.appendChild(row);
         }
       }
@@ -86,8 +109,8 @@ export class UI {
       body.appendChild(status);
       const grid = document.createElement('div'); grid.className = 'cards';
       for (const b of BUILDINGS) {
-        const c = document.createElement('div'); c.className = 'card';
-        c.innerHTML = `<div class="top"><div class="ico">${b.icon}</div><b>${b.name}</b></div><div class="desc">${b.desc}</div>`;
+        const c = document.createElement('div'); c.className = 'mcard';
+        c.innerHTML = `<div class="shot photo"><img src="thumbs/b_${b.id}.jpg" alt="" loading="lazy" draggable="false"></div><div class="meta"><div class="model">${b.name}</div><div class="desc">${b.desc}</div></div>`;
         const row = document.createElement('div'); row.className = 'row';
         row.appendChild(this.btn('Build on A', '', () => { g.act('spawnBuilding', { def: b.id, plot: 0 }); this.close('spawn'); }));
         row.appendChild(this.btn('Build on B', 'alt', () => { g.act('spawnBuilding', { def: b.id, plot: 1 }); this.close('spawn'); }));
@@ -171,7 +194,7 @@ export class UI {
     for (const slot of ['auto', '1', '2', '3', '4', '5']) {
       const meta = g.slotMeta(slot);
       const r = document.createElement('div'); r.className = 'slot';
-      r.innerHTML = `<div class="ico" style="font-size:22px">${slot === 'auto' ? '⏱️' : '💾'}</div><div class="info"><b>${slot === 'auto' ? 'Autosave' : 'Slot ' + slot}</b><br>${meta ? new Date(meta.time).toLocaleString() + ' · ' + meta.summary : '<span style="opacity:.6">empty</span>'}</div>`;
+      r.innerHTML = `<div class="ico">${ic(slot === 'auto' ? 'clock' : 'save')}</div><div class="info"><b>${slot === 'auto' ? 'Autosave' : 'Slot ' + slot}</b><br>${meta ? new Date(meta.time).toLocaleString() + ' · ' + meta.summary : '<span style="opacity:.6">empty</span>'}</div>`;
       if (slot !== 'auto') r.appendChild(this.btn('Save', '', () => { g.saveSlot(slot); this.renderSave(); }));
       r.appendChild(this.btn('Load', 'alt', () => { g.loadSlot(slot); this.close('save'); }, !meta || g.net.isClient));
       if (meta && slot !== 'auto') r.appendChild(this.btn('🗑', 'red', () => { g.deleteSlot(slot); this.renderSave(); }));
@@ -217,10 +240,10 @@ export class UI {
     const sum = list.reduce((a, b) => a + b[1], 0) || 1;
     for (const [h, kg] of list) { const i = document.createElement('i'); i.style.width = (kg / sum * 100) + '%'; i.style.background = '#' + new THREE.Color(h).getHexString(); i.title = fmtKg(kg); sw.appendChild(i); }
   }
-  setNet(html) { const el = $('netBadge'); el.classList.toggle('hidden', !html); if (html && el.innerHTML !== html) el.innerHTML = html; }
+  setNet(html) { const el = $('netBadge'); el.classList.toggle('hidden', !html); if (html && this.cache.net !== html) { this.cache.net = html; el.innerHTML = iconize(html); } }
 
   toast(msg, good = false, ms = 3200) {
-    const el = document.createElement('div'); el.className = 'toast' + (good ? ' good' : ''); el.innerHTML = msg;
+    const el = document.createElement('div'); el.className = 'toast' + (good ? ' good' : ''); el.innerHTML = iconize(msg);
     $('toasts').appendChild(el);
     while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
     setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 450); }, ms);
@@ -259,8 +282,8 @@ export class UI {
   }
   setPrompt(html) {
     const el = $('prompt');
-    if (!html) { el.classList.add('hidden'); return; }
-    if (el.innerHTML !== html) el.innerHTML = html;
+    if (!html) { el.classList.add('hidden'); this.cache.prompt = null; return; }
+    if (this.cache.prompt !== html) { this.cache.prompt = html; el.innerHTML = iconize(html); }
     el.classList.remove('hidden');
   }
   setCrosshair(active, visible = true) { const c = $('crosshair'); c.classList.toggle('target', active); c.style.display = visible ? '' : 'none'; }
@@ -268,18 +291,19 @@ export class UI {
     $('vehicleHud').classList.toggle('hidden', mode !== 'machine');
     if (machine) {
       const ctl = controlsFor(machine);
-      const setBtn = (act, txt) => { const el = document.querySelector(`#tbtns-exc [data-act="${act}"]`); if (!el) return; el.classList.toggle('hidden', !txt); if (txt) el.innerHTML = txt.includes('<') ? txt : `${{ stickOut: '⇱', stickIn: '⇲', curlIn: '↻', curlOut: '↺' }[act] || ''}<small>${txt}</small>`; };
+      const setBtn = (act, txt) => { const el = document.querySelector(`#tbtns-exc [data-act="${act}"]`); if (!el) return; el.classList.toggle('hidden', !txt); if (txt) el.innerHTML = txt.includes('<') ? iconize(txt) : `${ic({ stickOut: 'armOut', stickIn: 'armIn', curlIn: 'curlIn', curlOut: 'curlOut' }[act] || 'grab')}<small>${txt}</small>`; };
       setBtn('stickOut', ctl.stickOut); setBtn('stickIn', ctl.stickIn); setBtn('curlIn', ctl.curlIn); setBtn('curlOut', ctl.curlOut); setBtn('grab', ctl.grab);
       const rl = document.querySelector('#stickR label'); if (rl) rl.textContent = ctl.right || '';
       $('stickR').classList.toggle('nostick', !ctl.right);
       this.machineHint = ctl.hint;
-      $('vhName').textContent = machine.spec.name;
+      $('vhName').textContent = machine.spec.brand + ' ' + machine.spec.model;
+      $('vhImg').src = THUMB(machine.spec.id);
       $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher' }[machine.spec.attach]
         || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
       ? '<kbd>W</kbd><kbd>S</kbd> drive · <kbd>A</kbd><kbd>D</kbd> steer<br>' + (this.machineHint || '') + '<br><kbd>C</kbd> camera · <kbd>E</kbd> exit'
-      : '<kbd>Click</kbd> hammer · <kbd>Q</kbd> pick up · <kbd>G</kbd> throw<br><kbd>E</kbd> use · <kbd>B</kbd> spawn · <kbd>M</kbd> multiplayer';
+      : '<kbd>Click</kbd> hammer · <kbd>Q</kbd> pick up · <kbd>G</kbd> throw<br><kbd>E</kbd> use · <kbd>B</kbd> spawn · <kbd>M</kbd> online';
     if (touch) {
       $('tbtns-foot').classList.toggle('hidden', mode !== 'foot');
       $('tbtns-exc').classList.toggle('hidden', mode !== 'machine');
@@ -288,7 +312,7 @@ export class UI {
       $('stickLLabel').textContent = mode === 'machine' ? 'DRIVE' : 'MOVE';
     }
   }
-  setUseButton(label) { const b = $('tbUse'); if (!label) { b.classList.add('hidden'); return; } if (b.textContent !== label) b.textContent = label; b.classList.remove('hidden'); }
+  setUseButton(label) { const b = $('tbUse'); if (!label) { b.classList.add('hidden'); return; } if (b.dataset.l !== label) { b.dataset.l = label; b.innerHTML = iconize(label); } b.classList.remove('hidden'); }
   setVehicle(m) {
     const a = m.att, b = a.behaviour, on = m.openTarget > 0.5;
     const st = { breaker: on ? 'ON' : 'OFF', crusher: on ? 'CRUSHING' : 'OFF', roller: on ? 'VIBRATING' : 'OFF', paver: on ? 'PAVING' : 'OFF', skip: m.open > 0.5 ? 'OPEN' : 'CLOSED',
@@ -298,5 +322,76 @@ export class UI {
     $('vhLoad').textContent = a.bulk ? (m.payload.kg ? `${Math.round(m.payload.kg)} ${m.payload.kind === 'water' ? 'L water' : 'kg ' + m.payload.kind}` : (m.held.length ? `${m.held.length} pcs` : 'empty')) : a.pieces ? `${m.held.length} pcs` : '—';
     $('vhFill').style.width = (a.bulk ? Math.min(100, m.payload.kg / cap * 100) : Math.min(100, m.held.length / cap * 100)) + '%';
     $('vhFill').style.background = m.payload.kind === 'water' ? '#3d7080' : m.payload.kg ? hex(m.payload.color) : '#7fd0ff';
+  }
+
+  // ------------------------------------------------------------------ showroom (3D preview before spawning)
+  setupShowroom() {
+    const sr = () => this.game.showroom;
+    $('srBack').addEventListener('click', () => { this.closeShowroom(); this.open('spawn'); });
+    $('srPrev').addEventListener('click', () => this.stepShowroom(-1));
+    $('srNext').addEventListener('click', () => this.stepShowroom(1));
+    $('srSpawn').addEventListener('click', () => {
+      const g = this.game, id = sr().spec.id;
+      if (g.machines.size >= 20) return;
+      g.act('spawnMachine', { spec: id, near: g.player.pos.toArray(), yaw: g.cam.yaw + Math.PI });
+      this.closeShowroom();
+    });
+    const drag = $('srDrag'), pts = new Map();
+    let last = null, pinch = 0;
+    drag.addEventListener('pointerdown', (e) => { drag.setPointerCapture(e.pointerId); pts.set(e.pointerId, [e.clientX, e.clientY]); last = [e.clientX, e.clientY]; sr().dragging = true; sr().idleT = 0; });
+    drag.addEventListener('pointermove', (e) => {
+      if (!pts.has(e.pointerId)) return;
+      pts.set(e.pointerId, [e.clientX, e.clientY]);
+      const s = sr();
+      if (pts.size >= 2) {
+        const [a, b] = [...pts.values()]; const d = Math.hypot(a[0] - b[0], a[1] - b[1]);
+        if (pinch) s.zoom = Math.min(1.8, Math.max(0.45, s.zoom * pinch / d));
+        pinch = d; return;
+      }
+      if (last) { s.spin += (e.clientX - last[0]) * 0.008; s.pitch = Math.min(0.75, Math.max(0.02, s.pitch + (e.clientY - last[1]) * 0.004)); }
+      last = [e.clientX, e.clientY]; s.idleT = 0;
+    });
+    const up = (e) => { pts.delete(e.pointerId); if (pts.size < 2) pinch = 0; if (!pts.size) { sr().dragging = false; last = null; } };
+    drag.addEventListener('pointerup', up); drag.addEventListener('pointercancel', up);
+    drag.addEventListener('wheel', (e) => { const s = sr(); s.zoom = Math.min(1.8, Math.max(0.45, s.zoom * (1 + Math.sign(e.deltaY) * 0.08))); e.preventDefault(); }, { passive: false });
+    window.addEventListener('keydown', (e) => {
+      if (!sr() || !sr().active) return;
+      if (e.code === 'ArrowLeft') this.stepShowroom(-1);
+      if (e.code === 'ArrowRight') this.stepShowroom(1);
+      if (e.code === 'Escape') { this.closeShowroom(); this.open('spawn'); }
+      if (e.code === 'Enter') $('srSpawn').click();
+    });
+  }
+  openShowroom(id) {
+    const s = this.game.showroom;
+    for (const o of PANELS) $(o).classList.add('hidden');
+    this.syncOpen();
+    s.active = true; s.zoom = 1; s.pitch = 0.2; s.spin = 0.7; s.idleT = 0;
+    s.show(id);
+    this.fillShowroom();
+    $('showroomUI').classList.remove('hidden'); $('hud').classList.add('hidden'); $('touch').style.visibility = 'hidden';
+    this.game.input.releaseLock();
+    this.game.audio.click();
+  }
+  stepShowroom(d) {
+    const s = this.game.showroom, i = MACHINES.findIndex((m) => m.id === s.spec.id);
+    s.show(MACHINES[(i + d + MACHINES.length) % MACHINES.length].id);
+    this.fillShowroom();
+    this.game.audio.click();
+  }
+  fillShowroom() {
+    const sp = this.game.showroom.spec, info = machineInfo(sp), g = this.game;
+    $('srBrand').textContent = sp.brand; $('srModel').textContent = sp.model; $('srType').textContent = info.type;
+    $('srDesc').textContent = sp.desc;
+    $('srCount').textContent = `${MACHINES.indexOf(sp) + 1} / ${MACHINES.length}`;
+    $('srStats').innerHTML = [['Tool', info.tool], ['Drive', info.drive], ['Weight', info.tons + ' t'], ['Top speed', Math.round(sp.speed * 3.6) + ' km/h']]
+      .map(([k, v]) => `<div class="sr-stat"><span>${k}</span><b>${v}</b></div>`).join('');
+    const full = g.machines.size >= 20;
+    $('srSpawn').disabled = full;
+    $('srNote').textContent = full ? 'Site is full (20 machines). Remove one first.' : `${g.machines.size} / 20 machines on site`;
+  }
+  closeShowroom() {
+    this.game.showroom.close();
+    $('showroomUI').classList.add('hidden'); $('hud').classList.remove('hidden'); $('touch').style.visibility = '';
   }
 }

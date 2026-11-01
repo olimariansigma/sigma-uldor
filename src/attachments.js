@@ -8,9 +8,11 @@ function mesh(geo, mat, parent, cast = true) { const m = new THREE.Mesh(geo, mat
 function point(parent, x, y, z) { const o = new THREE.Object3D(); o.position.set(x, y, z); parent.add(o); return o; }
 function shapeFrom(pts) { const s = new THREE.Shape(); s.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) s.lineTo(pts[i][0], pts[i][1]); s.closePath(); return s; }
 // extrude a profile drawn in (z, y) across x
+// a flat plate in the YZ plane (profile pts = [z, y]) spanning x .. x + thick (x is the LEFT face)
 export function sidePlate(pts, thick, x, bevel = 0.008) {
   const g = new THREE.ExtrudeGeometry(shapeFrom(pts), { depth: thick, bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 1 });
-  g.rotateY(-Math.PI / 2); g.translate(x + thick / 2, 0, 0);
+  g.rotateY(-Math.PI / 2); // extrusion now runs from x = -thick to 0
+  g.translate(x + thick, 0, 0);
   return g;
 }
 export function curvePts(ctrl, n = 16) {
@@ -58,7 +60,7 @@ export function buildAttachment(kind, K) {
       const pts = shearMode
         ? [[0, -0.05], [0.4, 0.3], [1.0, 0.28], [1.5, 0.05], [1.45, -0.08], [1.0, 0.1], [0.45, 0.12], [0.1, -0.15]]
         : [[0, -0.04], [0.25, 0.36], [0.75, 0.42], [1.2, 0.36], [len, -0.06], [len - 0.06, -0.16], [1.12, 0.12], [0.72, 0.2], [0.3, 0.2], [0.08, -0.12]];
-      return sidePlate(pts.map(([z, y]) => [z, y * f]), shearMode ? 0.12 : 0.07, -0.035);
+      return sidePlate(pts.map(([z, y]) => [z, y * f]), shearMode ? 0.12 : 0.07, shearMode ? -0.06 : -0.035);
     };
     const ja = point(A, 0, 0.05, 0.92), jb = point(A, 0, -0.05, 0.92);
     const ta = [], tb = [], ka = [], kb = [];
@@ -177,7 +179,7 @@ export function buildAttachment(kind, K) {
     coupler(K, A);
     const n = 5;
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2;
+      const a = (i / n) * Math.PI * 2 + Math.PI / 2; // one tine on the centre line: mirror-symmetric left/right
       const hinge = new THREE.Group(); hinge.position.set(Math.cos(a) * 0.38, Math.sin(a) * 0.38, 0.72); hinge.rotation.z = a; A.add(hinge);
       const pts = [[0, -0.05], [0.25, 0.25], [0.7, 0.36], [1.15, 0.22], [1.38, -0.22], [1.3, -0.3], [1.06, 0.08], [0.68, 0.22], [0.28, 0.12], [0.06, -0.14]];
       const g = sidePlate(pts, 0.09, -0.045); g.rotateZ(-Math.PI / 2);

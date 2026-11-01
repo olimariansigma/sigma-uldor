@@ -8,8 +8,8 @@ import * as T from './textures.js';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 // ------------------------------------------------------------------ weathered materials
-// Dust / mud toward the ground, chipped paint, grime streaks. All materials of one machine share uBase so
-// the dirt line follows the machine when it drives onto a slab or floats on the lake.
+// Dust / mud toward the ground, chipped paint, grime streaks, all computed from a per-vertex rest position
+// (see restPositions) so the weathering is part of the model.
 const NOISE = `
   float wh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
   float wn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -23,12 +23,14 @@ export function weathered(color, { rough = 0.45, metal = 0.12, clearcoat = 0.4, 
   m.userData.weather = u;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, u);
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWP;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\n#ifdef USE_INSTANCING\nvWP = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;\n#else\nvWP = (modelMatrix * vec4(transformed, 1.0)).xyz;\n#endif');
+    // aRest = the vertex position in machine space at the rest pose, so dirt / chips / streaks are glued to the
+    // paint and never slide over the surface when the machine drives or the arm moves
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nattribute vec3 aRest;\nvarying vec3 vWP;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWP = aRest;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>
         varying vec3 vWP; uniform float uBase, uDirt, uWear; uniform vec3 uDirtCol;${NOISE}`)
       .replace('#include <map_fragment>', `#include <map_fragment>
-        float wH = vWP.y - uBase;
+        float wH = vWP.y;
         float wN = wn(vWP.xz * 2.3 + vWP.y * 1.7) * 0.6 + wn(vWP.xz * 7.0 - vWP.y * 3.0) * 0.4;
         float wD = clamp((1.05 - wH) / 1.05, 0.0, 1.0); wD *= wD;
         float wS = smoothstep(0.62, 0.9, wn(vWP.xz * 11.0 + vWP.y * 9.0)) * clamp((1.6 - wH) / 1.6, 0.0, 1.0);
@@ -62,6 +64,23 @@ export function machineMaterials(M, paintHex, accentHex) {
     hazard: M.hazard, chrome: M.chrome, glass: M.cabGlass, lens: M.lightLens, red: M.redLens, amber: M.amberLens,
     tread: M.tread, seat: M.seat, plastic: M.blackPlastic,
   };
+}
+
+// give every weathered mesh under `root` its rest-pose position (relative to root) as the aRest attribute
+export function restPositions(root, extra = []) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert(), mm = new THREE.Matrix4(), v = new THREE.Vector3();
+  const visit = (o) => {
+    if (!o.isMesh || !o.material || !o.material.userData || !o.material.userData.weather) return;
+    if (o.geometry.userData.restOwner && o.geometry.userData.restOwner !== o.uuid) o.geometry = o.geometry.clone();
+    const g = o.geometry, pos = g.attributes.position, arr = new Float32Array(pos.count * 3);
+    if (o.isInstancedMesh) mm.identity(); else mm.multiplyMatrices(inv, o.matrixWorld);
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(mm); arr[i * 3] = v.x; arr[i * 3 + 1] = v.y; arr[i * 3 + 2] = v.z; }
+    g.setAttribute('aRest', new THREE.BufferAttribute(arr, 3));
+    g.userData.restOwner = o.uuid;
+  };
+  root.traverse(visit);
+  for (const e of extra) e.traverse(visit);
 }
 
 // ------------------------------------------------------------------ batching

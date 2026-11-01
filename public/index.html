@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#1a1d21">
+<meta name="theme-color" content="#0f1114">
 <title>Wrecking Yard</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -12,53 +12,60 @@
 
 <!-- Loading / title -->
 <div id="title" class="screen">
-  <div class="title-card">
-    <div class="logo">
-      <div class="logo-stripes"></div>
-      <h1>WRECKING<span>YARD</span></h1>
-      <div class="logo-sub">Demolition · Crushing · Cement</div>
+  <div class="title-bg"></div>
+  <div class="title-shade"></div>
+  <div class="title-col">
+    <img class="logo-img" src="img/logo.png" alt="Wrecking Yard" draggable="false">
+    <div id="loadwrap">
+      <div id="loadbar"><div id="loadfill"></div></div>
+      <div id="loadtext">Starting engines…</div>
     </div>
-    <div id="loadbar"><div id="loadfill"></div></div>
-    <div id="loadtext">Pouring concrete…</div>
     <div id="titleMenu" class="hidden">
-      <input id="nameInput" class="text-in" maxlength="16" placeholder="Your name">
-      <button id="playBtn" class="big-btn">PLAY</button>
-      <div class="join-row"><input id="titleCode" class="text-in code-in" maxlength="6" placeholder="CODE"><button id="titleJoin" class="mid-btn">JOIN FRIEND</button></div>
-      <div id="titleMsg" class="title-msg"></div>
-      <div class="title-help">
-        <p><b>Smash cinder-block buildings, feed the rubble to the crusher and collect coloured dust.</b></p>
-        <p>Mix the dust with lake water into cement and fix the potholes in the road. Spawn any of 10 excavators and play with friends on PC and mobile.</p>
+      <button id="playBtn" class="g-btn g-primary g-xl"><i data-ic="play"></i>PLAY</button>
+      <label class="field"><span>Driver name</span><input id="nameInput" class="text-in" maxlength="16" placeholder="Your name"></label>
+      <div class="join-row">
+        <label class="field grow"><span>Friend's code</span><input id="titleCode" class="text-in code-in" maxlength="6" placeholder="ABC123"></label>
+        <button id="titleJoin" class="g-btn g-blue"><i data-ic="globe"></i>JOIN</button>
       </div>
+      <div id="titleMsg" class="title-msg"></div>
     </div>
   </div>
+  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v3.1</span></div>
 </div>
 
 <!-- HUD -->
 <div id="hud" class="hidden">
   <div id="topLeft">
-    <div id="dustBox">
-      <div class="dust-main"><span class="dust-ico">⛰️</span><b id="dustTotal">0 kg</b><span class="dim"> crushed</span></div>
+    <div id="dustBox" class="g-card">
+      <div class="dust-main"><i data-ic="pile" class="dust-ico"></i><b id="dustTotal">0 kg</b><span class="dim">crushed</span></div>
       <div id="swatches"></div>
-      <div class="dust-sub"><span>Pile <b id="pileKg">0 kg</b></span><span>Cement <b id="cementKg">0 kg</b></span><span>Road <b id="roadFix">0/0</b></span></div>
+      <div class="dust-sub">
+        <span><i data-ic="pile"></i><b id="pileKg">0 kg</b></span>
+        <span><i data-ic="cement"></i><b id="cementKg">0 kg</b></span>
+        <span><i data-ic="road"></i><b id="roadFix">0/0</b></span>
+      </div>
     </div>
     <div id="netBadge" class="hidden"></div>
   </div>
   <div id="topRight">
-    <button class="hud-btn" id="spawnBtn" title="Spawn (B)">🏗️<span>Spawn</span></button>
-    <button class="hud-btn" id="multiBtn" title="Play together (M)">🌐<span>Multiplayer</span></button>
-    <button class="hud-btn" id="saveBtn" title="Save / load">💾<span>Save</span></button>
-    <button class="hud-btn" id="helpBtn" title="Controls (H)">❔</button>
-    <button class="hud-btn" id="settingsBtn" title="Settings">⚙️</button>
+    <button class="hud-btn" id="spawnBtn" title="Spawn (B)"><i data-ic="spawn"></i><span>Spawn</span></button>
+    <button class="hud-btn" id="multiBtn" title="Play together (M)"><i data-ic="globe"></i><span>Online</span></button>
+    <button class="hud-btn" id="saveBtn" title="Save / load"><i data-ic="save"></i><span>Save</span></button>
+    <button class="hud-btn sq" id="helpBtn" title="Controls (H)"><i data-ic="help"></i></button>
+    <button class="hud-btn sq" id="settingsBtn" title="Settings"><i data-ic="gear"></i></button>
   </div>
   <div id="crosshair"><div></div></div>
   <div id="carry" class="hidden"><span id="carryIcon"></span><span id="carryVal">0/3</span></div>
   <div id="bucketHud" class="hidden"><span id="bucketSw"></span><span id="bucketVal"></span></div>
   <div id="prompt" class="hidden"></div>
-  <div id="vehicleHud" class="hidden">
-    <div class="vh-title" id="vhName">Machine</div>
-    <div class="vh-row"><span id="vhToolLbl">Grapple</span><b id="vhGrab">OPEN</b></div>
-    <div class="vh-row"><span>Load</span><b id="vhLoad">0</b></div>
-    <div class="vh-bar"><div id="vhFill"></div></div>
+  <div id="vehicleHud" class="hidden g-card">
+    <img id="vhImg" alt="">
+    <div class="vh-body">
+      <div class="vh-title" id="vhName">Machine</div>
+      <div class="vh-row"><span id="vhToolLbl">Grapple</span><b id="vhGrab">OPEN</b></div>
+      <div class="vh-row"><span>Load</span><b id="vhLoad">0</b></div>
+      <div class="vh-bar"><div id="vhFill"></div></div>
+    </div>
   </div>
   <div id="keyHints"></div>
   <div id="toasts"></div>
@@ -70,20 +77,41 @@
   <div class="stick" id="stickL"><div class="knob"></div><label id="stickLLabel">MOVE</label></div>
   <div class="stick hidden" id="stickR"><div class="knob"></div><label>SWING · BOOM</label></div>
   <div id="tbtns-foot" class="tbtns">
-    <button data-act="hammer" class="tb tb-big">🔨</button>
-    <button data-act="pickup" class="tb">✋<small>PICK</small></button>
-    <button data-act="throw" class="tb">🧱<small>THROW</small></button>
-    <button data-act="jump" class="tb">⤒<small>JUMP</small></button>
+    <button data-act="hammer" class="tb tb-big"><i data-ic="hammer"></i><small>SMASH</small></button>
+    <button data-act="pickup" class="tb"><i data-ic="hand"></i><small>PICK</small></button>
+    <button data-act="throw" class="tb"><i data-ic="throw"></i><small>THROW</small></button>
+    <button data-act="jump" class="tb"><i data-ic="jump"></i><small>JUMP</small></button>
   </div>
   <div id="tbtns-exc" class="tbtns hidden">
-    <button data-act="grab" class="tb tb-big" id="tbGrab">✊<small>GRAB</small></button>
-    <button data-act="stickOut" class="tb">⇱<small>ARM OUT</small></button>
-    <button data-act="stickIn" class="tb">⇲<small>ARM IN</small></button>
-    <button data-act="curlIn" class="tb">↻<small>CURL</small></button>
-    <button data-act="curlOut" class="tb">↺<small>DUMP</small></button>
+    <button data-act="grab" class="tb tb-big" id="tbGrab"><i data-ic="grab"></i><small>GRAB</small></button>
+    <button data-act="stickOut" class="tb"><i data-ic="armOut"></i><small>ARM OUT</small></button>
+    <button data-act="stickIn" class="tb"><i data-ic="armIn"></i><small>ARM IN</small></button>
+    <button data-act="curlIn" class="tb"><i data-ic="curlIn"></i><small>CURL</small></button>
+    <button data-act="curlOut" class="tb"><i data-ic="curlOut"></i><small>DUMP</small></button>
   </div>
   <button data-act="use" id="tbUse" class="tb tb-use hidden">ENTER</button>
-  <button data-act="cam" id="tbCam" class="tb tb-cam hidden">🎥</button>
+  <button data-act="cam" id="tbCam" class="tb tb-cam hidden"><i data-ic="camera"></i></button>
+</div>
+
+<!-- Machine showroom (3D preview before spawning) -->
+<div id="showroomUI" class="hidden">
+  <div id="srDrag"></div>
+  <div class="sr-top">
+    <button class="g-btn g-dark" id="srBack"><i data-ic="left"></i>BACK</button>
+    <div class="sr-count" id="srCount">1 / 20</div>
+  </div>
+  <button class="sr-nav sr-prev" id="srPrev"><i data-ic="left"></i></button>
+  <button class="sr-nav sr-next" id="srNext"><i data-ic="right"></i></button>
+  <div class="sr-info g-card">
+    <div class="sr-brand" id="srBrand">TORVA</div>
+    <div class="sr-model" id="srModel">TX330</div>
+    <div class="sr-type" id="srType">Demolition excavator</div>
+    <p class="sr-desc" id="srDesc"></p>
+    <div class="sr-stats" id="srStats"></div>
+    <button class="g-btn g-primary g-lg" id="srSpawn"><i data-ic="spawn"></i>SPAWN</button>
+    <div class="sr-note" id="srNote"></div>
+  </div>
+  <div class="sr-hint">Drag to turn · scroll or pinch to zoom</div>
 </div>
 
 <!-- Spawn panel -->
@@ -91,32 +119,32 @@
   <div class="panel-head">
     <h2>Sandbox</h2>
     <div class="tabs"><button class="tab active" data-tab="machines">Machines</button><button class="tab" data-tab="buildings">Buildings</button><button class="tab" data-tab="tools">Tools</button></div>
-    <button class="close" data-close="spawn">✕</button>
+    <button class="close" data-close="spawn"><i data-ic="close"></i></button>
   </div>
   <div class="panel-body" id="spawnBody"></div>
 </div>
 
 <!-- Multiplayer -->
 <div id="multi" class="panel hidden">
-  <div class="panel-head"><h2>Play together</h2><button class="close" data-close="multi">✕</button></div>
+  <div class="panel-head"><h2>Play together</h2><button class="close" data-close="multi"><i data-ic="close"></i></button></div>
   <div class="panel-body" id="multiBody"></div>
 </div>
 
 <!-- Save / load -->
 <div id="save" class="panel hidden">
-  <div class="panel-head"><h2>Save &amp; load</h2><button class="close" data-close="save">✕</button></div>
+  <div class="panel-head"><h2>Save &amp; load</h2><button class="close" data-close="save"><i data-ic="close"></i></button></div>
   <div class="panel-body" id="saveBody"></div>
 </div>
 
 <!-- Mixer -->
 <div id="mixerPanel" class="panel hidden">
-  <div class="panel-head"><h2>Cement mixer</h2><button class="close" data-close="mixerPanel">✕</button></div>
+  <div class="panel-head"><h2>Cement mixer</h2><button class="close" data-close="mixerPanel"><i data-ic="close"></i></button></div>
   <div class="panel-body" id="mixerBody"></div>
 </div>
 
 <!-- Help -->
 <div id="help" class="panel hidden">
-  <div class="panel-head"><h2>How to play</h2><button class="close" data-close="help">✕</button></div>
+  <div class="panel-head"><h2>How to play</h2><button class="close" data-close="help"><i data-ic="close"></i></button></div>
   <div class="panel-body help-grid">
     <div>
       <h3>On foot</h3>
@@ -126,16 +154,16 @@
         <li><kbd>Q</kbd> / <kbd>Right click</kbd> pick up blocks (hold)</li>
         <li><kbd>G</kbd> throw (auto-aims into the crusher hopper)</li>
         <li><kbd>E</kbd> use: drive a machine, fill / pour your bucket, open the mixer</li>
-        <li><kbd>B</kbd> spawn menu · <kbd>M</kbd> multiplayer · <kbd>H</kbd> help</li>
+        <li><kbd>B</kbd> spawn menu · <kbd>M</kbd> online · <kbd>H</kbd> help</li>
       </ul>
     </div>
     <div>
-      <h3>Excavators</h3>
+      <h3>Machines</h3>
       <ul>
         <li><kbd>W S</kbd> drive · <kbd>A D</kbd> steer</li>
         <li><kbd>←</kbd> <kbd>→</kbd> swing · <kbd>↑</kbd> <kbd>↓</kbd> boom</li>
         <li><kbd>R</kbd> / <kbd>F</kbd> arm out / in · <kbd>Z</kbd> / <kbd>X</kbd> curl / dump</li>
-        <li><kbd>Click</kbd> / <kbd>Space</kbd> grapple, breaker on/off, skip gate</li>
+        <li><kbd>Click</kbd> / <kbd>Space</kbd> tool: grab, breaker, gate, crusher, vibration, paving</li>
         <li><kbd>C</kbd> cab camera · <kbd>E</kbd> climb out</li>
       </ul>
     </div>
@@ -143,9 +171,8 @@
       <h3>Dust → cement → road</h3>
       <ul>
         <li>Rubble in the crusher hopper is crushed into dust that keeps the block's colour. It rides the conveyor onto the pile.</li>
-        <li>Scoop dust from the pile (bucket machine, or <kbd>E</kbd> with your bucket) and pour it into the <b>mixer</b>.</li>
-        <li>Get water from the <b>lake</b> (AQUAMOLE water tank, any bucket, or your hand bucket) and pour it in too.</li>
-        <li>The paddles mix the colours together into cement. Carry it to the potholes in the street and pour to fix them.</li>
+        <li>Scoop dust from the pile and pour it into the <b>mixer</b>, add water from the <b>lake</b>.</li>
+        <li>The paddles blend the colours into cement. Pour it into potholes (skip, paver or your bucket), then roll them flat with the roller.</li>
       </ul>
     </div>
   </div>
@@ -153,14 +180,14 @@
 
 <!-- Settings -->
 <div id="settings" class="panel hidden">
-  <div class="panel-head"><h2>Options</h2><button class="close" data-close="settings">✕</button></div>
+  <div class="panel-head"><h2>Options</h2><button class="close" data-close="settings"><i data-ic="close"></i></button></div>
   <div class="panel-body">
     <div class="opt"><span>Graphics quality</span>
       <select id="optQuality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
     <div class="opt"><span>Master volume</span><input type="range" id="optVolume" min="0" max="1" step="0.05"></div>
     <div class="opt"><span>Look sensitivity</span><input type="range" id="optSens" min="0.3" max="2.5" step="0.05"></div>
     <div class="opt"><span>Invert look Y</span><input type="checkbox" id="optInvert"></div>
-    <div class="opt"><button class="small-btn" id="fullscreenBtn">Toggle fullscreen</button></div>
+    <div class="opt"><button class="g-btn g-dark" id="fullscreenBtn">Toggle fullscreen</button></div>
   </div>
 </div>
 

@@ -39,7 +39,7 @@ export class Crusher {
     // ---------------- undercarriage ----------------
     this.tracks = [];
     for (const s of [-1, 1]) {
-      const tu = buildTrackUnit(M, { length: 6.4, radius: 0.36, width: 0.5, rollers: 9, frameColor: M.darkSteel });
+      const tu = buildTrackUnit(M, { length: 6.4, radius: 0.36, width: 0.5, rollers: 9, frameColor: M.darkSteel, side: s });
       tu.group.position.set(s * 0.98, 0, -2.6);
       this.root.add(tu.group);
       this.tracks.push(tu);
@@ -309,11 +309,12 @@ export class Crusher {
 
   get pileKg() { let k = 0; for (const l of this.layers) k += l.kg; return k; }
 
-  // 34 degree angle of repose, bulk density 1500 kg/m3
+  // loose crushed fines bulk out: ~1000 kg/m3, so a pile takes up about the same space as the blocks that
+  // went in (8 blocks of 17 kg -> a pile as big as those 8 blocks). 38 degree angle of repose.
   pileDims() {
-    const v = Math.max(0.02, this.pileKg / 1500);
-    const r = Math.max(0.35, Math.cbrt(v / 0.7068));
-    return { r, h: r * 0.675 };
+    const v = Math.max(0.02, this.pileKg / 1000);
+    const r = Math.max(0.35, Math.cbrt(v / (Math.PI / 3 * 0.78)));
+    return { r, h: r * 0.78 };
   }
 
   pileWorld() { return this.root.localToWorld(this.pileLocal.clone()); }

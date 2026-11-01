@@ -96,6 +96,7 @@ export class Showroom {
       if (m.att && m.att.rotor) { m.boom = cl(-0.75, 'boom'); m.stickA = cl(1.6, 'stick'); m.levelClamp(); m.open = 1; }
     }
     if (m.family === 'loader') { m.boom = cl(0.15, 'boom'); m.curl = cl(0.4, 'curl'); }
+    if (m.family === 'truck') m.curl = cl(0.2, 'curl');
   }
 
   // fit camera / lights / turntable to the machine's size. Uses a cylinder around the turntable axis so the

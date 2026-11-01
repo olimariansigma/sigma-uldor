@@ -323,7 +323,7 @@ class Game {
   }
 
   findMachineSpot(near, spec) {
-    const r = ({ crane: 4.6, roller: 3.0, paver: 3.0, loader: 4.2, dozer: 3.4, dumper: 2.4 }[spec.family] || (spec.under === 'pontoon' ? 4.2 : 2.8)) * spec.scale;
+    const r = ({ crane: 4.6, roller: 3.0, paver: 3.0, loader: 4.2, dozer: 3.4, dumper: 2.4, truck: 5.2 }[spec.family] || (spec.under === 'pontoon' ? 4.2 : 2.8)) * spec.scale;
     const terrain = this.env.terrainCollider;
     const free = (x, z) => {
       if (x < SITE.lotMin.x + r || x > SITE.lotMax.x - r || z < SITE.lotMin.y + r || z > SITE.lotMax.y - r) return false;
@@ -359,6 +359,7 @@ class Game {
     add('amx', 27, -14, Math.PI / 2);
     add('lc200', 18, 14, -Math.PI / 2);
     add('cr64', 4, 21, Math.PI / 2);
+    add('tk410', -10, -8, Math.PI / 2);
     this.player.teleport(this.spawnPoint());
   }
 

@@ -12,7 +12,7 @@ const THUMB = (id) => `thumbs/m_${id}.webp`;
 const TOOL = { brickclamp: 'Rotating brick clamp', grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
   breaker: 'Hydraulic breaker', orangepeel: 'Orange-peel grab', pulverizer: 'Pulverizer', tank: 'Water tank', skip: 'Concrete skip' };
 const FAMILY = { roller: ['Tandem roller', 'Twin vibrating drums', 'Articulated drums'], paver: ['Paver', 'Hopper + screed', 'Rubber tracks'], loader: ['Wheel loader', '3 m bucket', 'Articulated wheels'],
-  dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'] };
+  dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'], truck: ['Tipper truck', 'Tipping body', '8x4 · 2 steered axles'] };
 const UNDER = { steel: 'Steel tracks', rubber: 'Rubber tracks', wheels: 'Wheels + outriggers', pontoon: 'Floating pontoons', spider: 'Walking legs', robot: 'Remote tracks' };
 const TONS = { wh200: 38, bg90: 24, tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
 export function machineInfo(sp) {
@@ -21,7 +21,7 @@ export function machineInfo(sp) {
     return { type, tool: TOOL[sp.attach] || 'Attachment', drive: UNDER[sp.under] || 'Tracks', tons: TONS[sp.id], speed: sp.speed };
   }
   const f = FAMILY[sp.family] || ['Machine', 'Tool', 'Tracks'];
-  return { type: f[0], tool: f[1], drive: f[2], tons: TONS[sp.id], speed: sp.speed };
+  return { type: sp.typeName || f[0], tool: sp.toolName || f[1], drive: f[2], tons: TONS[sp.id] ?? sp.tons, speed: sp.speed };
 }
 
 export class UI {
@@ -83,10 +83,11 @@ export class UI {
       body.appendChild(head);
       let lastFam = null, grid = null;
       for (const sp of MACHINES) {
-        const fam = sp.family === 'excavator' ? 'Excavators' : 'Road & site machines';
+        const famOf = (x) => x.family === 'excavator' ? 'Excavators' : x.family === 'truck' ? 'Tipper trucks' : 'Road & site machines';
+        const fam = famOf(sp);
         if (fam !== lastFam) {
           lastFam = fam;
-          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${MACHINES.filter((x) => (x.family === 'excavator') === (fam === 'Excavators')).length})`; body.appendChild(h);
+          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${MACHINES.filter((x) => famOf(x) === fam).length})`; body.appendChild(h);
           grid = document.createElement('div'); grid.className = 'cards'; body.appendChild(grid);
         }
         const info = machineInfo(sp);
@@ -318,7 +319,7 @@ export class UI {
       $('vhName').textContent = machine.spec.brand + ' ' + machine.spec.model;
       $('vhImg').src = THUMB(machine.spec.id);
       $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher', brickclamp: 'Clamp' }[machine.spec.attach]
-        || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball' }[machine.family] || 'Tool';
+        || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball', truck: 'Body' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
       ? '<kbd>W</kbd><kbd>S</kbd> drive · <kbd>A</kbd><kbd>D</kbd> steer<br>' + (this.machineHint || '') + '<br><kbd>C</kbd> camera · <kbd>E</kbd> exit'

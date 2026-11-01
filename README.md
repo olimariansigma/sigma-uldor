@@ -1,13 +1,13 @@
 # Wrecking Yard
 
-A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 22 machines to spawn (16 excavators and 6 road and site machines) and cross-play multiplayer between PC and phones.
+A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 25 machines to spawn (16 excavators, 6 road and site machines and 3 eight-wheel tipper trucks) and cross-play multiplayer between PC and phones.
 
 ## Download
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | `WreckingYard-3.4.0-Windows.exe` (about 156 MB): portable, no install |
-| Android 7.0+ | `WreckingYard-3.4.0-Android.apk` (about 108 MB): installs over older versions, saves are kept |
+| Windows 10/11 (64-bit) | `WreckingYard-3.5.0-Windows.exe` (about 156 MB): portable, no install |
+| Android 7.0+ | `WreckingYard-3.5.0-Android.apk` (about 108 MB): installs over older versions, saves are kept |
 
 Since v3.4 the builds are bigger than GitHub's 100 MB file limit (HD texture pack), so they aren't stored in the repository: build them with `npm run exe` / `npm run apk` (they land in `build/`) or use the copies shared with you.
 
@@ -21,7 +21,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 * **Cement.** Put dust in the pan mixer and add any amount of water (lake water or the hose button). Each colour swirls around the tub and the paddles blend it all into cement in a couple of seconds.
 * **Cement trowel.** Take cement from the mixer onto your trowel (hotbar slot 2). Click the ground to lay cement tiles anywhere in the yard (they dry from dark to their final colour), or click a pothole to fill it. Tiles are saved and shared in multiplayer.
 * **Road repair.** Pour cement into the potholes, or load the paver and drive over them. Each patch takes the cement's colour and dries over time. Then roll it with the tandem roller to compact it to a perfect finish (⭐ on the HUD). The breaker excavator can make new potholes.
-* **22 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders.
+* **25 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders.
   * Excavators:
     * TORVA TX330 (rotating sorting grapple)
     * KESTREL K35 mini on rubber tracks (zero tail, canopy, swing-post boom)
@@ -46,7 +46,12 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * TORVA DZ80 bulldozer with ripper
     * KESTREL TD6 tracked dumper with a slewing, tipping skip
     * VANTOR CC250 crawler crane with a wrecking ball
-* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 22 with the arrows, then press **Spawn**.
+  * Tipper trucks (8x4: four axles, the front two steer, twin tyres on the back):
+    * VELKA R410 XT: white cab, heavy XT bumper with a skid plate, off-road tyres, half-pipe body
+    * VELKA S650 V8: metallic silver high-roof cab, chrome grille and roof light bar, polished rims, brushed aluminium half-pipe body
+    * VELKA G370: yellow cab with a square steel box body
+    * Load them with any excavator or loader. Blocks ride along in the body (steering gets gentler at speed so the load doesn't slide out), then Z tips the body up on its front cylinder, the tailgate swings open and the load slides out the back. One R410 is parked in the yard by default.
+* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 25 with the arrows, then press **Spawn**.
 * **Solid machines.** Machines stop at walls instead of passing through them. Keep driving or pressing the arm, blade or bucket against a wall and the blocks it touches crack (they darken) and break loose; heavy machines and fast hits break them sooner. Arms and buckets can't sink into the ground.
 * **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device.
 * **Save slots.** There are five save slots plus an autosave. A save contains every block, machine, the dust pile, the mixer and the road.
@@ -59,7 +64,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 | Tools | 1 hammer, 2 cement trowel, Left click to use | hotbar at the top, big button to use |
 | Pick up / throw | Q or right click / G | ✋ / 🧱 |
 | Use (drive, bucket, mixer, pothole) | E | context button |
-| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump, T Y rotate clamp (BG90), Click/Space tool, C cab camera (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
+| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump (tip / lower on trucks), T Y rotate clamp (BG90), Click/Space tool, C cab camera (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
 | Menus | B spawn, M online, H help | top-right buttons |
 
 ## Building from source

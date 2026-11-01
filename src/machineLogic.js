@@ -98,6 +98,27 @@ export function machineInteract(m, dt, W) {
   } else if (beh === 'roller') roller(m, dt, W);
   else if (beh === 'paver') paver(m, dt, W);
   else if (beh === 'ball') wreckingBall(m, dt, W);
+  else if (beh === 'bed' && (Math.abs(m.curl - prevCurl) > 1e-5 || m.curl > 0.3)) {
+    // tipping a body is slow (below Rapier's sleep threshold), so blocks resting in it would stay asleep and
+    // stick to the floor at any angle: wake whatever is in the body while it moves or stands raised
+    m.wakeT = (m.wakeT || 0) - dt;
+    if (m.wakeT <= 0) {
+      m.wakeT = 0.2;
+      const near = demo.piecesInSphere(gp, (att.wakeR || 2.4) * s, [LOOSE]);
+      for (const p of near) p.body.wakeUp();
+      // near full tip the body shudders, so a load wedged on itself still slides out over the rear edge
+      if (att.dump && m.curl > att.dump.from) {
+        const inv = _m.copy(att.group.matrixWorld).invert(), dir = att.dump.dir.clone().transformDirection(att.group.matrixWorld);
+        const [hw, len, h] = att.dump.box;
+        for (const p of near) {
+          _p.copy(p.pos).applyMatrix4(inv);
+          if (Math.abs(_p.x) > hw || _p.z < -1 || _p.z > len || _p.y < -0.6 || _p.y > h) continue;
+          const mass = p.body.mass();
+          p.body.applyImpulse({ x: dir.x * mass * 0.7, y: mass * 0.35, z: dir.z * mass * 0.7 }, true);
+        }
+      }
+    }
+  }
 
   // ---- held pieces follow the attachment
   const am = m.holdFrame().matrixWorld;

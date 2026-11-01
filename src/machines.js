@@ -5,6 +5,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { machineMaterials, weathered, bake, restPositions } from './detail.js';
 import { buildExcavator } from './mx-excavator.js';
 import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, stepCrane } from './mx-vehicles.js';
+import { buildTruck } from './mx-truck.js';
 import { terrainHeight, SITE } from './site.js';
 
 const clamp = THREE.MathUtils.clamp;
@@ -36,9 +37,13 @@ export const MACHINES = [
   { id: 'dz80', tons: 22, family: 'dozer', name: 'TORVA DZ80 Bulldozer', brand: 'TORVA', model: 'DZ80', icon: '🐂', desc: 'Pushes walls flat and shoves rubble to the crusher. Rear ripper included.', scale: 1.0, paint: 0xf2b200, speed: 2.8 },
   { id: 'td6', tons: 6, family: 'dumper', name: 'KESTREL TD6 Tracked Dumper', brand: 'KESTREL', model: 'TD6', icon: '🛻', desc: 'Rubber-tracked dumper with a slewing, tipping skip. Load it with blocks and drive them anywhere.', scale: 1.0, paint: 0xff7300, speed: 3.5 },
   { id: 'cc250', tons: 80, family: 'crane', name: 'VANTOR CC250 Wrecking Ball', brand: 'VANTOR', model: 'CC250', icon: '⚫', desc: 'Crawler crane with a 16 m lattice boom and a swinging wrecking ball. Classic.', scale: 1.0, paint: 0xd11f1f, accent: 0x222222, speed: 1.4 },
+  // ---- tipper trucks (8x4, two steered front axles, rear-tipping body)
+  { id: 'tk410', tons: 32, family: 'truck', name: 'VELKA R410 XT Tipper', brand: 'VELKA', model: 'R410 XT', icon: '🚚', desc: '8x4 construction tipper: white cab-over cab, heavy XT bumper with skid plate, off-road tyres and a 16 m³ half-pipe body. Load it with blocks or rubble, drive it to the crusher and tip.', scale: 1, paint: 0xf1f1ee, accent: 0x1b1d20, bodyPaint: 0xeeeeea, chassisPaint: 0x26282b, trim: 'xt', bodyLabel: 'VELKA KIPP', typeName: '8x4 tipper truck', toolName: 'Half-pipe tipping body', speed: 9.5 },
+  { id: 'tk650', tons: 36, family: 'truck', name: 'VELKA S650 V8 Tipper', brand: 'VELKA', model: 'S650 V8', icon: '🚛', desc: 'Flagship V8 tipper: silver metallic high-roof cab, chrome grille, roof light bar and polished rims, with a lightweight aluminium half-pipe body. The fastest truck on the yard.', scale: 1, paint: 0x9aa1a8, accent: 0x15171a, bodyPaint: 0xa7acb1, bodyMetal: true, chassisPaint: 0x17181a, trim: 'chrome', roof: 'high', bodyLabel: 'VELKA ALU', typeName: '8x4 V8 tipper truck', toolName: 'Aluminium half-pipe body', speed: 11 },
+  { id: 'tk370', tons: 30, family: 'truck', name: 'VELKA G370 Box Tipper', brand: 'VELKA', model: 'G370', icon: '🚚', desc: 'Workhorse 8x4 in yard yellow with a square steel box body and a top-hinged tailgate that swings up when you tip. Wide flat floor, perfect for whole wall sections of blocks.', scale: 1, paint: 0xf2b705, accent: 0x1b1d20, bodyPaint: 0xf0b000, chassisPaint: 0x1d1e20, trim: 'work', body: 'box', bodyLabel: 'VELKA BAU', typeName: '8x4 box tipper truck', toolName: 'Steel box tipping body', speed: 8.5 },
 ];
 
-const BUILDERS = { excavator: buildExcavator, roller: buildRoller, paver: buildPaver, loader: buildLoader, dozer: buildDozer, dumper: buildDumper, crane: buildCrane };
+const BUILDERS = { excavator: buildExcavator, roller: buildRoller, paver: buildPaver, loader: buildLoader, dozer: buildDozer, dumper: buildDumper, crane: buildCrane, truck: buildTruck };
 
 export class Machine {
   constructor(ctx, spec, id, pos, yaw) {
@@ -146,9 +151,9 @@ export class Machine {
     for (const set of this.colliderSets) {
       const body = W.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
       const s = this.s * (set.k || 1); // set.k: extra scale of a scaled-up attachment
-      for (const [x, y, z, sx, sy, sz, rx = 0] of set.boxes) {
-        const rq = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0));
-        W.createCollider(RAPIER.ColliderDesc.cuboid(sx * s / 2, sy * s / 2, sz * s / 2).setTranslation(x * s, y * s, z * s).setRotation(rq).setFriction(1.0), body);
+      for (const [x, y, z, sx, sy, sz, rx = 0, rz = 0] of set.boxes) {
+        const rq = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz));
+        W.createCollider(RAPIER.ColliderDesc.cuboid(sx * s / 2, sy * s / 2, sz * s / 2).setTranslation(x * s, y * s, z * s).setRotation(rq).setFriction(set.friction ?? 1.0), body);
         const cub = (d) => new RAPIER.Cuboid(Math.max(0.02, sx * s / 2 + d), Math.max(0.02, sy * s / 2 + d), Math.max(0.02, sz * s / 2 + d));
         const info = { obj: set.obj, off: new THREE.Vector3(x, y, z), rq, shape: cub(-0.03) };
         // inner: may not overlap intact blocks (hard stop). Between inner and outer the machine is pressing
@@ -169,7 +174,12 @@ export class Machine {
     for (const { obj, body } of this.bodies) {
       obj.getWorldPosition(_v); obj.getWorldQuaternion(_q);
       if (teleport) { body.setTranslation(_v, true); body.setRotation(_q, true); }
-      else { body.setNextKinematicTranslation(_v); body.setNextKinematicRotation(_q); }
+      else {
+        // Rapier 0.14 never moves a kinematic body's world centre of mass, and the solver uses it as the lever arm
+        // for the body's spin: loads on a turning truck bed got dragged sideways. Refresh it every frame.
+        body.recomputeMassPropertiesFromColliders();
+        body.setNextKinematicTranslation(_v); body.setNextKinematicRotation(_q);
+      }
     }
   }
   shapePose(b) {
@@ -237,10 +247,18 @@ export class Machine {
     const pen0 = this.breakShapes.length ? this.armPenetration() : -9;
     this.floating = sp.amphibious && terrainHeight(this.root.position.x, this.root.position.z) < SITE.lake.water - 0.95 * this.s;
     const vmax = sp.speed * (this.floating ? 0.6 : 1);
-    this.speed += (c.drive * vmax - this.speed) * Math.min(1, dt * (rig.drive === 'tank' ? 2.5 : 1.5));
+    const want = c.drive * vmax;
+    if (rig.accel) {
+      // trucks: limited engine pull and braking so a load does not slide out
+      const dv = want - this.speed, lim = (Math.sign(dv) === Math.sign(this.speed) || !this.speed ? rig.accel : rig.brake) * dt;
+      this.speed += clamp(dv, -lim, lim);
+    } else this.speed += (want - this.speed) * Math.min(1, dt * (rig.drive === 'tank' ? 2.5 : 1.5));
     if (rig.drive === 'car') {
-      this.steerVis += (c.steer * -0.45 - this.steerVis) * Math.min(1, dt * 4);
-      this.turn = (this.speed / 2.7) * Math.tan(this.steerVis);
+      let lock = 0.45;
+      // speed-sensitive steering: cap the sideways acceleration (wheelbase * a / v^2) on long, heavy vehicles
+      if (rig.maxLat) lock = Math.min(lock, Math.atan(rig.maxLat * rig.wheelbase * this.s / Math.max(1, this.speed * this.speed)));
+      this.steerVis += (c.steer * -lock - this.steerVis) * Math.min(1, dt * 4);
+      this.turn = (this.speed / (rig.wheelbase ? rig.wheelbase * this.s : 2.7)) * Math.tan(this.steerVis);
     } else if (rig.drive === 'artic') {
       this.steerVis += (c.steer * -0.6 - this.steerVis) * Math.min(1, dt * 2.5);
       this.turn = (this.speed / (rig.wheelbase * this.s)) * Math.sin(this.steerVis) * 1.6;
@@ -308,7 +326,7 @@ export class Machine {
       const dl = (dist + dyaw * g) / this.s, dr = (dist - dyaw * g) / this.s;
       if (Math.abs(dl) > 1e-5 || Math.abs(dr) > 1e-5) { this.tracks[0].move(dr); this.tracks[1].move(dl); }
     }
-    const r = this.family === 'roller' ? 0.68 : this.family === 'loader' ? 0.88 : this.spec.under === 'spider' ? 0.58 : 0.55;
+    const r = this.family === 'roller' ? 0.68 : this.family === 'loader' ? 0.88 : this.family === 'truck' ? 0.54 : this.spec.under === 'spider' ? 0.58 : 0.55;
     for (const w of this.wheels) w.rotation.x += dist / (r * this.s);
   }
 
@@ -372,6 +390,7 @@ export function controlsFor(m) {
   if (f === 'loader') return { right: 'LIFT', stickOut: null, stickIn: null, curlIn: 'RACK', curlOut: 'DUMP', grab: null, hint: '<kbd>↑</kbd><kbd>↓</kbd> lift arms · <kbd>Z</kbd><kbd>X</kbd> rack / dump bucket' };
   if (f === 'dozer') return { right: 'BLADE', stickOut: 'RIP ↓', stickIn: 'RIP ↑', curlIn: 'TILT ↑', curlOut: 'TILT ↓', grab: null, hint: '<kbd>↑</kbd><kbd>↓</kbd> blade · <kbd>Z</kbd><kbd>X</kbd> pitch · <kbd>R</kbd><kbd>F</kbd> ripper' };
   if (f === 'dumper') return { right: 'SLEW', stickOut: null, stickIn: null, curlIn: 'TIP', curlOut: 'LOWER', grab: null, hint: '<kbd>←</kbd><kbd>→</kbd> slew skip · <kbd>Z</kbd><kbd>X</kbd> tip / lower' };
+  if (f === 'truck') return { right: null, stickOut: null, stickIn: null, curlIn: 'TIP', curlOut: 'LOWER', grab: null, hint: '<kbd>Z</kbd><kbd>X</kbd> tip / lower the body · back up to where you want the load, then tip' };
   if (f === 'roller') return { right: null, stickOut: null, stickIn: null, curlIn: null, curlOut: null, grab: '〰️<small>VIBRATE</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> drum vibration on / off' };
   if (f === 'paver') return { right: 'SCREED', stickOut: null, stickIn: null, curlIn: 'WINGS ↑', curlOut: 'WINGS ↓', grab: '🛣️<small>PAVE</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> paving flow · <kbd>Z</kbd><kbd>X</kbd> hopper wings' };
   if (f === 'crane') return { right: 'SWING · BOOM', stickOut: 'LOWER', stickIn: 'HOIST', curlIn: null, curlOut: null, grab: null, hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> winch' };

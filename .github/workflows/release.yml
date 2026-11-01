@@ -75,7 +75,11 @@ jobs:
         run: cd dist && zip -qr9 "../WreckingYard-game-${{ matrix.version }}.zip" .
       - name: Release notes
         run: |
-          git log -1 --format=%B "${{ matrix.ref }}" | grep -v -i -E '^(Co-Authored-By|Claude-Session|https://claude.ai)' > notes.md
+          # every commit since the previous version tag (or just the last commit for the first one)
+          SHA="$(git rev-parse "${{ matrix.ref }}^{commit}")"
+          PREV="$(git tag --merged "$SHA^" --sort=-v:refname 'v*' 2>/dev/null | grep -v "^v${{ matrix.version }}$" | head -1 || true)"
+          RANGE="$SHA -1"; [ -n "$PREV" ] && RANGE="$PREV..$SHA"
+          git log --format='%B%n' $RANGE | grep -v -i -E '^(Co-Authored-By|Claude-Session|https://claude.ai)' | cat -s > notes.md
           echo "" >> notes.md
           echo "Play it with the Wrecking Yard launcher (Windows / Android): download it from the latest release." >> notes.md
       - name: Publish
@@ -88,6 +92,8 @@ jobs:
           FLAG="--latest=false"; [ "$V" = "$LATEST" ] && FLAG="--latest"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --target "$SHA" --title "Wrecking Yard $V" --notes-file notes.md $FLAG || sleep 5
+          else
+            gh release edit "$TAG" --notes-file notes.md
           fi
           gh release upload "$TAG" "WreckingYard-game-$V.zip" --clobber
 

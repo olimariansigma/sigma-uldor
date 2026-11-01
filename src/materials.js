@@ -91,7 +91,7 @@ export function materials() {
     blackPlastic: new THREE.MeshStandardMaterial({ color: 0x1d1e20, roughness: 0.6, metalness: 0.0 }),
     seat: new THREE.MeshStandardMaterial({ color: 0x2a2b2e, roughness: 0.85 }),
     glass: new THREE.MeshPhysicalMaterial({ color: 0xbfd6e0, roughness: 0.04, metalness: 0.0, transparent: true, opacity: 0.32, envMapIntensity: 1.6, depthWrite: false, side: THREE.DoubleSide }),
-    cabGlass: new THREE.MeshPhysicalMaterial({ color: 0x1b2a33, roughness: 0.03, metalness: 0.2, transparent: true, opacity: 0.55, envMapIntensity: 2.0, depthWrite: false, side: THREE.DoubleSide }),
+    cabGlass: new THREE.MeshPhysicalMaterial({ color: 0x1b2a33, roughness: 0.03, metalness: 0.2, transparent: true, opacity: 0.66, envMapIntensity: 2.0, depthWrite: false, side: THREE.DoubleSide }),
     pvc: new THREE.MeshStandardMaterial({ color: 0xf5f4ef, roughness: 0.35 }),
     doorWood: new THREE.MeshStandardMaterial({ map: T.woodTextures('dark').map, roughness: 0.55, color: 0xb05a3a }),
     brass: new THREE.MeshStandardMaterial({ color: 0xd4a640, roughness: 0.25, metalness: 1 }),

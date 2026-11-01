@@ -12,7 +12,7 @@ import { Audio } from './audio.js';
 import { Crusher, fmtKg } from './crusher.js';
 import { Mixer } from './mixer.js';
 import { Road } from './road.js';
-import { Machine, MACHINES } from './machines.js';
+import { Machine, MACHINES, controlsFor } from './machines.js';
 import { machineInteract, releaseAll } from './machineLogic.js';
 import { Player } from './player.js';
 import { Avatar, SHIRTS } from './avatar.js';
@@ -82,7 +82,7 @@ class Game {
     this.mixer = new Mixer(this.scene, this.physics, this.M, SITE.mixerPos);
     this.road = new Road(this.scene);
     this.machines = new Map(); this.nextMachineId = 1;
-    this.plots = [null, null]; this.buildingStatics = new Map();
+    this.plots = [null, null]; this.buildingStatics = new Map(); this.groundHandles = new Set();
     this.settings = { hammer: this.prefs.hammer, carry: this.prefs.carry, crusher: 3, grapple: 1 };
     this.net = new Net(); this.setupNet();
     this.myId = 0; this.myName = this.prefs.name || 'Player' + Math.floor(Math.random() * 900 + 100);
@@ -231,14 +231,19 @@ class Game {
     for (const d of b.decor) { const m = new THREE.Mesh(d.geo, d.mat); m.castShadow = true; m.receiveShadow = true; group.add(m); }
     this.scene.add(group);
     const body = this.physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
-    for (const s of b.statics) this.physics.world.createCollider(RAPIER.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z), body);
-    this.buildingStatics.set(bld.id, { group, body });
+    const handles = [], rects = [];
+    for (const s of b.statics) {
+      const c = this.physics.world.createCollider(RAPIER.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z), body);
+      handles.push(c.handle); this.groundHandles.add(c.handle);
+      rects.push({ x0: s.pos.x - s.size.x / 2, x1: s.pos.x + s.size.x / 2, z0: s.pos.z - s.size.z / 2, z1: s.pos.z + s.size.z / 2, y: s.pos.y + s.size.y / 2 });
+    }
+    this.buildingStatics.set(bld.id, { group, body, handles, rects });
     this.plots[plot] = bld.id;
     return bld;
   }
   removeBuildingFull(bid) {
     const st = this.buildingStatics.get(bid);
-    if (st) { this.scene.remove(st.group); this.physics.world.removeRigidBody(st.body); this.buildingStatics.delete(bid); }
+    if (st) { this.scene.remove(st.group); this.physics.world.removeRigidBody(st.body); this.buildingStatics.delete(bid); for (const h of st.handles) this.groundHandles.delete(h); }
     for (const m of this.machines.values()) m.held = m.held.filter((h) => h.p.b !== bid);
     this.demo.removeBuilding(bid);
     this.plots = this.plots.map((p) => (p === bid ? null : p));
@@ -246,10 +251,26 @@ class Game {
 
   createMachine(specId, id, pos, yaw) {
     const spec = MACHINES.find((m) => m.id === specId);
-    const m = new Machine({ scene: this.scene, physics: this.physics, M: this.M, terrainCollider: this.env.terrainCollider }, spec, id, pos, yaw);
+    const m = new Machine(this.machineCtx(), spec, id, pos, yaw);
     this.machines.set(id, m);
     this.nextMachineId = Math.max(this.nextMachineId, id + 1);
     return m;
+  }
+  machineCtx() {
+    if (this._mctx) return this._mctx;
+    const g = this, terrain = this.env.terrainCollider;
+    this._mctx = {
+      scene: this.scene, physics: this.physics, M: this.M, terrainCollider: terrain,
+      groundAt: (x, z) => g.groundAt(x, z),
+      isGround: (c) => c.handle === terrain.handle || g.groundHandles.has(c.handle),
+    };
+    return this._mctx;
+  }
+  // terrain + building foundations (machines drive up onto the slabs)
+  groundAt(x, z) {
+    let h = terrainHeight(x, z);
+    for (const st of this.buildingStatics.values()) for (const r of st.rects) if (x > r.x0 - 0.3 && x < r.x1 + 0.3 && z > r.z0 - 0.3 && z < r.z1 + 0.3) h = Math.max(h, r.y);
+    return h;
   }
   destroyMachine(id) {
     const m = this.machines.get(id); if (!m) return;
@@ -259,14 +280,14 @@ class Game {
   }
 
   findMachineSpot(near, spec) {
-    const r = 2.8 * spec.scale * (spec.under === 'pontoon' ? 1.5 : 1);
+    const r = ({ crane: 4.6, roller: 3.0, paver: 3.0, loader: 4.2, dozer: 3.4, dumper: 2.4 }[spec.family] || (spec.under === 'pontoon' ? 4.2 : 2.8)) * spec.scale;
     const terrain = this.env.terrainCollider;
     const free = (x, z) => {
       if (x < SITE.lotMin.x + r || x > SITE.lotMax.x - r || z < SITE.lotMin.y + r || z > SITE.lotMax.y - r) return false;
       if (!spec.amphibious && lakeDist(x, z) < 1.4) return false;
       for (const m of this.machines.values()) if (Math.hypot(m.pos.x - x, m.pos.z - z) < (m.radius * m.s + r) * 0.9) return false;
       let hit = false;
-      this.physics.world.intersectionsWithShape({ x, y: 1.4 * spec.scale + 0.3, z }, { x: 0, y: 0, z: 0, w: 1 }, new RAPIER.Cylinder(1.2 * spec.scale + 0.2, r), (c) => { if (terrain && c.handle === terrain.handle) return true; hit = true; return false; }, RAPIER.QueryFilterFlags.ONLY_FIXED);
+      this.physics.world.intersectionsWithShape({ x, y: 1.4 * spec.scale + 0.3, z }, { x: 0, y: 0, z: 0, w: 1 }, new RAPIER.Cylinder(1.2 * spec.scale + 0.2, r), (c) => { if (this.machineCtx().isGround(c)) return true; hit = true; return false; }, RAPIER.QueryFilterFlags.ONLY_FIXED);
       return !hit;
     };
     for (let ring = 0; ring < 14; ring++) {
@@ -290,14 +311,15 @@ class Game {
     add('tx330', -20, 6, Math.PI);
     add('amx', 27, -14, Math.PI / 2);
     add('lc200', 18, 14, -Math.PI / 2);
-    add('k35', -9, 4, Math.PI);
+    add('wh75', -9, 5, Math.PI);
+    add('cr64', 4, 21, Math.PI / 2);
     this.player.teleport(this.spawnPoint());
   }
 
   clearWorld() {
     for (const id of [...this.machines.keys()]) this.destroyMachine(id);
     for (const bid of [...this.buildingStatics.keys()]) { const st = this.buildingStatics.get(bid); this.scene.remove(st.group); this.physics.world.removeRigidBody(st.body); }
-    this.buildingStatics.clear();
+    this.buildingStatics.clear(); this.groundHandles.clear();
     this.demo.clearAll();
     this.plots = [null, null];
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
@@ -421,7 +443,7 @@ class Game {
         break;
       }
       case 'spawnMachine': {
-        if (this.machines.size >= 10) { this.tell(pid, '⚠️ Max 10 machines. Remove one first.'); return; }
+        if (this.machines.size >= 20) { this.tell(pid, '⚠️ Max 20 machines. Remove one first.'); return; }
         const spec = MACHINES.find((m) => m.id === d.spec); if (!spec) return;
         const near = v3(d.near);
         const fwd = new THREE.Vector3(-Math.sin(d.yaw + Math.PI), 0, -Math.cos(d.yaw + Math.PI));
@@ -483,7 +505,7 @@ class Game {
         break;
       }
       case 'bucketFill': this.bucketFill(pid, d.source); break;
-      case 'bucketPour': this.bucketPour(pid, d.target, d.hole); break;
+      case 'bucketPour': this.bucketPour(pid, d.target, d.target === 'paver' ? d.id : d.hole); break;
       case 'newWorld': if (pid === this.myId) { this.newWorld(); if (this.net.isHost) this.broadcastWorld(); } break;
     }
   }
@@ -530,6 +552,9 @@ class Game {
     if (target === 'mixer') {
       used = b.kind === 'water' ? this.mixer.addWater(b.kg) : b.kind === 'dust' ? this.mixer.addDust(b.kg, b.color) : this.mixer.addCement(b.kg, b.color);
       this.mixerDirty = true;
+    } else if (target === 'paver' && b.kind === 'cement') {
+      const m = this.machines.get(hole === undefined ? -1 : hole) || this.machines.get(arguments[3]);
+      if (m) { used = Math.min(b.kg, m.capacity() - m.payload.kg); if (used > 0) { const tot = m.payload.kg + used; m.payload.color.copy(m.payload.kg ? m.payload.color.clone().lerp(b.color, used / tot) : b.color); m.payload.kind = 'cement'; m.payload.kg = tot; m.payDirty = true; } }
     } else if (target === 'hole' && b.kind === 'cement') {
       used = this.road.fill(hole, b.kg, b.color);
       this.events.push(['road', this.road.serialize()]);
@@ -772,6 +797,8 @@ class Game {
       case 'mix': this.mixer.restore(e[1]); break;
       case 'road': this.road.restore(e[1]); break;
       case 'set': Object.assign(this.settings, e[1]); this.crusher.rate = this.settings.crusher; break;
+      case 'dep': this.crusher.deposit(e[1], new THREE.Color(e[2], e[3], e[4])); break;
+      case 'tally': this.crusher.totalKg += e[1]; this.crusher.tally.set(e[2], (this.crusher.tally.get(e[2]) || 0) + e[1]); break;
       case 'inv': {
         const pl = this.players.get(e[1]); if (!pl) return;
         pl.bucket.kind = e[2]; pl.bucket.kg = e[3]; pl.bucket.color.setRGB(e[4], e[5], e[6]);
@@ -847,7 +874,11 @@ class Game {
         if (this.input) c.exDist = clamp(c.exDist + this.input.wheel * 0.8, 5, 34);
         const target = m.root.position.clone().add(new THREE.Vector3(0, 2.6 * Math.max(0.6, m.s), 0));
         const off = new THREE.Vector3(Math.sin(c.exYaw) * Math.cos(c.exPitch), -Math.sin(c.exPitch), Math.cos(c.exYaw) * Math.cos(c.exPitch));
-        cam.position.copy(target).addScaledVector(off, c.exDist);
+        let dist = c.exDist;
+        const own = new Set(m.bodies.map((b) => b.body.handle));
+        const hit = W.castRay(new RAPIER.Ray(target, off), dist, true, RAPIER.QueryFilterFlags.EXCLUDE_DYNAMIC | RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined, (col) => !col.parent() || !own.has(col.parent().handle));
+        if (hit) dist = Math.max(2.5, hit.timeOfImpact - 0.35);
+        cam.position.copy(target).addScaledVector(off, dist);
         const gy = terrainHeight(cam.position.x, cam.position.z) + 0.4;
         if (cam.position.y < gy) cam.position.y = gy;
         cam.lookAt(target);
@@ -879,6 +910,13 @@ class Game {
     const mp = this.mixer.panelPoint, tc = this.mixer.tubCenter;
     if (Math.hypot(p.x - mp.x, p.z - mp.z) < 2.6 || (Math.hypot(p.x - tc.x, p.z - tc.z) < 2.3 && p.y > 1.0)) {
       return { text: `${key('E')}Open the cement mixer controls`, label: 'MIXER', run: () => this.ui.open('mixerPanel') };
+    }
+    // paver hopper
+    if (b.kind === 'cement') {
+      for (const m of this.machines.values()) if (m.family === 'paver') {
+        const hp = m.att.mouth.getWorldPosition(new THREE.Vector3());
+        if (Math.hypot(p.x - hp.x, p.z - hp.z) < 2.6) return { text: `${key('E')}Pour cement into the paver hopper (${Math.round(m.payload.kg)} kg)`, label: 'POUR', run: () => this.act('bucketPour', { target: 'paver', id: m.id }) };
+      }
     }
     // potholes
     if (b.kind === 'cement') {
@@ -1014,7 +1052,7 @@ class Game {
     this.hudTimer = (this.hudTimer || 0) - dt;
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.3;
-      this.ui.setDust(this.crusher.totalKg, this.crusher.tally, this.crusher.pileKg, this.mixer.cement, `${this.road.repaired}/${this.road.holes.length}`);
+      this.ui.setDust(this.crusher.totalKg, this.crusher.tally, this.crusher.pileKg, this.mixer.cement, `${this.road.repaired}/${this.road.holes.length}${this.road.compacted ? ' ⭐' + this.road.compacted : ''}`);
       const n = this.players.size;
       this.ui.setNet(this.net.isHost ? `🌐 Hosting · code <b>${this.net.code}</b> · ${n} player${n > 1 ? 's' : ''}` : this.net.isClient ? `🌐 Online · <b>${this.net.code}</b> · ${n} players` : null);
       if (!$('mixerPanel').classList.contains('hidden')) this.ui.renderMixer();
@@ -1035,6 +1073,11 @@ class Game {
       onPile(delta) { g.events.push(['take', -delta]); },
       onMixer() { g.mixerDirty = true; },
       onRoad() { g.roadTimer = 0; g.roadDirty = true; },
+      onDeposit(kg, col) { g.events.push(['dep', kg, col.r, col.g, col.b]); },
+      onBucketCrush(kg, col) { g.crusher.totalKg += kg; const h = col.getHex(); g.crusher.tally.set(h, (g.crusher.tally.get(h) || 0) + kg); g.events.push(['tally', kg, h]); },
+      tellDriver(m, msg) { if (m.driver >= 0) g.tell(m.driver, msg, true); },
+      physics: this.physics,
+      get machines() { return [...g.machines.values()]; },
     };
     return this._mw;
   }

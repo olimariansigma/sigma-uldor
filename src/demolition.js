@@ -183,7 +183,7 @@ export class Demolition {
 
   // ---------------------------------------------------------------- state changes (authority)
   makeBody(p, kinematic) {
-    const desc = kinematic ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic().setLinearDamping(0.05).setAngularDamping(0.25).setCanSleep(true);
+    const desc = kinematic ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic().setLinearDamping(0.05).setAngularDamping(0.25).setCanSleep(true).setCcdEnabled(true);
     const body = this.world.createRigidBody(desc.setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat));
     const cd = RAPIER.ColliderDesc.cuboid(p.size.x / 2 - 0.006, p.size.y / 2 - 0.006, p.size.z / 2 - 0.006)
       .setDensity(p.type.density).setFriction(0.85).setRestitution(0.05);

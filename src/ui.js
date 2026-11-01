@@ -1,6 +1,6 @@
 // DOM HUD and panels (sandbox spawn menu, multiplayer, save slots, mixer, toasts).
 import * as THREE from 'three';
-import { MACHINES } from './machines.js';
+import { MACHINES, controlsFor } from './machines.js';
 import { BUILDINGS } from './buildings.js';
 import { fmtKg } from './crusher.js';
 
@@ -55,15 +55,18 @@ export class UI {
     const body = $('spawnBody'); body.innerHTML = '';
     if (this.tab === 'machines') {
       const n = g.machines.size;
-      const head = document.createElement('div'); head.className = 'sect'; head.textContent = `Machines on site: ${n} / 10`;
+      const head = document.createElement('div'); head.className = 'sect'; head.textContent = `Machines on site: ${n} / 20`;
       body.appendChild(head);
       const grid = document.createElement('div'); grid.className = 'cards';
+      let lastFam = null;
       for (const sp of MACHINES) {
+        const fam = sp.family === 'excavator' ? 'Excavators' : 'Road & site machines';
+        if (fam !== lastFam) { lastFam = fam; const h = document.createElement('div'); h.className = 'sect'; h.style.gridColumn = '1 / -1'; h.textContent = fam + ` (${MACHINES.filter((x) => (x.family === 'excavator') === (fam === 'Excavators')).length})`; grid.appendChild(h); }
         const c = document.createElement('div'); c.className = 'card';
         c.innerHTML = `<div class="top"><div class="ico">${sp.icon}</div><div><b>${sp.name}</b></div></div><div class="desc">${sp.desc}</div>`;
         const sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = '#' + new THREE.Color(sp.paint).getHexString(); c.querySelector('.top').appendChild(sw);
         const row = document.createElement('div'); row.className = 'row';
-        row.appendChild(this.btn('Spawn here', '', () => { g.act('spawnMachine', { spec: sp.id, near: g.player.pos.toArray(), yaw: g.cam.yaw + Math.PI }); this.close('spawn'); }, n >= 10));
+        row.appendChild(this.btn('Spawn here', '', () => { g.act('spawnMachine', { spec: sp.id, near: g.player.pos.toArray(), yaw: g.cam.yaw + Math.PI }); this.close('spawn'); }, n >= 20));
         c.appendChild(row); grid.appendChild(c);
       }
       body.appendChild(grid);
@@ -264,27 +267,35 @@ export class UI {
   setMode(mode, touch, machine = null) {
     $('vehicleHud').classList.toggle('hidden', mode !== 'machine');
     if (machine) {
+      const ctl = controlsFor(machine);
+      const setBtn = (act, txt) => { const el = document.querySelector(`#tbtns-exc [data-act="${act}"]`); if (!el) return; el.classList.toggle('hidden', !txt); if (txt) el.innerHTML = txt.includes('<') ? txt : `${{ stickOut: '⇱', stickIn: '⇲', curlIn: '↻', curlOut: '↺' }[act] || ''}<small>${txt}</small>`; };
+      setBtn('stickOut', ctl.stickOut); setBtn('stickIn', ctl.stickIn); setBtn('curlIn', ctl.curlIn); setBtn('curlOut', ctl.curlOut); setBtn('grab', ctl.grab);
+      const rl = document.querySelector('#stickR label'); if (rl) rl.textContent = ctl.right || '';
+      $('stickR').classList.toggle('nostick', !ctl.right);
+      this.machineHint = ctl.hint;
       $('vhName').textContent = machine.spec.name;
-      $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank' }[machine.spec.attach];
-      const tg = $('tbGrab'); if (tg) tg.innerHTML = machine.spec.attach === 'breaker' ? '🔨<small>HAMMER</small>' : machine.spec.attach === 'skip' ? '🚪<small>GATE</small>' : machine.att.behaviour === 'scoop' ? '🪣<small>—</small>' : '✊<small>GRAB</small>';
+      $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher' }[machine.spec.attach]
+        || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
-      ? '<kbd>W</kbd><kbd>S</kbd> drive · <kbd>A</kbd><kbd>D</kbd> steer<br><kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom<br><kbd>R</kbd><kbd>F</kbd> arm · <kbd>Z</kbd><kbd>X</kbd> curl / dump<br><kbd>Click</kbd>/<kbd>Space</kbd> tool · <kbd>C</kbd> camera · <kbd>E</kbd> exit'
+      ? '<kbd>W</kbd><kbd>S</kbd> drive · <kbd>A</kbd><kbd>D</kbd> steer<br>' + (this.machineHint || '') + '<br><kbd>C</kbd> camera · <kbd>E</kbd> exit'
       : '<kbd>Click</kbd> hammer · <kbd>Q</kbd> pick up · <kbd>G</kbd> throw<br><kbd>E</kbd> use · <kbd>B</kbd> spawn · <kbd>M</kbd> multiplayer';
     if (touch) {
       $('tbtns-foot').classList.toggle('hidden', mode !== 'foot');
       $('tbtns-exc').classList.toggle('hidden', mode !== 'machine');
-      $('stickR').classList.toggle('hidden', mode !== 'machine');
+      $('stickR').classList.toggle('hidden', mode !== 'machine' || $('stickR').classList.contains('nostick'));
       $('tbCam').classList.toggle('hidden', mode !== 'machine');
       $('stickLLabel').textContent = mode === 'machine' ? 'DRIVE' : 'MOVE';
     }
   }
   setUseButton(label) { const b = $('tbUse'); if (!label) { b.classList.add('hidden'); return; } if (b.textContent !== label) b.textContent = label; b.classList.remove('hidden'); }
   setVehicle(m) {
-    const a = m.att;
-    $('vhGrab').textContent = a.behaviour === 'breaker' ? (m.openTarget > 0.5 ? 'ON' : 'OFF') : a.behaviour === 'skip' ? (m.open > 0.5 ? 'OPEN' : 'CLOSED') : a.behaviour === 'scoop' ? (m.payload.kg ? m.payload.kind : 'empty') : (m.open > 0.5 ? 'OPEN' : 'CLOSED');
-    const cap = a.bulk ? a.bulk.capacity * m.s ** 3 : Math.max(1, a.pieces);
-    $('vhLoad').textContent = a.bulk ? (m.payload.kg ? `${Math.round(m.payload.kg)} ${m.payload.kind === 'water' ? 'L water' : 'kg ' + m.payload.kind}` : (m.held.length ? `${m.held.length} pcs` : 'empty')) : `${m.held.length} pcs`;
+    const a = m.att, b = a.behaviour, on = m.openTarget > 0.5;
+    const st = { breaker: on ? 'ON' : 'OFF', crusher: on ? 'CRUSHING' : 'OFF', roller: on ? 'VIBRATING' : 'OFF', paver: on ? 'PAVING' : 'OFF', skip: m.open > 0.5 ? 'OPEN' : 'CLOSED',
+      scoop: m.payload.kg ? m.payload.kind : m.held.length ? 'loaded' : 'empty', blade: 'ready', bed: 'ready', ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
+    $('vhGrab').textContent = st ?? (m.open > 0.5 ? 'OPEN' : 'CLOSED');
+    const cap = a.bulk ? m.capacity() : Math.max(1, a.pieces);
+    $('vhLoad').textContent = a.bulk ? (m.payload.kg ? `${Math.round(m.payload.kg)} ${m.payload.kind === 'water' ? 'L water' : 'kg ' + m.payload.kind}` : (m.held.length ? `${m.held.length} pcs` : 'empty')) : a.pieces ? `${m.held.length} pcs` : '—';
     $('vhFill').style.width = (a.bulk ? Math.min(100, m.payload.kg / cap * 100) : Math.min(100, m.held.length / cap * 100)) + '%';
     $('vhFill').style.background = m.payload.kind === 'water' ? '#3d7080' : m.payload.kg ? hex(m.payload.color) : '#7fd0ff';
   }

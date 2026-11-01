@@ -1,6 +1,7 @@
-// Authority-side machine interactions: knocking walls down, grabbing / scooping pieces, bulk material
-// (dust, water, cement) and the hydraulic breaker.
+// Authority-side machine interactions: anything a moving arm / blade / ball touches breaks loose, grabbing,
+// scooping, bulk material (dust, water, cement), breaker, crusher bucket, roller compaction, paving, wrecking ball.
 import * as THREE from 'three';
+import RAPIER from '@dimforge/rapier3d-compat';
 import { INTACT, LOOSE, HELD } from './demolition.js';
 import { inWater, terrainHeight } from './site.js';
 
@@ -10,39 +11,66 @@ const WATER_COL = new THREE.Color(0x3d7080);
 export function machineInteract(m, dt, W) {
   const { demo, sfx } = W;
   const att = m.att, s = m.s;
-  // ---- knock walls down with anything that moves fast enough
-  m.probes.forEach((pr, i) => {
-    const now = pr.obj.getWorldPosition(new THREE.Vector3());
-    const vel = now.clone().sub(m.prevProbe[i]).divideScalar(Math.max(dt, 1e-3));
-    if (vel.length() > 0.35 && vel.length() < 40) {
-      const hits = demo.breakSphere(now, pr.r * s, vel.clone().clampLength(0, 4).multiplyScalar(0.8), 6);
-      if (hits.length) m.hyd = 1;
+  const active = m.driver >= 0 || m.hyd > 0.02 || Math.abs(m.speed) > 0.05 || m.family === 'crane';
+
+  // ---- 1. contact: any arm / attachment / blade / ball collider overlapping an intact block breaks it loose.
+  // (kinematic parts never collide with fixed blocks in the physics engine, so without this they'd ghost through walls)
+  if (active) {
+    for (const b of m.breakShapes) {
+      const { p, q } = m.shapePose(b);
+      const hits = [];
+      W.physics.world.intersectionsWithShape(p, q, b.shape, (c) => { const piece = demo.pieceFromCollider(c); if (piece && piece.state === INTACT) hits.push(piece); return hits.length < 10; }, RAPIER.QueryFilterFlags.ONLY_FIXED);
+      if (!hits.length) continue;
+      const ballV = m.family === 'crane' && m.ballSt ? m.ballSt.v.clone() : null;
+      for (const piece of hits) {
+        const dir = ballV ? ballV.clone().clampLength(0, 8) : piece.pos.clone().sub(p).setY(0.3).normalize().multiplyScalar(2.5);
+        const mass = piece.size.x * piece.size.y * piece.size.z * piece.type.density;
+        demo.detach(piece, { x: dir.x * mass, y: dir.y * mass, z: dir.z * mass });
+        if (piece.type.sound === 'glass') sfx.glass(piece.pos);
+      }
+      sfx.dust(hits[0].pos, demo.chipColor(hits[0]), 2 + hits.length, 0.8);
+      sfx.chips(hits[0].pos, new THREE.Vector3(), demo.chipColor(hits[0]), 3 + hits.length);
+      m.hitSnd = (m.hitSnd || 0) - dt;
+      if (m.hitSnd <= 0) { sfx.impact(hits[0].type.sound, Math.min(1, 0.4 + hits.length * 0.1), hits[0].pos); m.hitSnd = 0.12; }
+      m.hyd = 1;
     }
-    m.prevProbe[i].copy(now);
-  });
+    // ---- 2. probes knock things over when swung fast (wider reach than the colliders)
+    m.probes.forEach((pr, i) => {
+      const now = pr.obj.getWorldPosition(new THREE.Vector3());
+      const vel = now.clone().sub(m.prevProbe[i]).divideScalar(Math.max(dt, 1e-3));
+      if (vel.length() > 0.35 && vel.length() < 40) demo.breakSphere(now, pr.r * s, vel.clone().clampLength(0, 4).multiplyScalar(0.8), 6);
+      m.prevProbe[i].copy(now);
+    });
+  }
 
   const gp = m.grabPoint.getWorldPosition(new THREE.Vector3());
-  const prevOpen = m.prevOpen ?? m.open;
-  m.prevOpen = m.open;
+  const prevOpen = m.prevOpen ?? m.open, prevCurl = m.prevCurl ?? m.curl;
+  m.prevOpen = m.open; m.prevCurl = m.curl;
+  const beh = att ? att.behaviour : 'none';
 
-  if (att.behaviour === 'jaw') {
+  if (beh === 'jaw') {
     if (m.openTarget < 0.5 && prevOpen > 0.4 && m.open <= 0.4) grab(m, demo, gp, sfx, W.capacityScale || 1);
     if (m.openTarget > 0.5 && m.held.length && m.open > 0.3) releaseAll(m, demo, dt);
-  } else if (att.behaviour === 'scoop' || att.behaviour === 'skip') {
+  } else if (beh === 'scoop' || beh === 'skip' || beh === 'crusher') {
     const mouth = att.mouth.getWorldPosition(new THREE.Vector3());
     const n = att.mouthN.clone().applyQuaternion(att.group.getWorldQuaternion(new THREE.Quaternion()));
-    const up = n.y > 0.35, down = att.behaviour === 'skip' ? m.open > 0.5 : n.y < -0.3;
-    if (att.behaviour === 'scoop' && att.pieces > 0) {
-      if (up && m.held.length < att.pieces && !m.payload.kg) scoop(m, demo, gp, att.grabR * s);
+    const up = n.y > 0.25, down = beh === 'skip' ? m.open > 0.5 : n.y < -0.3;
+    const curlingIn = m.curl - prevCurl > 1e-4 || (m.family === 'loader' && m.curl - prevCurl > 1e-4);
+    if (beh !== 'skip' && att.pieces > 0) {
+      const room = att.pieces - m.held.length;
+      // scoop while the bucket is facing up or actively curling through the pile
+      if ((up || curlingIn) && room > 0 && (!m.payload.kg || beh === 'crusher')) scoop(m, demo, gp, Math.max(0.62, att.grabR * s * 1.15), room);
       if (down && m.held.length) releaseAll(m, demo, dt);
     }
-    // bulk material
-    if (!down && n.y > -0.2 && !m.held.length) fillBulk(m, dt, mouth, W);
+    if (beh === 'crusher') crushInBucket(m, dt, W);
+    if (!down && n.y > -0.2 && !m.held.length && beh !== 'crusher') fillBulk(m, dt, mouth, W);
     if (down && m.payload.kg > 0) pourBulk(m, dt, att.spout ? att.spout.getWorldPosition(new THREE.Vector3()) : mouth, n, W);
-  } else if (att.behaviour === 'breaker') {
+  } else if (beh === 'breaker') {
     m.breakerActive = m.openTarget > 0.5;
     if (m.breakerActive) breaker(m, dt, W);
-  }
+  } else if (beh === 'roller') roller(m, dt, W);
+  else if (beh === 'paver') paver(m, dt, W);
+  else if (beh === 'ball') wreckingBall(m, dt, W);
 
   // ---- held pieces follow the attachment
   const am = m.attach.matrixWorld;
@@ -59,15 +87,15 @@ function grab(m, demo, gp, sfx, capScale) {
   const room = Math.round(m.att.pieces * capScale) - m.held.length;
   if (room <= 0) return;
   const s = m.s;
-  const cand = demo.piecesInSphere(gp, 1.3 * s, [LOOSE]);
-  const intact = demo.intactNear(gp, 0.8 * s, 12);
+  const cand = demo.piecesInSphere(gp, 1.4 * s, [LOOSE]);
+  const intact = demo.intactNear(gp, 0.85 * s, 12);
   const all = [...cand, ...intact].sort((a, b) => a.pos.distanceToSquared(gp) - b.pos.distanceToSquared(gp)).slice(0, room);
   const inv = new THREE.Matrix4().copy(m.attach.matrixWorld).invert();
+  const gl = m.attach.worldToLocal(gp.clone());
   for (const p of all) {
     const pm = new THREE.Matrix4().compose(p.pos, p.quat, new THREE.Vector3(1, 1, 1));
     const local = new THREE.Matrix4().multiplyMatrices(inv, pm);
     const lp = new THREE.Vector3().setFromMatrixPosition(local);
-    const gl = m.grabPoint.position.clone().add(m.att.group.position);
     lp.x *= 0.7; lp.y = THREE.MathUtils.lerp(lp.y, gl.y, 0.55); lp.z = THREE.MathUtils.lerp(lp.z, gl.z, 0.35);
     local.setPosition(lp);
     if (!demo.hold(p, m.id, local)) continue;
@@ -76,13 +104,16 @@ function grab(m, demo, gp, sfx, capScale) {
   if (all.length) { sfx.impact(all[0].type.sound, 0.8, gp); sfx.dust(gp, demo.chipColor(all[0]), 4, 0.8); }
 }
 
-function scoop(m, demo, gp, r) {
-  const room = m.att.pieces - m.held.length;
-  const cand = demo.piecesInSphere(gp, r, [LOOSE]).slice(0, room);
+function scoop(m, demo, gp, r, room) {
+  const cand = demo.piecesInSphere(gp, r, [LOOSE]).sort((a, b) => a.pos.distanceToSquared(gp) - b.pos.distanceToSquared(gp)).slice(0, room);
   if (!cand.length) return;
   const inv = new THREE.Matrix4().copy(m.attach.matrixWorld).invert();
+  const gl = m.attach.worldToLocal(gp.clone());
   for (const p of cand) {
     const local = new THREE.Matrix4().multiplyMatrices(inv, new THREE.Matrix4().compose(p.pos, p.quat, new THREE.Vector3(1, 1, 1)));
+    // pull scooped blocks inside the bucket so they never sit outside the shell
+    const lp = new THREE.Vector3().setFromMatrixPosition(local).lerp(gl, 0.45);
+    local.setPosition(lp);
     if (demo.hold(p, m.id, local)) m.held.push({ p, local });
   }
 }
@@ -102,25 +133,20 @@ function setPay(m, kind, kg, color, W) {
 }
 
 function fillBulk(m, dt, mouth, W) {
-  const cap = m.att.bulk.capacity * (m.s ** 3) / (m.att.kind === 'bigbucket' ? 1 : 1);
-  m.capKg = cap;
+  const cap = m.capacity();
   const room = cap - m.payload.kg;
   if (room <= 1) return;
-  const kinds = m.att.bulk.kinds;
-  const pk = m.payload.kind;
-  // lake water
+  const kinds = m.att.bulk.kinds, pk = m.payload.kind;
   if (kinds.includes('water') && (!pk || pk === 'water') && inWater(mouth.x, mouth.y, mouth.z)) {
-    const add = Math.min(room, 320 * dt);
-    setPay(m, 'water', m.payload.kg + add, WATER_COL, W);
+    setPay(m, 'water', m.payload.kg + Math.min(room, 320 * dt), WATER_COL, W);
     if (Math.random() < 0.5) W.sfx.chips(mouth, new THREE.Vector3(0, -1, 0), 0x6aa0b0, 2, 0.05, 1.5);
     W.sfx.splash(mouth, 0.3);
     return;
   }
-  // stockpile of crushed dust
   if (kinds.includes('dust') && (!pk || pk === 'dust') && W.crusher.pileKg > 1) {
     const c = W.crusher.pileWorld(), { r } = W.crusher.pileDims();
-    if (Math.hypot(mouth.x - c.x, mouth.z - c.z) < r * 0.95 && mouth.y < W.crusher.pileSurfaceY(mouth.x, mouth.z) + 0.3) {
-      const got = W.crusher.take(Math.min(room, 280 * dt));
+    if (Math.hypot(mouth.x - c.x, mouth.z - c.z) < r * 1.0 && mouth.y < W.crusher.pileSurfaceY(mouth.x, mouth.z) + 0.45) {
+      const got = W.crusher.take(Math.min(room, 320 * dt));
       if (got.kg > 0) {
         const tot = m.payload.kg + got.kg;
         const col = m.payload.kg ? m.payload.color.clone().lerp(got.color, got.kg / tot) : got.color;
@@ -131,10 +157,9 @@ function fillBulk(m, dt, mouth, W) {
       return;
     }
   }
-  // cement from the mixer tub
   if (kinds.includes('cement') && (!pk || pk === 'cement') && W.mixer.cement > 0.5) {
     const t = W.mixer.tubCenter;
-    if (Math.hypot(mouth.x - t.x, mouth.z - t.z) < 1.25 && mouth.y < t.y + 0.2 && mouth.y > t.y - 1.1) {
+    if (Math.hypot(mouth.x - t.x, mouth.z - t.z) < 1.3 && mouth.y < t.y + 0.3 && mouth.y > t.y - 1.1) {
       const got = W.mixer.takeCement(Math.min(room, 260 * dt));
       const tot = m.payload.kg + got.kg;
       const col = m.payload.kg ? m.payload.color.clone().lerp(got.color, got.kg / tot) : got.color;
@@ -145,27 +170,50 @@ function fillBulk(m, dt, mouth, W) {
 }
 
 function pourBulk(m, dt, from, n, W) {
-  const rate = (m.att.behaviour === 'skip' ? 220 : 320) * dt;
+  const rate = (m.att.behaviour === 'skip' ? 260 : 360) * dt;
   const amt = Math.min(m.payload.kg, rate);
   const kind = m.payload.kind, col = m.payload.color.clone();
   let used = 0;
-  // into the mixer tub?
   const t = W.mixer.tubCenter;
+  const paver = W.machines.find((o) => o.family === 'paver' && o !== m && Math.hypot(from.x - o.att.mouth.getWorldPosition(_p).x, from.z - _p.z) < 1.8 && from.y > _p.y - 0.6);
+  const pc = W.crusher.pileWorld();
   if (Math.hypot(from.x - t.x, from.z - t.z) < 1.7 && from.y > t.y - 0.6 && from.y < t.y + 5) {
     used = kind === 'water' ? W.mixer.addWater(amt) : kind === 'dust' ? W.mixer.addDust(amt, col) : W.mixer.addCement(amt, col);
     if (used > 0) W.onMixer();
+  } else if (paver && kind === 'cement') {
+    used = Math.min(amt, paver.capacity() - paver.payload.kg);
+    if (used > 0) { const tot = paver.payload.kg + used; setPay(paver, 'cement', tot, paver.payload.kg ? paver.payload.color.clone().lerp(col, used / tot) : col, W); }
   } else if (kind === 'cement') {
     const h = W.road.nearest(from, 1.2);
     if (h >= 0 && from.y < 5) { used = W.road.fill(h, amt, col); if (used > 0) W.onRoad(); }
+  } else if (kind === 'dust' && Math.hypot(from.x - pc.x, from.z - pc.z) < W.crusher.pileDims().r + 2.5) {
+    W.crusher.deposit(amt, col); W.onDeposit(amt, col); used = amt;
   }
-  // whatever didn't go anywhere useful spills on the ground
-  const spill = amt;
-  setPay(m, kind, m.payload.kg - spill, null, W);
-  const fall = from.clone();
-  W.sfx.chips(fall, new THREE.Vector3(0, 0, 0).sub(n).multiplyScalar(0.3), kind === 'water' ? 0x6aa0b0 : col.getHex(), 3, 0.05, 0.6);
-  if (Math.random() < 0.3) W.sfx.dust(fall, kind === 'water' ? 0xc8dde3 : col.getHex(), 1, 0.4, { alpha: 0.3 });
-  if (kind === 'water') W.sfx.splash(fall, 0.2);
+  setPay(m, kind, m.payload.kg - amt, null, W);
+  W.sfx.chips(from, new THREE.Vector3(0, 0, 0).sub(n).multiplyScalar(0.3), kind === 'water' ? 0x6aa0b0 : col.getHex(), 3, 0.05, 0.6);
+  if (Math.random() < 0.3) W.sfx.dust(from, kind === 'water' ? 0xc8dde3 : col.getHex(), 1, 0.4, { alpha: 0.3 });
+  if (kind === 'water') W.sfx.splash(from, 0.2);
   m.lastPour = used > 0 ? 'ok' : 'spill';
+}
+
+// crusher bucket: held blocks become dust inside the bucket
+function crushInBucket(m, dt, W) {
+  if (!(m.openTarget > 0.5) || !m.held.length) return;
+  m.cbTimer = (m.cbTimer || 0) - dt;
+  if (m.cbTimer > 0) return;
+  m.cbTimer = 0.32;
+  const room = m.capacity() - m.payload.kg;
+  if (room < 5) return;
+  const h = m.held.pop();
+  const p = h.p, kg = p.kg, col = W.demo.dustColor(p).clone();
+  const at = p.pos.clone();
+  W.demo.vanish(p);
+  const tot = m.payload.kg + kg;
+  setPay(m, 'dust', Math.min(m.capacity(), tot), m.payload.kg ? m.payload.color.clone().lerp(col, kg / tot) : col, W);
+  W.onBucketCrush(kg, col);
+  W.sfx.chips(at, new THREE.Vector3(0, -1, 0), col.getHex(), 6, 0.05, 2);
+  W.sfx.dust(at, col.getHex(), 3, 0.6, { alpha: 0.45 });
+  W.sfx.breaker(at, 0.6);
 }
 
 function breaker(m, dt, W) {
@@ -174,14 +222,14 @@ function breaker(m, dt, W) {
   m.bkTimer = 0.11;
   const tip = m.att.tip.getWorldPosition(new THREE.Vector3());
   const dir = tip.clone().sub(m.attach.getWorldPosition(new THREE.Vector3())).normalize();
-  const near = W.demo.intactNear(tip, 0.32 * m.s, 4);
+  const near = W.demo.intactNear(tip, 0.34 * Math.max(0.7, m.s), 4);
   if (near.length) {
     for (const p of near) W.demo.damage(p, 2, tip, dir, 3);
     W.sfx.breaker(tip, 1);
     m.hyd = 1;
     return;
   }
-  const loose = W.demo.piecesInSphere(tip, 0.35 * m.s, [LOOSE]);
+  const loose = W.demo.piecesInSphere(tip, 0.38 * Math.max(0.7, m.s), [LOOSE]);
   if (loose.length) { for (const p of loose.slice(0, 3)) W.demo.damage(p, 1, tip, dir, 3); W.sfx.breaker(tip, 0.7); return; }
   const g = terrainHeight(tip.x, tip.z);
   if (tip.y < g + 0.25) {
@@ -189,11 +237,51 @@ function breaker(m, dt, W) {
     W.sfx.chips(tip, dir, W.road.onRoad(tip.x, tip.z) ? 0x3a3b3e : 0x8a7a66, 4, 0.05, 2.5);
     W.sfx.dust(tip, 0x9a9488, 1, 0.5);
     if (W.road.onRoad(tip.x, tip.z)) {
-      // pound the same spot long enough and the asphalt gives way
       const k = Math.round(tip.x / 1.5) + ',' + Math.round(tip.z / 1.5);
       m.roadHits = m.roadHits || new Map();
       const n = (m.roadHits.get(k) || 0) + 1; m.roadHits.set(k, n);
       if (n === 30 && W.road.nearest(tip, 0.5, false) < 0 && W.road.onRoad(tip.x, tip.z - 1) && W.road.onRoad(tip.x, tip.z + 1)) { W.road.addHole(tip.x, tip.z, 0.8 + Math.random() * 0.3); W.onRoad(true); }
     }
+  }
+}
+
+// tandem roller: drums compact freshly filled potholes
+function roller(m, dt, W) {
+  if (Math.abs(m.speed) < 0.15) return;
+  for (const d of m.att.drums) {
+    const c = d.getWorldPosition(new THREE.Vector3());
+    for (const h of W.road.holes) {
+      if (h.filled < h.need || h.comp >= 1) continue;
+      if (Math.hypot(c.x - h.x, c.z - h.z) < h.r + 0.7) {
+        h.comp = Math.min(1, h.comp + dt * Math.abs(m.speed) * (m.vibrating ? 0.6 : 0.3));
+        W.road.refresh(h);
+        W.onRoad();
+        if (h.comp >= 1) W.tellDriver(m, '⭐ Pothole compacted to a perfect finish!');
+      }
+    }
+  }
+}
+
+// paver: lays cement from the hopper into potholes it drives over
+function paver(m, dt, W) {
+  if (!(m.openTarget > 0.5) || m.payload.kind !== 'cement' || m.payload.kg <= 0) return;
+  const sp = m.att.screedPoint.getWorldPosition(new THREE.Vector3());
+  const h = W.road.nearest(sp, 1.6);
+  if (h < 0) return;
+  const used = W.road.fill(h, Math.min(m.payload.kg, 300 * dt), m.payload.color);
+  if (used > 0) {
+    setPay(m, 'cement', m.payload.kg - used, null, W);
+    W.onRoad();
+    if (Math.random() < 0.3) W.sfx.dust(sp, m.payload.color.getHex(), 1, 0.6, { alpha: 0.25 });
+  }
+}
+
+// wrecking ball: the swinging ball smashes walls (contact handled above); add a heavy hit sound + shake
+function wreckingBall(m, dt, W) {
+  if (!m.ballSt) return;
+  const sp = m.ballSt ? m.ballSt.v.length() : 0;
+  if (sp > 2.5) {
+    const hits = W.demo.piecesInSphere(m.ballSt.p, 0.75 * m.s, [LOOSE]);
+    for (const p of hits.slice(0, 6)) if (p.body) p.body.applyImpulse({ x: m.ballSt.v.x * 0.15 * p.body.mass(), y: 0.2 * p.body.mass(), z: m.ballSt.v.z * 0.15 * p.body.mass() }, true);
   }
 }

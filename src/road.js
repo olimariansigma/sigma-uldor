@@ -23,7 +23,7 @@ export class Road {
 
   onRoad(x, z) { return z > SITE.streetZ - 1.3 && z < SITE.streetZ + 7.3 && Math.abs(x) < 240; }
 
-  addHole(x, z, r, filled = 0, color = null, dry = 1) {
+  addHole(x, z, r, filled = 0, color = null, dry = 1, comp = 0) {
     const hole = new THREE.Mesh(this.geo, new THREE.MeshStandardMaterial({ map: this.holeTex, transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -3 }));
     hole.scale.set(r * 2.3, 1, r * 2.3); hole.rotation.y = Math.random() * 6;
     hole.position.set(x, ROAD_Y, z); hole.receiveShadow = true; hole.renderOrder = 1;
@@ -33,7 +33,7 @@ export class Road {
     patch.visible = false;
     this.group.add(hole, patch);
     const need = Math.round(r * r * Math.PI * 60 / 5) * 5; // a thin patch of concrete
-    const h = { x, z, r, need, filled: 0, col: new THREE.Color(0.7, 0.7, 0.7), dry: 1, hole, patch };
+    const h = { x, z, r, need, filled: 0, comp, col: new THREE.Color(0.7, 0.7, 0.7), dry: 1, hole, patch };
     this.holes.push(h);
     if (filled) this.fill(this.holes.length - 1, filled, color || new THREE.Color(0.7, 0.7, 0.7), dry);
     return this.holes.length - 1;
@@ -75,8 +75,11 @@ export class Road {
 
   tint(h) {
     const wet = 1 - h.dry;
-    h.patch.material.color.copy(h.col).multiplyScalar(1 - wet * 0.35);
-    h.patch.material.roughness = 0.88 - wet * 0.7;
+    h.patch.material.color.copy(h.col).multiplyScalar((1 - wet * 0.35) * (1 - h.comp * 0.08));
+    h.patch.material.roughness = 0.88 - wet * 0.7 - h.comp * 0.1;
+    // un-rolled patches are lumpy, compacted ones are smooth and flush with the road
+    const ns = 1.6 - h.comp * 1.45;
+    h.patch.material.normalScale.set(ns, ns);
   }
 
   update(dt) {
@@ -84,11 +87,12 @@ export class Road {
   }
 
   get repaired() { return this.holes.filter((h) => h.filled >= h.need).length; }
+  get compacted() { return this.holes.filter((h) => h.filled >= h.need && h.comp >= 1).length; }
 
-  serialize() { return this.holes.map((h) => [h.x, h.z, h.r, h.filled, h.col.r, h.col.g, h.col.b, h.dry].map((v) => Math.round(v * 1000) / 1000)); }
+  serialize() { return this.holes.map((h) => [h.x, h.z, h.r, h.filled, h.col.r, h.col.g, h.col.b, h.dry, h.comp].map((v) => Math.round(v * 1000) / 1000)); }
   restore(list) {
     for (const h of this.holes) { this.group.remove(h.hole, h.patch); h.hole.material.dispose(); h.patch.material.dispose(); }
     this.holes = [];
-    for (const [x, z, r, filled, cr, cg, cb, dry] of list) this.addHole(x, z, r, filled, new THREE.Color(cr, cg, cb), dry);
+    for (const [x, z, r, filled, cr, cg, cb, dry, comp = 0] of list) this.addHole(x, z, r, filled, new THREE.Color(cr, cg, cb), dry, comp);
   }
 }

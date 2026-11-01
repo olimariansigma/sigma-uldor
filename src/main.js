@@ -10,6 +10,7 @@ import { BUILDINGS } from './buildings.js';
 import { FX } from './fx.js';
 import { Audio } from './audio.js';
 import { Crusher, fmtKg, KG } from './crusher.js';
+import { IntakeLine } from './intake.js';
 import { Mixer } from './mixer.js';
 import { Road } from './road.js';
 import { Machine, MACHINES, controlsFor } from './machines.js';
@@ -92,6 +93,7 @@ class Game {
     this.sfx = this.makeSfx();
     this.demo = new Demolition(this.scene, this.physics, this.types, this.sfx, true);
     this.crusher = new Crusher(this.scene, this.physics, this.M, SITE.crusherPos, SITE.crusherRot);
+    this.intake = new IntakeLine(this.scene, this.physics, this.M, this.crusher);
     this.mixer = new Mixer(this.scene, this.physics, this.M, SITE.mixerPos);
     this.road = new Road(this.scene);
     this.slabs = new Slabs(this.scene);
@@ -370,6 +372,7 @@ class Game {
     this.demo.clearAll();
     this.plots = SITE.plots.map(() => null);
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
+    this.intake.restore(null);
     this.mixer.empty();
     this.road.restore([]);
     this.slabs.clear();
@@ -385,7 +388,7 @@ class Game {
       plots: this.plots,
       pieces: this.demo.serializePieces(),
       machines: [...this.machines.values()].map((m) => m.serialize()),
-      crusher: this.crusher.serialize(), mixer: this.mixer.serialize(), road: this.road.serialize(), slabs: this.slabs.serialize(),
+      crusher: this.crusher.serialize(), intake: this.intake.serialize(), mixer: this.mixer.serialize(), road: this.road.serialize(), slabs: this.slabs.serialize(),
       settings: { crusher: this.settings.crusher, grapple: this.settings.grapple },
       players: forSave ? [] : [...this.players.values()].map((p) => ({ id: p.id, name: p.name, shirt: p.shirt, driving: p.driving, bucket: [p.bucket.kind, p.bucket.kg, p.bucket.color.r, p.bucket.color.g, p.bucket.color.b], cement: [p.cement.kg, p.cement.color.r, p.cement.color.g, p.cement.color.b] })),
       nextMachineId: this.nextMachineId,
@@ -416,7 +419,7 @@ class Game {
     // re-attach held pieces on the authority side
     if (!mirror) for (const p of this.demo.pieces) if (p.state === HELD) { const m = this.machines.get(p.holder); if (m && p.holdLocal) m.held.push({ p, local: p.holdLocal }); }
     this.nextMachineId = w.nextMachineId || this.nextMachineId;
-    this.crusher.restore(w.crusher); this.mixer.restore(w.mixer); this.road.restore(w.road); this.slabs.restore(w.slabs || []);
+    this.crusher.restore(w.crusher); this.intake.restore(w.intake); this.mixer.restore(w.mixer); this.road.restore(w.road); this.slabs.restore(w.slabs || []);
     if (w.settings) Object.assign(this.settings, w.settings);
     this.crusher.rate = this.settings.crusher;
   }
@@ -916,6 +919,7 @@ class Game {
     switch (e[0]) {
       case 'ps': this.demo.applyChange(e[1], e[2], e[3], e[4]); break;
       case 'fx': this.playFx(e); break;
+      case 'ix': this.intake.applyEvent(e, this.audio); break;
       case 'crush': this.crusher.crushVisual(e[1], new THREE.Color(e[2], e[3], e[4]), v3(e[5]), this.fx, this.audio); break;
       case 'take': this.crusher.take(e[1]); break;
       case 'pile': this.crusher.layers = e[1].map(([kg, r, g, b]) => ({ kg, c: new THREE.Color(r, g, b) })); this.crusher.updatePile(); break;
@@ -1193,11 +1197,13 @@ class Game {
       const W = this.machineWorld();
       for (const m of machList) machineInteract(m, dt, W);
       this.crusher.update(dt, this.demo, this.fx, this.audio, (p) => this.crushPiece(p));
+      this.intake.update(dt, this.demo, this.fx, this.audio, this.intakeCb());
       if (this.mixer.simulate(dt)) this.mixerDirty = true;
       this.mixTimer = (this.mixTimer || 0) - dt;
       if (this.mixer.dust > 0 && this.mixer.water > 0 && this.mixTimer <= 0) { this.mixTimer = 1; this.mixerDirty = true; }
     } else {
       this.crusher.update(dt, this.demo, this.fx, this.audio, null);
+      this.intake.update(dt, this.demo, this.fx, this.audio, null);
       for (const p of this.demo.pieces) if (p.state === HELD && p.holdLocal) {
         const m = this.machines.get(p.holder); if (!m) continue;
         const mw = new THREE.Matrix4().multiplyMatrices(m.holdFrame().matrixWorld, p.holdLocal);
@@ -1262,6 +1268,24 @@ class Game {
       get machines() { return [...g.machines.values()]; },
     };
     return this._mw;
+  }
+
+  // intake line callbacks (authority): blocks swallowed by the compactor, cubes crushed in the hopper
+  intakeCb() {
+    if (this._icb) return this._icb;
+    const g = this, mute = { crunch() {} };
+    this._icb = {
+      eat(p, color) { const kg = p.kg; g.demo.vanish(p); g.events.push(['ix', 'eat', kg, color.r, color.g, color.b]); },
+      event(e) { g.events.push(e); },
+      crush(cube, at) {
+        cube.parts.forEach((q, i) => {
+          g.crusher.crushVisual(q.kg, q.color, at, g.fx, i ? mute : g.audio);
+          g.events.push(['crush', q.kg, q.color.r, q.color.g, q.color.b, at.toArray().map((v) => +v.toFixed(2))]);
+        });
+        g.ui.popup('+' + fmtKg(cube.kg), at, '#' + cube.color.getHexString());
+      },
+    };
+    return this._icb;
   }
 
   crushPiece(p) {

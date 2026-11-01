@@ -5,7 +5,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import { machineMaterials, weathered, bake, restPositions } from './detail.js';
 import { buildExcavator } from './mx-excavator.js';
 import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, stepCrane } from './mx-vehicles.js';
-import { buildTruck } from './mx-truck.js';
+import { buildTruck, TRUCK_SIZES } from './mx-truck.js';
 import { terrainHeight, SITE } from './site.js';
 
 const clamp = THREE.MathUtils.clamp;
@@ -37,11 +37,23 @@ export const MACHINES = [
   { id: 'dz80', tons: 22, family: 'dozer', name: 'TORVA DZ80 Bulldozer', brand: 'TORVA', model: 'DZ80', icon: '🐂', desc: 'Pushes walls flat and shoves rubble to the crusher. Rear ripper included.', scale: 1.0, paint: 0xf2b200, speed: 2.8 },
   { id: 'td6', tons: 6, family: 'dumper', name: 'KESTREL TD6 Tracked Dumper', brand: 'KESTREL', model: 'TD6', icon: '🛻', desc: 'Rubber-tracked dumper with a slewing, tipping skip. Load it with blocks and drive them anywhere.', scale: 1.0, paint: 0xff7300, speed: 3.5 },
   { id: 'cc250', tons: 80, family: 'crane', name: 'VANTOR CC250 Wrecking Ball', brand: 'VANTOR', model: 'CC250', icon: '⚫', desc: 'Crawler crane with a 16 m lattice boom and a swinging wrecking ball. Classic.', scale: 1.0, paint: 0xd11f1f, accent: 0x222222, speed: 1.4 },
-  // ---- tipper trucks (8x4, two steered front axles, rear-tipping body)
-  { id: 'tk410', tons: 32, family: 'truck', name: 'VELKA R410 XT Tipper', brand: 'VELKA', model: 'R410 XT', icon: '🚚', desc: '8x4 construction tipper: white cab-over cab, heavy XT bumper with skid plate, off-road tyres and a 16 m³ half-pipe body. Load it with blocks or rubble, drive it to the crusher and tip.', scale: 1, paint: 0xf1f1ee, accent: 0x1b1d20, bodyPaint: 0xeeeeea, chassisPaint: 0x26282b, trim: 'xt', bodyLabel: 'VELKA KIPP', typeName: '8x4 tipper truck', toolName: 'Half-pipe tipping body', speed: 9.5 },
-  { id: 'tk650', tons: 36, family: 'truck', name: 'VELKA S650 V8 Tipper', brand: 'VELKA', model: 'S650 V8', icon: '🚛', desc: 'Flagship V8 tipper: silver metallic high-roof cab, chrome grille, roof light bar and polished rims, with a lightweight aluminium half-pipe body. The fastest truck on the yard.', scale: 1, paint: 0x9aa1a8, accent: 0x15171a, bodyPaint: 0xa7acb1, bodyMetal: true, chassisPaint: 0x17181a, trim: 'chrome', roof: 'high', bodyLabel: 'VELKA ALU', typeName: '8x4 V8 tipper truck', toolName: 'Aluminium half-pipe body', speed: 11 },
-  { id: 'tk370', tons: 30, family: 'truck', name: 'VELKA G370 Box Tipper', brand: 'VELKA', model: 'G370', icon: '🚚', desc: 'Workhorse 8x4 in yard yellow with a square steel box body and a top-hinged tailgate that swings up when you tip. Wide flat floor, perfect for whole wall sections of blocks.', scale: 1, paint: 0xf2b705, accent: 0x1b1d20, bodyPaint: 0xf0b000, chassisPaint: 0x1d1e20, trim: 'work', body: 'box', bodyLabel: 'VELKA BAU', typeName: '8x4 box tipper truck', toolName: 'Steel box tipping body', speed: 8.5 },
+  // ---- tipper trucks (rear-tipping body; every truck comes in three sizes, see TRUCK_VARIANTS below)
+  { id: 'tk370', tons: 16, family: 'truck', size: 's', name: 'VELKA G370 Box Tipper', brand: 'VELKA', model: 'G370', icon: '🚚', desc: 'Workhorse tipper in yard yellow with a square steel box body and a top-hinged tailgate that swings up when you tip. Wide flat floor for whole wall sections of blocks.', scale: 1, paint: 0xf2b705, accent: 0x1b1d20, bodyPaint: 0xf0b000, chassisPaint: 0x1d1e20, trim: 'work', body: 'box', bodyLabel: 'VELKA BAU', toolName: 'Steel box tipping body', speed: 10 },
+  { id: 'tk410', tons: 26, family: 'truck', size: 'm', name: 'VELKA R410 XT Tipper', brand: 'VELKA', model: 'R410 XT', icon: '🚚', desc: 'Construction tipper: white cab-over cab, heavy XT bumper with skid plate, off-road tyres and a half-pipe body. Load it with blocks, back it up to the intake behind the crusher and tip.', scale: 1, paint: 0xf1f1ee, accent: 0x1b1d20, bodyPaint: 0xeeeeea, chassisPaint: 0x26282b, trim: 'xt', bodyLabel: 'VELKA KIPP', toolName: 'Half-pipe tipping body', speed: 9.8 },
+  { id: 'tk650', tons: 35, family: 'truck', size: 'l', name: 'VELKA S650 V8 Tipper', brand: 'VELKA', model: 'S650 V8', icon: '🚛', desc: 'Flagship V8 tipper: silver metallic high-roof cab, chrome grille, roof light bar and polished rims, with a lightweight aluminium half-pipe body. The fastest truck on the yard.', scale: 1, paint: 0x9aa1a8, accent: 0x15171a, bodyPaint: 0xa7acb1, bodyMetal: true, chassisPaint: 0x17181a, trim: 'chrome', roof: 'high', bodyLabel: 'VELKA ALU', toolName: 'Aluminium half-pipe body', speed: 11 },
 ];
+
+// every truck in the other two sizes: hidden from the spawn grid, picked with the size buttons in the showroom
+for (const b of MACHINES.filter((x) => x.family === 'truck')) {
+  for (const k of ['s', 'm', 'l']) {
+    if (k === b.size) continue;
+    const d = { s: -1, m: 0, l: 1 }[k] - { s: -1, m: 0, l: 1 }[b.size];
+    MACHINES.push({ ...b, id: b.id + k, size: k, variantOf: b.id, tons: Math.round(b.tons + d * 9), speed: +(b.speed - d * 0.5).toFixed(1) });
+  }
+}
+export const truckVariants = (id) => { const base = MACHINES.find((x) => x.id === id); const root = base.variantOf || base.id; return MACHINES.filter((x) => x.id === root || x.variantOf === root).sort((a, b) => 'sml'.indexOf(a.size) - 'sml'.indexOf(b.size)); };
+export const BASE_MACHINES = MACHINES.filter((x) => !x.variantOf);
+export { TRUCK_SIZES };
 
 const BUILDERS = { excavator: buildExcavator, roller: buildRoller, paver: buildPaver, loader: buildLoader, dozer: buildDozer, dumper: buildDumper, crane: buildCrane, truck: buildTruck };
 

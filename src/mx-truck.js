@@ -26,6 +26,13 @@ function rimGeo(r, w, dished) {
   return mergeG(parts);
 }
 
+// chassis layouts. Axle entries: [z, steer group (1 = first steered axle, 2 = second, 0 = driven twin tyres)]
+export const TRUCK_SIZES = {
+  s: { label: 'Small', drive: '4x2', axles: [[3.15, 1], [-0.95, 0]], rear: -2.45, hinge: -2.05, L: 3.8, BH: 1.15, wb: 4.1, tank: 1.4, ad: 0.15, air: 0.5, guard: [1.05, 2.4], radius: 3.4, cam: 1.3 },
+  m: { label: 'Medium', drive: '6x4', axles: [[3.15, 1], [-1.35, 0], [-2.75, 0]], rear: -3.8, hinge: -3.45, L: 5.0, BH: 1.3, wb: 4.6, tank: 1.2, ad: 0.0, air: -0.1, guard: [0.9, 2.8], radius: 4.1, cam: 1.45 },
+  l: { label: 'Big', drive: '8x4', axles: [[3.15, 1], [1.7, 2], [-2.15, 0], [-3.55, 0]], rear: -4.6, hinge: -4.25, L: 6.0, BH: 1.45, wb: 5.0, tank: 0.3, ad: -0.75, air: -0.85, guard: [-0.35, 2.6], radius: 4.6, cam: 1.6 },
+};
+
 export function buildTruck(m) {
   const sp = m.spec, K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
   const trim0 = sp.trim || 'xt';
@@ -36,16 +43,17 @@ export function buildTruck(m) {
   const trim = sp.trim || 'xt'; // xt | chrome | work
   const highRoof = sp.roof === 'high';
   const R = 0.54;
+  const Z = TRUCK_SIZES[sp.size || 'l'], RE = Z.rear;
 
-  // ---------------------------------------------------------------- wheels: 2 steered front axles, tandem drive with twins
+  // ---------------------------------------------------------------- wheels: steered front axle(s), driven axle(s) with twins
   m.steerWheels = []; m.steer2 = [];
-  const axles = [[3.15, true], [1.7, true], [-2.15, false], [-3.55, false]];
+  const axles = Z.axles.map(([z, g]) => [z, g > 0, g]), lastAxle = axles.length - 1;
   const tg = tyre(R, 0.38, 26, trim === 'xt'), tgRear = tyre(R, 0.32, 26, true);
   const rimF = rimGeo(R, 0.38, true), rimR = rimGeo(R, 0.32, false);
   axles.forEach(([z, front], ai) => {
     for (const s of [-1, 1]) {
       const hub = new THREE.Group(); hub.position.set(s * (front ? 1.04 : 0.98), R, z); U.add(hub);
-      if (front) (ai === 0 ? m.steerWheels : m.steer2).push(hub);
+      if (front) (axles[ai][2] === 1 ? m.steerWheels : m.steer2).push(hub);
       const twins = front ? [0] : [0.17, -0.17];
       for (const ox of twins) {
         const spin = new THREE.Group(); spin.position.x = s * ox; hub.add(spin);
@@ -63,7 +71,7 @@ export function buildTruck(m) {
         const seg = bx(front ? 0.44 : 0.78, 0.03, p0.distanceTo(p1) + 0.01, 0, 0, 0); seg.rotateX(-(a0 + a1) / 2 + Math.PI / 2); seg.translate(0, (p0.y + p1.y) / 2, (p0.z + p1.z) / 2); mg.push(seg);
       }
       const guard = add(hub, mergeG(mg), front ? K.black : K.black); guard.position.x = s * (front ? 0.02 : 0); guard.rotation.y = 0;
-      if (!front && ai === 3) add(U, mergeG([bx(0.78, 0.5, 0.02, s * 0.98, 0.42, z - R - 0.14)]), K.rubber);
+      if (!front && ai === lastAxle) add(U, mergeG([bx(0.78, 0.5, 0.02, s * 0.98, 0.42, z - R - 0.14)]), K.rubber);
     }
     // axle: beam + differential for driven axles, leaf springs, shock absorbers
     const ax = [cy(0.07, 0.07, 1.9, 12, 0, R, z, 0, 0, Math.PI / 2)];
@@ -73,24 +81,30 @@ export function buildTruck(m) {
     for (const s of [-1, 1]) add(U, tubeAB(V(s * 0.62, R + 0.05, z + 0.25), V(s * 0.55, R + 0.55, z + 0.4), 0.035), K.steel);
   });
   // drive shafts
-  add(U, mergeG([tubeAB(V(0, R + 0.1, 0.6), V(0, R + 0.08, -1.85), 0.055), tubeAB(V(0, R + 0.08, -2.45), V(0, R + 0.08, -3.25), 0.055)]), K.steel);
+  { const dz = axles.filter((a) => !a[1]).map((a) => a[0]); const sh = [tubeAB(V(0, R + 0.1, 0.6), V(0, R + 0.08, dz[0] + 0.3), 0.055)];
+    for (let i = 1; i < dz.length; i++) sh.push(tubeAB(V(0, R + 0.08, dz[i - 1] - 0.3), V(0, R + 0.08, dz[i] + 0.3), 0.055));
+    add(U, mergeG(sh), K.steel); }
 
   // ---------------------------------------------------------------- chassis frame + equipment
-  const fr = [bx(0.1, 0.3, 8.6, 0.45, 1.0, -0.3), bx(0.1, 0.3, 8.6, -0.45, 1.0, -0.3)];
-  for (const z of [3.7, 2.4, 0.9, -0.6, -1.6, -2.85, -4.2]) fr.push(bx(0.9, 0.18, 0.12, 0, 1.0, z));
-  fr.push(boltRow(V(0.51, 1.08, 3.6), V(0.51, 1.08, -4.4), 30, V(1, 0, 0), 0.016, 0.012), boltRow(V(-0.51, 1.08, 3.6), V(-0.51, 1.08, -4.4), 30, V(-1, 0, 0), 0.016, 0.012));
+  const fl = 4.0 - RE, fc = (4.0 + RE) / 2;
+  const fr = [bx(0.1, 0.3, fl, 0.45, 1.0, fc), bx(0.1, 0.3, fl, -0.45, 1.0, fc)];
+  for (const z of [3.7, 2.4, 0.9, -0.6, -1.6, -2.85, -4.2]) if (z > RE + 0.5) fr.push(bx(0.9, 0.18, 0.12, 0, 1.0, z));
+  fr.push(bx(0.9, 0.18, 0.12, 0, 1.0, RE + 0.4));
+  const nb = Math.round(fl * 3.5);
+  fr.push(boltRow(V(0.51, 1.08, 3.6), V(0.51, 1.08, RE + 0.2), nb, V(1, 0, 0), 0.016, 0.012), boltRow(V(-0.51, 1.08, 3.6), V(-0.51, 1.08, RE + 0.2), nb, V(-1, 0, 0), 0.016, 0.012));
   add(U, mergeG(fr), chassisMat);
   // rear: light bar, under-run guard, hitch, number plate
-  add(U, mergeG([bx(2.3, 0.12, 0.12, 0, 0.62, -4.62), bx(0.1, 0.42, 0.1, 0.6, 0.85, -4.6), bx(0.1, 0.42, 0.1, -0.6, 0.85, -4.6), rbox(2.45, 0.12, 0.16, 0.02, 0, 1.12, -4.62), rbox(0.3, 0.22, 0.25, 0.03, 0, 0.95, -4.55)]), K.black);
-  for (const s of [-1, 1]) { add(U, rbox(0.34, 0.14, 0.04, 0.02, s * 0.95, 1.12, -4.71), K.red, false); add(U, bx(0.1, 0.12, 0.03, s * 0.72, 1.12, -4.71), K.amber, false); }
-  add(U, mergeG([bx(0.52, 0.12, 0.01, 0, 0.98, -4.68)]), m.ctx.M.paintWhite || K.grey, false);
+  add(U, mergeG([bx(2.3, 0.12, 0.12, 0, 0.62, RE - 0.02), bx(0.1, 0.42, 0.1, 0.6, 0.85, RE), bx(0.1, 0.42, 0.1, -0.6, 0.85, RE), rbox(2.45, 0.12, 0.16, 0.02, 0, 1.12, RE - 0.02), rbox(0.3, 0.22, 0.25, 0.03, 0, 0.95, RE + 0.05)]), K.black);
+  for (const s of [-1, 1]) { add(U, rbox(0.34, 0.14, 0.04, 0.02, s * 0.95, 1.12, RE - 0.11), K.red, false); add(U, bx(0.1, 0.12, 0.03, s * 0.72, 1.12, RE - 0.11), K.amber, false); }
+  add(U, mergeG([bx(0.52, 0.12, 0.01, 0, 0.98, RE - 0.08)]), m.ctx.M.paintWhite || K.grey, false);
   // fuel tank (polished aluminium, straps), AdBlue tank, battery box, air tanks, side guards
-  add(U, mergeG([rbox(0.55, 0.62, 1.35, 0.14, 0.88, 0.95, 0.3)]), K.galv);
-  add(U, mergeG([bx(0.6, 0.04, 0.06, 0.88, 0.95, 0.85), bx(0.6, 0.04, 0.06, 0.88, 0.95, -0.25), cy(0.06, 0.06, 0.06, 12, 0.88, 1.3, 0.75)]), K.black);
-  add(U, mergeG([rbox(0.45, 0.42, 0.5, 0.08, 0.86, 0.9, -0.75), cy(0.05, 0.05, 0.05, 10, 0.86, 1.13, -0.6)]), K.grey);
-  add(U, mergeG([rbox(0.5, 0.45, 0.9, 0.04, -0.85, 0.95, 0.25), bx(0.52, 0.04, 0.92, -0.85, 1.19, 0.25)]), K.black);
-  add(U, mergeG([cy(0.13, 0.13, 0.9, 16, -0.75, 0.75, -0.75, Math.PI / 2), cy(0.13, 0.13, 0.9, 16, 0.25, 0.75, -0.95, Math.PI / 2)]), K.steel);
-  for (const s of [-1, 1]) add(U, mergeG([bx(0.04, 0.06, 2.6, s * 1.18, 0.7, -0.35), bx(0.04, 0.06, 2.6, s * 1.18, 1.0, -0.35), bx(0.04, 0.38, 0.06, s * 1.18, 0.85, 0.9), bx(0.04, 0.38, 0.06, s * 1.18, 0.85, -1.6)]), s < 0 ? K.galv : K.galv);
+  const tz = Z.tank, az = Z.ad, rz = Z.air;
+  add(U, mergeG([rbox(0.55, 0.62, 1.35, 0.14, 0.88, 0.95, tz)]), K.galv);
+  add(U, mergeG([bx(0.6, 0.04, 0.06, 0.88, 0.95, tz + 0.55), bx(0.6, 0.04, 0.06, 0.88, 0.95, tz - 0.55), cy(0.06, 0.06, 0.06, 12, 0.88, 1.3, tz + 0.45)]), K.black);
+  add(U, mergeG([rbox(0.45, 0.42, 0.5, 0.08, 0.86, 0.9, az), cy(0.05, 0.05, 0.05, 10, 0.86, 1.13, az + 0.15)]), K.grey);
+  add(U, mergeG([rbox(0.5, 0.45, 0.9, 0.04, -0.85, 0.95, tz), bx(0.52, 0.04, 0.92, -0.85, 1.19, tz)]), K.black);
+  add(U, mergeG([cy(0.13, 0.13, 0.9, 16, -0.75, 0.75, rz, Math.PI / 2), cy(0.13, 0.13, 0.9, 16, 0.25, 0.75, rz - 0.2, Math.PI / 2)]), K.steel);
+  { const [gz, gl] = Z.guard; for (const s of [-1, 1]) add(U, mergeG([bx(0.04, 0.06, gl, s * 1.18, 0.7, gz), bx(0.04, 0.06, gl, s * 1.18, 1.0, gz), bx(0.04, 0.38, 0.06, s * 1.18, 0.85, gz + gl / 2 - 0.05), bx(0.04, 0.38, 0.06, s * 1.18, 0.85, gz - gl / 2 + 0.05)]), K.galv); }
   // exhaust: silencer box under the right step, tail pipe
   add(U, mergeG([rbox(0.5, 0.4, 0.7, 0.06, -0.85, 0.8, 1.35), tubeAB(V(-1.1, 0.7, 1.1), V(-1.25, 0.62, 0.9), 0.05)]), K.steel);
 
@@ -163,13 +177,13 @@ export function buildTruck(m) {
 
   // ---------------------------------------------------------------- tipping body on its rear hinge
   m.upper = U;
-  const hinge = new THREE.Group(); hinge.position.set(0, 1.42, -4.25); U.add(hinge);
+  const hinge = new THREE.Group(); hinge.position.set(0, 1.42, Z.hinge); U.add(hinge);
   m.attach = hinge;
   const body = new THREE.Group(); hinge.add(body);
-  const L = 6.0, BW = 2.45, BH = 1.35;
+  const L = Z.L, BW = 2.45, BH = Z.BH, HZ = Z.hinge;
   const box = sp.body === 'box';
   // subframe + hinge brackets
-  add(U, mergeG([bx(0.12, 0.16, 6.2, 0.45, 1.22, -1.15), bx(0.12, 0.16, 6.2, -0.45, 1.22, -1.15), pinX(0.07, 1.1, 0, 1.42, -4.25), bx(0.2, 0.3, 0.3, 0.45, 1.3, -4.25), bx(0.2, 0.3, 0.3, -0.45, 1.3, -4.25)]), chassisMat);
+  add(U, mergeG([bx(0.12, 0.16, 1.95 - HZ, 0.45, 1.22, (1.95 + HZ) / 2), bx(0.12, 0.16, 1.95 - HZ, -0.45, 1.22, (1.95 + HZ) / 2), pinX(0.07, 1.1, 0, 1.42, HZ), bx(0.2, 0.3, 0.3, 0.45, 1.3, HZ), bx(0.2, 0.3, 0.3, -0.45, 1.3, HZ)]), chassisMat);
   if (!box) {
     // half-pipe: U-shaped shell extruded along the body
     const shp = new THREE.Shape(), n = 18;
@@ -208,13 +222,18 @@ export function buildTruck(m) {
   // headboard + cab protector canopy, tarp roller, long-members under the body
   add(body, mergeG([bx(BW, BH + 0.25, 0.08, 0, (BH + 0.25) / 2, L + 0.06), bx(BW, 0.06, 0.75, 0, BH + 0.25, L + 0.38, -0.12)]), bodyMat);
   add(body, mergeG([cy(0.12, 0.12, BW, 18, 0, BH + 0.4, L - 0.1, 0, 0, Math.PI / 2), bx(0.12, 0.3, 0.12, BW / 2 - 0.05, BH + 0.22, L - 0.1), bx(0.12, 0.3, 0.12, -BW / 2 + 0.05, BH + 0.22, L - 0.1)]), K.black);
-  add(body, mergeG([bx(0.14, 0.14, L, 0.45, -0.03, L / 2 + 0.05), bx(0.14, 0.14, L, -0.45, -0.03, L / 2 + 0.05), ...[0.6, 2.2, 3.8, 5.4].map((z) => bx(1.2, 0.1, 0.1, 0, -0.02, z))]), K.dark);
+  add(body, mergeG([bx(0.14, 0.14, L, 0.45, -0.03, L / 2 + 0.05), bx(0.14, 0.14, L, -0.45, -0.03, L / 2 + 0.05), ...[0.6, 2.2, 3.8, 5.4].filter((z) => z < L - 0.3).map((z) => bx(1.2, 0.1, 0.1, 0, -0.02, z))]), K.dark);
   { const bl = label(sp.bodyLabel || 'VELKA KIPP', 1.1, 0.24, '#15171a'); bl.position.set(BW / 2 + 0.07, BH * 0.86, L * 0.75); bl.rotation.y = Math.PI / 2; body.add(bl); }
   // tailgate hinged along its top edge
-  const tail = new THREE.Group(); tail.position.set(0, BH + 0.02, 0.05); body.add(tail);
-  add(tail, mergeG([bx(BW, BH, 0.06, 0, -BH / 2, -0.03), bx(BW + 0.06, 0.1, 0.1, 0, -BH + 0.05, -0.06), ...[-0.8, 0, 0.8].map((x) => bx(0.06, BH - 0.1, 0.06, x, -BH / 2, -0.08))]), bodyMat);
-  add(tail, mergeG([pinX(0.04, BW + 0.12, 0, 0, 0), bx(0.12, 0.12, 0.12, BW / 2 + 0.03, -BH + 0.1, -0.06), bx(0.12, 0.12, 0.12, -BW / 2 - 0.03, -BH + 0.1, -0.06)]), K.dark);
-  stick(tail, 'warn', 0.3, BW / 2 - 0.3, -BH * 0.5, -0.09, Math.PI);
+  // high-lift gate: it hangs on side arms from pivots on brackets above the body, so nothing crosses the
+  // opening and the whole load slides out under it when the body tips
+  const GA = 0.5;
+  add(body, mergeG([bx(0.1, GA + 0.12, 0.14, BW / 2 + 0.07, BH + GA / 2, 0.12), bx(0.1, GA + 0.12, 0.14, -BW / 2 - 0.07, BH + GA / 2, 0.12)]), bodyMat);
+  const tail = new THREE.Group(); tail.position.set(0, BH + GA, 0.05); body.add(tail);
+  add(tail, mergeG([bx(BW, BH, 0.06, 0, -GA - BH / 2, -0.03), bx(BW + 0.06, 0.1, 0.1, 0, -GA - BH + 0.05, -0.06), bx(BW + 0.06, 0.08, 0.1, 0, -GA - 0.04, -0.06), ...[-0.8, 0, 0.8].map((x) => bx(0.06, BH - 0.1, 0.06, x, -GA - BH / 2, -0.08))]), bodyMat);
+  add(tail, mergeG([pinX(0.06, 0.2, BW / 2 + 0.08, 0, 0), pinX(0.06, 0.2, -BW / 2 - 0.08, 0, 0), bx(0.06, GA + 0.2, 0.08, BW / 2 + 0.06, -GA / 2 - 0.05, -0.05), bx(0.06, GA + 0.2, 0.08, -BW / 2 - 0.06, -GA / 2 - 0.05, -0.05),
+    bx(0.12, 0.12, 0.12, BW / 2 + 0.03, -GA - BH + 0.1, -0.06), bx(0.12, 0.12, 0.12, -BW / 2 - 0.03, -GA - BH + 0.1, -0.06)]), K.dark);
+  stick(tail, 'warn', 0.3, BW / 2 - 0.3, -GA - BH * 0.5, -0.09, Math.PI);
   m.tailgate = tail;
   // front telescopic tipping cylinder: chassis -> body underside near the headboard
   cylinder(m, anchor(U, 0, 1.1, 1.25), anchor(body, 0, -0.05, L - 0.55), 0.13, 0.08);
@@ -240,14 +259,14 @@ export function buildTruck(m) {
     for (const sg of [-1, 1]) floorBoxes.push([sg * (BW / 2 - 0.02), cy0 + (BH - cy0) / 2, L / 2 + 0.05, 0.1, BH - cy0 + 0.1, L]);
   }
   m.colliderSets.push(
-    { obj: U, boxes: [[0, 2.35, 3.25, 2.5, 2.3, 2.15], [0, 0.85, -0.25, 2.45, 0.9, 7.5]], chassis: true },
+    { obj: U, boxes: [[0, 2.35, 3.25, 2.5, 2.3, 2.15], [0, 0.85, (3.5 + HZ + 0.25) / 2, 2.45, 0.9, 3.5 - HZ - 0.25]], chassis: true },
     { obj: body, boxes: [...floorBoxes, [0, (BH + 0.25) / 2, L + 0.06, BW, BH + 0.25, 0.1]], friction: 0.4 }, // worn smooth steel: loads slide out when tipped
-    { obj: tail, boxes: [[0, -BH / 2, -0.03, BW, BH, 0.08]] },
+    { obj: tail, boxes: [[0, -GA - BH / 2, -0.03, BW, BH, 0.08]] },
   );
-  m.radius = 4.6; m.camScale = 1.6;
+  m.radius = Z.radius; m.camScale = Z.cam;
   m.bakeList.push(U, C, body, tail);
   m.rig = {
-    family: 'truck', drive: 'car', wheelbase: 5.0, accel: 2.6, brake: 4.5, maxLat: 3.2, swing: false, limits: { curl: [0, 1.0] }, rates: { curl: 0.32 },
+    family: 'truck', drive: 'car', wheelbase: Z.wb, accel: 2.6, brake: 4.5, maxLat: 3.2, swing: false, limits: { curl: [0, 1.0] }, rates: { curl: 0.32 },
     apply(mm) {
       hinge.rotation.x = -mm.curl;
       mm.tailgate.rotation.x = Math.min(2.4, mm.curl * 2.4); // top-hinged gate swings up and out of the way

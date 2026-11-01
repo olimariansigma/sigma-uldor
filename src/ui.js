@@ -1,6 +1,6 @@
 // DOM HUD and panels (sandbox spawn menu, multiplayer, save slots, mixer, toasts).
 import * as THREE from 'three';
-import { MACHINES, controlsFor } from './machines.js';
+import { MACHINES, BASE_MACHINES, TRUCK_SIZES, truckVariants, controlsFor } from './machines.js';
 import { BUILDINGS } from './buildings.js';
 import { fmtKg, fmtL, KG } from './crusher.js';
 import { ic, iconize, fillIcons } from './icons.js';
@@ -20,8 +20,12 @@ export function machineInfo(sp) {
     const type = sp.under === 'robot' ? 'Demolition robot' : sp.under === 'spider' ? 'Walking excavator' : sp.under === 'wheels' ? (sp.cab === 'elevated' ? 'Wheeled material handler' : 'Wheeled excavator') : sp.under === 'pontoon' ? 'Amphibious excavator' : sp.boom === 'long' ? 'High-reach demolition' : sp.scale < 0.6 ? 'Mini excavator' : 'Crawler excavator';
     return { type, tool: TOOL[sp.attach] || 'Attachment', drive: UNDER[sp.under] || 'Tracks', tons: TONS[sp.id], speed: sp.speed };
   }
+  if (sp.family === 'truck') {
+    const z = TRUCK_SIZES[sp.size];
+    return { type: `${z.label} tipper truck · ${z.drive}`, tool: sp.toolName, drive: `${z.drive} · ${z.axles.length} axles`, tons: sp.tons, speed: sp.speed };
+  }
   const f = FAMILY[sp.family] || ['Machine', 'Tool', 'Tracks'];
-  return { type: sp.typeName || f[0], tool: sp.toolName || f[1], drive: f[2], tons: TONS[sp.id] ?? sp.tons, speed: sp.speed };
+  return { type: f[0], tool: f[1], drive: f[2], tons: TONS[sp.id] ?? sp.tons, speed: sp.speed };
 }
 
 export class UI {
@@ -82,12 +86,12 @@ export class UI {
       const head = document.createElement('div'); head.className = 'sect'; head.textContent = `Machines on site ${n} / 20 · tap one to inspect it in 3D`;
       body.appendChild(head);
       let lastFam = null, grid = null;
-      for (const sp of MACHINES) {
+      for (const sp of BASE_MACHINES) {
         const famOf = (x) => x.family === 'excavator' ? 'Excavators' : x.family === 'truck' ? 'Tipper trucks' : 'Road & site machines';
         const fam = famOf(sp);
         if (fam !== lastFam) {
           lastFam = fam;
-          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${MACHINES.filter((x) => famOf(x) === fam).length})`; body.appendChild(h);
+          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${BASE_MACHINES.filter((x) => famOf(x) === fam).length})`; body.appendChild(h);
           grid = document.createElement('div'); grid.className = 'cards'; body.appendChild(grid);
         }
         const info = machineInfo(sp);
@@ -395,8 +399,8 @@ export class UI {
     this.game.audio.click();
   }
   stepShowroom(d) {
-    const s = this.game.showroom, i = MACHINES.findIndex((m) => m.id === s.spec.id);
-    s.show(MACHINES[(i + d + MACHINES.length) % MACHINES.length].id);
+    const s = this.game.showroom, cur = s.spec.variantOf || s.spec.id, i = BASE_MACHINES.findIndex((m) => m.id === cur);
+    s.show(BASE_MACHINES[(i + d + BASE_MACHINES.length) % BASE_MACHINES.length].id);
     this.fillShowroom();
     this.game.audio.click();
   }
@@ -404,7 +408,15 @@ export class UI {
     const sp = this.game.showroom.spec, info = machineInfo(sp), g = this.game;
     $('srBrand').textContent = sp.brand; $('srModel').textContent = sp.model; $('srType').textContent = info.type;
     $('srDesc').textContent = sp.desc;
-    $('srCount').textContent = `${MACHINES.indexOf(sp) + 1} / ${MACHINES.length}`;
+    const base = sp.variantOf ? MACHINES.find((x) => x.id === sp.variantOf) : sp;
+    $('srCount').textContent = `${BASE_MACHINES.indexOf(base) + 1} / ${BASE_MACHINES.length}`;
+    // trucks: size picker (small 4x2 / medium 6x4 / big 8x4)
+    const sz = $('srSizes');
+    if (sp.family === 'truck') {
+      sz.classList.remove('hidden');
+      sz.innerHTML = truckVariants(sp.id).map((v) => `<button class="sr-size${v.id === sp.id ? ' on' : ''}" data-id="${v.id}"><b>${TRUCK_SIZES[v.size].label}</b><small>${TRUCK_SIZES[v.size].drive}</small></button>`).join('');
+      sz.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { this.game.showroom.show(b.dataset.id); this.fillShowroom(); this.game.audio.click(); }));
+    } else { sz.classList.add('hidden'); sz.innerHTML = ''; }
     $('srStats').innerHTML = [['Tool', info.tool], ['Drive', info.drive], ['Weight', info.tons + ' t'], ['Top speed', Math.round(sp.speed * 3.6) + ' km/h']]
       .map(([k, v]) => `<div class="sr-stat"><span>${k}</span><b>${v}</b></div>`).join('');
     const full = g.machines.size >= 20;

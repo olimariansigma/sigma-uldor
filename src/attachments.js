@@ -42,7 +42,7 @@ function rotator(K, A, r = 0.3, z = 0.66) {
 }
 
 /**
- * kind: grapple | bucket | bigbucket | minibucket | breaker | shear | orangepeel | pulverizer | tank | skip | claw | crusher
+ * kind: grapple | bucket | bigbucket | minibucket | breaker | shear | orangepeel | pulverizer | tank | skip | claw | crusher | brickclamp
  */
 export function buildAttachment(kind, K) {
   const A = new THREE.Group();
@@ -251,6 +251,47 @@ export function buildAttachment(kind, K) {
     out.behaviour = 'skip';
     out.bulk = { kinds: ['cement', 'dust', 'water'], capacity: 1200 };
     out.pieces = 0;
+  }
+  if (kind === 'brickclamp') {
+    // dedicated block grab: hydraulic rotator + parallel clamp. Two long padded jaws slide together on a
+    // guided cross-beam and squeeze a row of blocks (two long, two high). Blocks must be lined up with the
+    // jaws, and they slip out if the clamp is tilted or jerked (machineLogic: clamp()).
+    coupler(K, A, 0.44); rotator(K, A, 0.3, 0.62);
+    const R = new THREE.Group(); R.position.z = 0.74; A.add(R);
+    // slewing ring + motor housing
+    mesh(mergeG([cy(0.34, 0.34, 0.12, 32, 0, 0, 0.0, Math.PI / 2), rbox(0.5, 0.3, 0.22, 0.04, 0, 0.32, 0.02), boltCircle(V(0, 0, -0.065), 0.28, 16, V(0, 0, -1), 0.014)]), K.dark, R);
+    // main beam (box section with lightening holes faked by dark inserts), end caps and guide rails
+    const BL = 2.9;
+    mesh(mergeG([rbox(BL, 0.42, 0.3, 0.05, 0, 0, 0.2), rbox(0.6, 0.6, 0.12, 0.04, 0, 0, 0.06), rbox(0.08, 0.5, 0.36, 0.02, BL / 2 - 0.04, 0, 0.2), rbox(0.08, 0.5, 0.36, 0.02, -BL / 2 + 0.04, 0, 0.2)]), K.paint, R);
+    mesh(mergeG([...[-1, 1].map((x) => bx(0.07, 1.9, 0.07, x * 1.05, 0, 0.39)), ...[-0.7, 0, 0.7].map((x) => rbox(0.34, 0.26, 0.02, 0.03, x, 0, 0.051))]), K.steel, R);
+    mesh(mergeG([boltRow(V(-1.3, 0.21, 0.08), V(1.3, 0.21, 0.08), 14, V(0, 1, 0), 0.013, 0.012), boltRow(V(-1.3, -0.21, 0.08), V(1.3, -0.21, 0.08), 14, V(0, -1, 0), 0.013, 0.012)]), K.dark, R);
+    stick(R, 'warn', 0.2, 0, 0.215, 0.2, 0);
+    // hoses from the rotator to both clamp cylinders
+    mesh(mergeG([hose([[0.12, 0.2, -0.05], [0.4, 0.3, 0.05], [0.55, 0.18, 0.32]], 0.022, 12), hose([[-0.12, 0.2, -0.05], [-0.4, 0.3, 0.05], [-0.55, -0.18, 0.32]], 0.022, 12)]), K.black, R);
+    const jaw = (sgn) => {
+      const J = new THREE.Group(); J.position.set(0, sgn * 0.85, 0.35); R.add(J);
+      // carriage on the rails + vertical jaw plate with stiffening ribs, rubber pads on the inside face
+      mesh(mergeG([rbox(2.3, 0.22, 0.2, 0.04, 0, 0, 0), ...[-1, 1].map((x) => rbox(0.22, 0.12, 0.26, 0.03, x * 1.05, 0, -0.02))]), K.paint2, J);
+      mesh(mergeG([rbox(2.7, 0.07, 1.36, 0.02, 0, 0, 0.78), ...[-1.2, -0.6, 0, 0.6, 1.2].map((x) => rbox(0.06, 0.12, 1.2, 0.015, x, sgn * 0.08, 0.72)), rbox(2.7, 0.14, 0.08, 0.02, 0, sgn * 0.05, 1.44)]), K.paint, J);
+      mesh(mergeG([...[-0.9, -0.3, 0.3, 0.9].map((x) => rbox(0.5, 0.045, 1.1, 0.02, x, -sgn * 0.055, 0.8))]), K.rubber, J);
+      mesh(mergeG([boltRow(V(-1.25, sgn * 0.04, 0.2), V(1.25, sgn * 0.04, 0.2), 12, V(0, sgn, 0), 0.012, 0.012), boltRow(V(-1.25, sgn * 0.04, 1.36), V(1.25, sgn * 0.04, 1.36), 12, V(0, sgn, 0), 0.012, 0.012)]), K.dark, J);
+      // clamp cylinder from the beam centre to this carriage (rod stretches with the stroke)
+      mesh(mergeG([cy(0.075, 0.075, 0.42, 16, 0.5, sgn * 0.3, 0.36), cy(0.075, 0.075, 0.42, 16, -0.5, sgn * 0.3, 0.36)]), K.black, R);
+      const rod = mesh(mergeG([cy(0.036, 0.036, 1, 12, 0.5, 0.5, 0), cy(0.036, 0.036, 1, 12, -0.5, 0.5, 0)]), K.chrome, R, false);
+      rod.userData.keep = true; rod.position.z = 0.36;
+      return { J, rod, sgn };
+    };
+    const ja = jaw(1), jb = jaw(-1);
+    out.clampRods = [ja, jb];
+    out.jaws.push({ obj: ja.J, slide: true, sign: 1, closed: 0.33, openY: 0.85 }, { obj: jb.J, slide: true, sign: -1, closed: 0.33, openY: 0.85 });
+    out.rotor = R;
+    out.grab = point(R, 0, 0, 1.1);
+    out.clampFrame = point(R, 0, 0, 0);
+    out.grabR = 1.8;
+    out.colliders.push({ obj: R, boxes: [[0, 0, 0.2, BL, 0.45, 0.35]] }, { obj: ja.J, boxes: [[0, 0, 0.78, 2.7, 0.12, 1.3]] }, { obj: jb.J, boxes: [[0, 0, 0.78, 2.7, 0.12, 1.3]] });
+    out.cylAnchor = V(0, 0.3, 0.1);
+    out.behaviour = 'clamp';
+    out.pieces = 4;
   }
   if (!out.grab) out.grab = point(A, 0, 0, 1.2);
   return out;

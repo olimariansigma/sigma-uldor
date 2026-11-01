@@ -40,7 +40,24 @@ export function weathered(color, { rough = 0.45, metal = 0.12, clearcoat = 0.4, 
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.11, 0.1, 0.09), wChip * 0.85);
         float wSt = smoothstep(0.62, 1.0, wn(vec2((vWP.x + vWP.z) * 9.0, vWP.y * 0.7)));
         diffuseColor.rgb *= 1.0 - 0.14 * wSt * uWear;`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.96, wDirt);');
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.96, wDirt) + wSt * 0.08;')
+      // micro surface detail as a procedural bump: orange-peel paint, shallow dents, fine scratches and the
+      // bolt-hole pitting of worn steel. Uses screen-space derivatives, so it costs no geometry.
+      .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
+        {
+          vec3 P = vWP;
+          float hPeel = wn(P.xz * 70.0 + P.y * 53.0) * 0.5 + wn(P.xy * 61.0 - P.z * 47.0) * 0.5;
+          float hDent = wn(P.xz * 2.6 + P.y * 1.9) * wn(P.zy * 3.1 - P.x * 2.2);
+          float sc = wn(vec2(dot(P.xz, vec2(23.0, 41.0)) + P.y * 7.0, P.y * 0.9 + P.x * 0.3));
+          float hScr = smoothstep(0.93, 0.995, sc) * uWear;
+          float hgt = hPeel * 0.08 + hDent * 1.6 - hScr * 0.6 + wChip * 0.5;
+          vec3 dpx = dFdx(-vViewPosition), dpy = dFdy(-vViewPosition);
+          float dhx = dFdx(hgt), dhy = dFdy(hgt);
+          vec3 r1 = cross(dpy, normal), r2 = cross(normal, dpx);
+          float det = dot(dpx, r1);
+          vec3 grad = sign(det) * (dhx * r1 + dhy * r2);
+          normal = normalize(abs(det) * normal - grad * 0.012);
+        }`);
   };
   m.customProgramCacheKey = () => 'weathered' + (clearcoat > 0 ? 'p' : 's');
   return m;

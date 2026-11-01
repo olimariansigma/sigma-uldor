@@ -93,6 +93,7 @@ export class Showroom {
       if (m.spec.boom === 'long') { m.boom = cl(-1.05, 'boom'); m.stickA = cl(2.1, 'stick'); m.curl = cl(1.1, 'curl'); }
       else { m.boom = cl(-0.62, 'boom'); m.stickA = cl(1.85, 'stick'); m.curl = cl(1.35, 'curl'); }
       if (m.att && m.att.jaws && m.att.jaws.length) m.open = 0.6;
+      if (m.att && m.att.rotor) { m.boom = cl(-0.75, 'boom'); m.stickA = cl(1.6, 'stick'); m.levelClamp(); m.open = 1; }
     }
     if (m.family === 'loader') { m.boom = cl(0.15, 'boom'); m.curl = cl(0.4, 'curl'); }
   }

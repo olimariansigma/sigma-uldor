@@ -9,12 +9,12 @@ const $ = (id) => document.getElementById(id);
 const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings'];
 const hex = (c) => '#' + c.getHexString();
 const THUMB = (id) => `thumbs/m_${id}.webp`;
-const TOOL = { grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
+const TOOL = { brickclamp: 'Rotating brick clamp', grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
   breaker: 'Hydraulic breaker', orangepeel: 'Orange-peel grab', pulverizer: 'Pulverizer', tank: 'Water tank', skip: 'Concrete skip' };
 const FAMILY = { roller: ['Tandem roller', 'Twin vibrating drums', 'Articulated drums'], paver: ['Paver', 'Hopper + screed', 'Rubber tracks'], loader: ['Wheel loader', '3 m bucket', 'Articulated wheels'],
   dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'] };
 const UNDER = { steel: 'Steel tracks', rubber: 'Rubber tracks', wheels: 'Wheels + outriggers', pontoon: 'Floating pontoons', spider: 'Walking legs', robot: 'Remote tracks' };
-const TONS = { tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
+const TONS = { bg90: 24, tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
 export function machineInfo(sp) {
   if (sp.family === 'excavator') {
     const type = sp.under === 'robot' ? 'Demolition robot' : sp.under === 'spider' ? 'Walking excavator' : sp.under === 'wheels' ? 'Wheeled excavator' : sp.under === 'pontoon' ? 'Amphibious excavator' : sp.boom === 'long' ? 'High-reach demolition' : sp.scale < 0.6 ? 'Mini excavator' : 'Crawler excavator';
@@ -103,23 +103,21 @@ export class UI {
         }
       }
     } else if (this.tab === 'buildings') {
-      const plots = ['Plot A (centre)', 'Plot B (west)'];
+      const plots = ['Plot A (west)', 'Plot B (middle)', 'Plot C (east)'];
       const status = document.createElement('div'); status.className = 'sect';
-      status.textContent = plots.map((p, i) => `${p}: ${g.plotName(i)}`).join('   ·   ');
+      status.textContent = plots.map((p, i) => `${p}: ${g.plotName(i)}`).join(' · ');
       body.appendChild(status);
       const grid = document.createElement('div'); grid.className = 'cards';
       for (const b of BUILDINGS) {
         const c = document.createElement('div'); c.className = 'mcard';
         c.innerHTML = `<div class="shot photo"><img src="thumbs/b_${b.id}.jpg" alt="" loading="lazy" draggable="false"></div><div class="meta"><div class="model">${b.name}</div><div class="desc">${b.desc}</div></div>`;
         const row = document.createElement('div'); row.className = 'row';
-        row.appendChild(this.btn('Build on A', '', () => { g.act('spawnBuilding', { def: b.id, plot: 0 }); this.close('spawn'); }));
-        row.appendChild(this.btn('Build on B', 'alt', () => { g.act('spawnBuilding', { def: b.id, plot: 1 }); this.close('spawn'); }));
+        ['A', 'B', 'C'].forEach((n, i) => row.appendChild(this.btn(n, i === 1 ? 'alt' : '', () => { g.act('spawnBuilding', { def: b.id, plot: i }); this.close('spawn'); })));
         c.appendChild(row); grid.appendChild(c);
       }
       body.appendChild(grid);
       const row = document.createElement('div'); row.className = 'btn-row';
-      row.appendChild(this.btn('Clear plot A', 'red', () => g.act('clearPlot', { plot: 0 })));
-      row.appendChild(this.btn('Clear plot B', 'red', () => g.act('clearPlot', { plot: 1 })));
+      ['A', 'B', 'C'].forEach((n, i) => row.appendChild(this.btn('Clear plot ' + n, 'red', () => g.act('clearPlot', { plot: i }))));
       body.appendChild(row);
     } else {
       const s = g.settings;
@@ -298,7 +296,7 @@ export class UI {
       this.machineHint = ctl.hint;
       $('vhName').textContent = machine.spec.brand + ' ' + machine.spec.model;
       $('vhImg').src = THUMB(machine.spec.id);
-      $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher' }[machine.spec.attach]
+      $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher', brickclamp: 'Clamp' }[machine.spec.attach]
         || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
@@ -307,6 +305,7 @@ export class UI {
     if (touch) {
       $('tbtns-foot').classList.toggle('hidden', mode !== 'foot');
       $('tbtns-exc').classList.toggle('hidden', mode !== 'machine');
+      $('tbtns-rot').classList.toggle('hidden', mode !== 'machine' || !(machine && controlsFor(machine).rot));
       $('stickR').classList.toggle('hidden', mode !== 'machine' || $('stickR').classList.contains('nostick'));
       $('tbCam').classList.toggle('hidden', mode !== 'machine');
       $('stickLLabel').textContent = mode === 'machine' ? 'DRIVE' : 'MOVE';

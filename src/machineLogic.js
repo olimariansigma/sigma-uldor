@@ -13,34 +13,59 @@ export function machineInteract(m, dt, W) {
   const att = m.att, s = m.s;
   const active = m.driver >= 0 || m.hyd > 0.02 || Math.abs(m.speed) > 0.05 || m.family === 'crane';
 
-  // ---- 1. contact: any arm / attachment / blade / ball collider overlapping an intact block breaks it loose.
-  // (kinematic parts never collide with fixed blocks in the physics engine, so without this they'd ghost through walls)
+  // ---- 1. contact. Kinematic parts never collide with fixed blocks in the physics engine, so the machine
+  // stops at the wall (Machine.contactState) and the blocks it presses on or hits wear down here until they
+  // break loose. Heavier machines and faster hits break them sooner; bricks are sticky, so it takes a moment.
   if (active) {
-    for (const b of m.breakShapes) {
-      const { p, q } = m.shapePose(b);
+    const power = THREE.MathUtils.clamp((m.spec.tons || 20) / 20, 0.4, 3);
+    const press = Math.max(m.push || 0, Math.min(1, m.hyd));
+    m.prevBreak = m.prevBreak || [];
+    const fxT = (m.fxT = (m.fxT || 0) - dt) <= 0;
+    let anyHit = null;
+    const hitWith = (shape, p, q, dmgFor) => {
       const hits = [];
-      W.physics.world.intersectionsWithShape(p, q, b.shape, (c) => { const piece = demo.pieceFromCollider(c); if (piece && piece.state === INTACT) hits.push(piece); return hits.length < 10; }, RAPIER.QueryFilterFlags.ONLY_FIXED);
-      if (!hits.length) continue;
-      const ballV = m.family === 'crane' && m.ballSt ? m.ballSt.v.clone() : null;
+      W.physics.world.intersectionsWithShape(p, q, shape, (c) => { const piece = demo.pieceFromCollider(c); if (piece && piece.state === INTACT) hits.push(piece); return hits.length < 12; }, RAPIER.QueryFilterFlags.ONLY_FIXED);
       for (const piece of hits) {
-        const dir = ballV ? ballV.clone().clampLength(0, 8) : piece.pos.clone().sub(p).setY(0.3).normalize().multiplyScalar(2.5);
-        const mass = piece.size.x * piece.size.y * piece.size.z * piece.type.density;
-        demo.detach(piece, { x: dir.x * mass, y: dir.y * mass, z: dir.z * mass });
-        if (piece.type.sound === 'glass') sfx.glass(piece.pos);
+        const dmg = dmgFor(piece);
+        if (dmg <= 0) continue;
+        anyHit = piece;
+        if (wear(demo, piece, dmg / Math.max(1, Math.sqrt(hits.length) * 0.5), p, sfx)) {
+          const dir = m.family === 'crane' && m.ballSt ? m.ballSt.v.clone().clampLength(0, 6) : piece.pos.clone().sub(p).setY(0.25).normalize().multiplyScalar(1.8);
+          const mass = piece.body ? piece.body.mass() : piece.size.x * piece.size.y * piece.size.z * piece.type.density;
+          piece.body.applyImpulse({ x: dir.x * mass, y: dir.y * mass, z: dir.z * mass }, true);
+        }
       }
-      sfx.dust(hits[0].pos, demo.chipColor(hits[0]), 2 + hits.length, 0.8);
-      sfx.chips(hits[0].pos, new THREE.Vector3(), demo.chipColor(hits[0]), 3 + hits.length);
-      m.hitSnd = (m.hitSnd || 0) - dt;
-      if (m.hitSnd <= 0) { sfx.impact(hits[0].type.sound, Math.min(1, 0.4 + hits.length * 0.1), hits[0].pos); m.hitSnd = 0.12; }
-      m.hyd = 1;
-    }
-    // ---- 2. probes knock things over when swung fast (wider reach than the colliders)
-    m.probes.forEach((pr, i) => {
-      const now = pr.obj.getWorldPosition(new THREE.Vector3());
-      const vel = now.clone().sub(m.prevProbe[i]).divideScalar(Math.max(dt, 1e-3));
-      if (vel.length() > 0.35 && vel.length() < 40) demo.breakSphere(now, pr.r * s, vel.clone().clampLength(0, 4).multiplyScalar(0.8), 6);
-      m.prevProbe[i].copy(now);
+      return hits.length;
+    };
+    m.breakShapes.forEach((b, i) => {
+      const { p, q } = m.shapePose(b);
+      const pv = m.prevBreak[i], v = pv ? p.distanceTo(pv) / Math.max(dt, 1e-3) : 0;
+      m.prevBreak[i] = p.clone();
+      if (m.family === 'crane' && m.ballSt) {
+        const bs = m.ballSt.v.length();
+        const n = hitWith(b.outer, p, q, () => Math.max(0, bs - 1.0) * 1.4);
+        if (n && bs > 1) { m.ballSt.v.multiplyScalar(0.72); m.hyd = 1; }
+        return;
+      }
+      if (press < 0.02 && v < 0.05) return;
+      hitWith(b.outer, p, q, () => dt * power * (press * 3.5 + Math.min(v, 6) * 2.5));
     });
+    // driving the body / tracks / blade into a wall
+    if ((m.pushBody || 0) > 0.02 || Math.abs(m.speed) > 0.2) {
+      for (const b of m.blockShapes) {
+        const { p, q } = m.shapePose(b);
+        hitWith(b.outer, p, q, () => dt * power * (Math.max(m.pushBody || 0, Math.min(1, Math.abs(m.speed))) * 3.2));
+      }
+    }
+    if (anyHit && fxT) {
+      m.fxT = 0.09;
+      const c = demo.chipColor(anyHit);
+      sfx.chips(anyHit.pos, new THREE.Vector3(0, 1, 0), c, 3, 0.05, 2);
+      if (Math.random() < 0.5) sfx.dust(anyHit.pos, c, 1, 0.6, { alpha: 0.35 });
+      m.hitSnd = (m.hitSnd || 0) - 0.09;
+      if (m.hitSnd <= 0) { sfx.impact(anyHit.type.sound, 0.55, anyHit.pos); m.hitSnd = 0.35; }
+      m.hyd = Math.max(m.hyd, 0.6);
+    }
   }
 
   const gp = m.grabPoint.getWorldPosition(new THREE.Vector3());
@@ -59,12 +84,14 @@ export function machineInteract(m, dt, W) {
     if (beh !== 'skip' && att.pieces > 0) {
       const room = att.pieces - m.held.length;
       // scoop while the bucket is facing up or actively curling through the pile
-      if ((up || curlingIn) && room > 0 && (!m.payload.kg || beh === 'crusher')) scoop(m, demo, gp, Math.max(0.62, att.grabR * s * 1.15), room);
+      if ((up || curlingIn) && room > 0 && (!m.payload.kg || beh === 'crusher')) scoop(m, demo, gp, Math.max(0.95, att.grabR * s * 1.15), room);
       if (down && m.held.length) releaseAll(m, demo, dt);
     }
     if (beh === 'crusher') crushInBucket(m, dt, W);
     if (!down && n.y > -0.2 && !m.held.length && beh !== 'crusher') fillBulk(m, dt, mouth, W);
     if (down && m.payload.kg > 0) pourBulk(m, dt, att.spout ? att.spout.getWorldPosition(new THREE.Vector3()) : mouth, n, W);
+  } else if (beh === 'clamp') {
+    clampLogic(m, dt, W, gp);
   } else if (beh === 'breaker') {
     m.breakerActive = m.openTarget > 0.5;
     if (m.breakerActive) breaker(m, dt, W);
@@ -73,7 +100,7 @@ export function machineInteract(m, dt, W) {
   else if (beh === 'ball') wreckingBall(m, dt, W);
 
   // ---- held pieces follow the attachment
-  const am = m.attach.matrixWorld;
+  const am = m.holdFrame().matrixWorld;
   for (const h of m.held) {
     if (h.p.state !== HELD) continue;
     _m.multiplyMatrices(am, h.local); _m.decompose(_p, _q, _s);
@@ -83,6 +110,71 @@ export function machineInteract(m, dt, W) {
   m.lastGp = gp;
 }
 
+// ---- BG90 brick clamp: only blocks lined up between the jaws can be gripped; tilt or jerk and they slip out
+const _ax = new THREE.Vector3();
+function longAxis(p, out) {
+  const s = p.size; const k = s.x >= s.y && s.x >= s.z ? 0 : s.z >= s.y ? 2 : 1;
+  return out.set(k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0).applyQuaternion(p.quat);
+}
+function clampLogic(m, dt, W, gp) {
+  const att = m.att, demo = W.demo, R = att.rotor;
+  const prevOpen = m.cPrevOpen ?? m.open; m.cPrevOpen = m.open;
+  const rq = R.getWorldQuaternion(new THREE.Quaternion());
+  const down = new THREE.Vector3(0, 0, 1).applyQuaternion(rq), jaw = new THREE.Vector3(1, 0, 0).applyQuaternion(rq);
+  const tell = (msg) => { if ((m.tellT || 0) < performance.now()) { m.tellT = performance.now() + 2500; W.tellDriver(m, msg); } };
+  // closing on an empty clamp: pick up the aligned blocks between the jaws
+  if (m.openTarget < 0.5 && prevOpen > 0.35 && m.open <= 0.35 && !m.held.length) {
+    const inv = new THREE.Matrix4().copy(R.matrixWorld).invert();
+    const near = [...demo.piecesInSphere(gp, 2.6 * m.s, [LOOSE]), ...demo.intactNear(gp, 2.2 * m.s, 24).filter((p) => !p.up.some((q) => q.state === INTACT))];
+    const ok = [], bad = [];
+    for (const p of near) {
+      const lp = p.pos.clone().applyMatrix4(inv);
+      if (Math.abs(lp.y) > 0.5 || Math.abs(lp.x) > 1.45 || lp.z < 0.35 || lp.z > 1.95) continue;
+      if (Math.abs(longAxis(p, _ax).dot(jaw)) > 0.92) ok.push({ p, lp }); else bad.push(p);
+    }
+    if (down.y > -0.85) { if (ok.length || bad.length) tell('Keep the clamp level to grip (Z / X)'); }
+    else if (!ok.length) { if (bad.length) tell('Line the clamp up with the blocks first (rotate with T / Y)'); }
+    else {
+      ok.sort((a, b) => a.lp.lengthSq() - b.lp.lengthSq());
+      const s = 1 / m.s, q0 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+      for (const { p, lp } of ok.slice(0, att.pieces)) {
+        lp.y = 0; lp.z = THREE.MathUtils.clamp(lp.z, 0.75, 1.5);
+        const local = new THREE.Matrix4().compose(lp, q0, new THREE.Vector3(s, s, s));
+        if (demo.hold(p, m.id, local)) m.held.push({ p, local });
+      }
+      W.sfx.impact('metal', 0.7, gp);
+    }
+  }
+  if (m.held.length) {
+    // grip check: tilted clamp or jerky moves make blocks slide out
+    const v = m.lastGpC ? gp.clone().sub(m.lastGpC).divideScalar(Math.max(dt, 1e-3)) : new THREE.Vector3();
+    const acc = m.lastVC ? v.clone().sub(m.lastVC).length() / Math.max(dt, 1e-3) : 0;
+    m.accSm = (m.accSm || 0) + (acc - (m.accSm || 0)) * Math.min(1, dt * 8);
+    if (down.y > -0.72) { releaseAll(m, demo, dt); tell('The clamp tipped over and the blocks slid out!'); }
+    else if ((m.accSm > 13 || v.length() > 7.5) && (m.slipT || 0) < performance.now()) {
+      m.slipT = performance.now() + 450;
+      const h = m.held.pop(); demo.release(h.p, v.clone().clampLength(0, 4));
+      tell('Too jerky! A block slipped out of the clamp');
+    }
+    m.lastVC = v;
+  } else { m.lastVC = null; m.accSm = 0; }
+  m.lastGpC = gp.clone();
+  if (m.openTarget > 0.5 && m.held.length && m.open > 0.45) releaseAll(m, demo, dt);
+}
+
+// grind an intact block down; returns true when it breaks loose
+function wear(demo, p, dmg, at, sfx) {
+  if (p.state !== INTACT) return false;
+  p.hp -= dmg;
+  if (p.hp <= 0) {
+    demo.detach(p);
+    if (p.type.sound === 'glass') sfx.glass(p.pos);
+    return true;
+  }
+  demo.tintDamage(p);
+  return false;
+}
+
 function grab(m, demo, gp, sfx, capScale) {
   const room = Math.round(m.att.pieces * capScale) - m.held.length;
   if (room <= 0) return;
@@ -90,8 +182,8 @@ function grab(m, demo, gp, sfx, capScale) {
   const cand = demo.piecesInSphere(gp, 1.4 * s, [LOOSE]);
   const intact = demo.intactNear(gp, 0.85 * s, 12);
   const all = [...cand, ...intact].sort((a, b) => a.pos.distanceToSquared(gp) - b.pos.distanceToSquared(gp)).slice(0, room);
-  const inv = new THREE.Matrix4().copy(m.attach.matrixWorld).invert();
-  const gl = m.attach.worldToLocal(gp.clone());
+  const inv = new THREE.Matrix4().copy(m.holdFrame().matrixWorld).invert();
+  const gl = m.holdFrame().worldToLocal(gp.clone());
   for (const p of all) {
     const pm = new THREE.Matrix4().compose(p.pos, p.quat, new THREE.Vector3(1, 1, 1));
     const local = new THREE.Matrix4().multiplyMatrices(inv, pm);

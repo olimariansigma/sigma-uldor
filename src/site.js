@@ -4,16 +4,19 @@ import * as THREE from 'three';
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 
 export const SITE = {
-  lotMin: new THREE.Vector2(-40, -36), lotMax: new THREE.Vector2(40, 24),
+  lotMin: new THREE.Vector2(-114, -136), lotMax: new THREE.Vector2(100, 24),
   gate: [8, 26],              // opening in the front fence (x range)
   streetZ: 30.5,              // kerb line of the street
-  plots: [V(-4, 0, -14), V(-27, 0, -18)],
+  // three big demolition plots along the back of the yard (buildings are built at buildScale)
+  plots: [V(-70, 0, -88), V(-6, 0, -88), V(60, 0, -90)],
+  plotNames: ['A', 'B', 'C'],
+  buildScale: 3,
   crusherPos: V(14, 0, -2), crusherRot: 0,
   mixerPos: V(25, 0, 13),
   lake: { cx: 33.5, cz: -4, rx: 5.6, rz: 8.2, water: -0.45, depth: 2.6 },
-  playerSpawn: V(4, 0.2, 10),
+  playerSpawn: V(-2, 0.2, -30),
   machineYard: V(-26, 0, 6),
-  terrainSize: 200,
+  terrainSize: 320, terrainSeg: 160,
 };
 
 // terrain height (0 everywhere except the lake bowl)

@@ -28,8 +28,11 @@ export class Demolition {
   }
 
   // ---------------------------------------------------------------- buildings
-  addBuilding(def, plot, specs, groundY) {
-    const b = { id: this.buildings.length, def, plot, start: this.pieces.length, count: specs.length, meshes: [], groundY, removed: false };
+  // scale: buildings are authored at 1:1 and built bigger; every non-unit piece (blocks, windows, props) is
+  // scaled with them, weight follows volume and big blocks are tougher
+  addBuilding(def, plot, specs, groundY, scale = 1) {
+    const b = { id: this.buildings.length, def, plot, start: this.pieces.length, count: specs.length, meshes: [], groundY, removed: false, scale };
+    const hpMul = scale > 1 ? 2 : 1;
     this.buildings.push(b);
     const counts = new Map();
     for (const s of specs) counts.set(s.type, (counts.get(s.type) || 0) + 1);
@@ -51,12 +54,13 @@ export class Demolition {
     for (const s of specs) {
       const t = this.types.get(s.type);
       const entry = entries.get(s.type);
-      const size = t.unit ? s.size.clone() : t.size.clone();
+      const k = t.unit ? 1 : scale;
+      const size = t.unit ? s.size.clone() : t.size.clone().multiplyScalar(k);
       const color = s.color ? s.color.clone() : null;
-      const kg = t.kg || Math.max(1, Math.round(size.x * size.y * size.z * (t.kgm3 || 1000)));
+      const kg = t.kg ? Math.round(t.kg * k * k * k) : Math.max(1, Math.round(size.x * size.y * size.z * (t.kgm3 || 1000)));
       const p = {
-        id: this.pieces.length, b: b.id, type: t, size, pos: s.pos.clone(), quat: s.quat ? s.quat.clone() : new THREE.Quaternion(),
-        color, kg, state: INTACT, hp: t.hp, idx: entry.next++, parts: entry.parts, collider: null, body: null,
+        id: this.pieces.length, b: b.id, type: t, size, k, pos: s.pos.clone(), quat: s.quat ? s.quat.clone() : new THREE.Quaternion(),
+        color, kg, state: INTACT, hp: t.hp * hpMul, maxHp: t.hp * hpMul, idx: entry.next++, parts: entry.parts, collider: null, body: null,
         up: [], down: [], side: [], holder: -1, holdLocal: null, target: null, sent: null,
       };
       if (t.tint) for (const im of p.parts) im.setColorAt(p.idx, color || _c.setScalar(1));
@@ -93,7 +97,7 @@ export class Demolition {
   chipColor(p) { return p.color ? p.color.getHex() : p.type.chip; }
 
   writeMatrix(p, scale = 1) {
-    _s.copy(p.type.unit ? p.size : ONE).multiplyScalar(scale);
+    _s.copy(p.type.unit ? p.size : ONE).multiplyScalar(scale * (p.k || 1));
     _m.compose(p.pos, p.quat, _s);
     for (const im of p.parts) im.setMatrixAt(p.idx, _m);
   }
@@ -116,7 +120,7 @@ export class Demolition {
   }
 
   computeAdjacency(b) {
-    const eps = 0.02, cell = 1.2;
+    const eps = 0.02, cell = 1.2 * (b.scale || 1);
     const grid = new Map();
     const list = this.pieces.slice(b.start, b.start + b.count);
     const boxes = list.map((p) => this.aabb(p));
@@ -148,6 +152,8 @@ export class Demolition {
   // hanging costs metres / (how far that piece type can cantilever). Anything whose total exceeds 1 falls.
   recompute(b) {
     const n = b.count, s0 = b.start;
+    // big buildings: spans scale with the building, and bricks bond harder (STICK) so walls hold bigger holes
+    const S = b.scale || 1, reach = S * (S > 1 ? 1.8 : 1);
     const dist = new Float64Array(n).fill(1e9);
     const heap = new MinHeap();
     for (let i = 0; i < n; i++) {
@@ -160,13 +166,13 @@ export class Demolition {
       const p = this.pieces[s0 + i];
       const relax = (q, metres) => {
         if (q.state !== INTACT) return;
-        const nd = d + metres / q.type.hang, qi = q.id - s0;
+        const nd = d + metres / (q.type.hang * reach), qi = q.id - s0;
         if (nd < dist[qi] && nd <= 1) { dist[qi] = nd; heap.push(qi, nd); }
       };
       const span = (q) => Math.hypot(q.cx - p.cx, q.cz - p.cz) * Math.max(p.type.stiff || 1, q.type.stiff || 1);
       for (const q of p.up) relax(q, 0);
-      for (const q of p.side) relax(q, span(q) + 0.05);
-      for (const q of p.down) relax(q, span(q) + 0.3);
+      for (const q of p.side) relax(q, span(q) + 0.05 * S);
+      for (const q of p.down) relax(q, span(q) + 0.3 * S);
     }
     let fell = 0; const at = new THREE.Vector3();
     for (let i = 0; i < n; i++) {
@@ -224,10 +230,7 @@ export class Demolition {
         if (p.type.sound === 'glass') this.sfx.glass(p.pos);
         return true;
       }
-      if (p.type.tint) {
-        const f = 0.55 + 0.45 * (p.hp / p.type.hp);
-        for (const im of p.parts) { im.setColorAt(p.idx, _c.copy(p.color).multiplyScalar(f)); im.instanceColor.needsUpdate = true; }
-      }
+      this.tintDamage(p);
       return false;
     } else if (p.state === LOOSE && p.body) {
       const m = p.body.mass();
@@ -236,6 +239,13 @@ export class Demolition {
       return true;
     }
     return false;
+  }
+
+  // cracked blocks get darker as they lose hit points
+  tintDamage(p) {
+    if (!p.type.tint) return;
+    const f = 0.55 + 0.45 * Math.max(0, p.hp / p.maxHp);
+    for (const im of p.parts) { im.setColorAt(p.idx, _c.copy(p.color).multiplyScalar(f)); im.instanceColor.needsUpdate = true; }
   }
 
   breakSphere(center, radius, push, maxCount = 12) {
@@ -416,7 +426,7 @@ export class Demolition {
     const states = [], hp = [], xf = {}, holders = {};
     for (const p of this.pieces) {
       states.push(p.state);
-      hp.push(p.hp === p.type.hp ? 0 : Math.round(p.hp * 10) / 10);
+      hp.push(p.hp === p.maxHp ? 0 : Math.round(p.hp * 10) / 10);
       if (p.state === LOOSE || p.state === HELD || p.state === CARRIED) xf[p.id] = [...p.pos.toArray(), ...p.quat.toArray()].map((v) => Math.round(v * 1e4) / 1e4);
       if (p.state === HELD || p.state === CARRIED) holders[p.id] = [p.holder, p.holdLocal ? p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) : null];
     }

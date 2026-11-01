@@ -1,23 +1,23 @@
 # Wrecking Yard
 
-A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 20 machines to spawn (14 excavators and 6 road and site machines) and cross-play multiplayer between PC and phones.
+A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 21 machines to spawn (15 excavators and 6 road and site machines) and cross-play multiplayer between PC and phones.
 
 ## Download
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | [`release/WreckingYard-3.1.0-Windows.exe`](release/WreckingYard-3.1.0-Windows.exe): portable, no install |
-| Android 7.0+ | [`release/WreckingYard-3.1.0-Android.apk`](release/WreckingYard-3.1.0-Android.apk): installs over older versions, saves are kept |
+| Windows 10/11 (64-bit) | [`release/WreckingYard-3.2.0-Windows.exe`](release/WreckingYard-3.2.0-Windows.exe): portable, no install |
+| Android 7.0+ | [`release/WreckingYard-3.2.0-Android.apk`](release/WreckingYard-3.2.0-Android.apk): installs over older versions, saves are kept |
 
 The Windows exe is not code-signed, so SmartScreen may warn you the first time. Click **More info → Run anyway**. On Android, allow "install unknown apps" for your browser or file manager.
 
 ## What's in it
 
-* **Cinder-block buildings.** Every hollow two-core block is its own physics object and has its own paint colour. Cut the bottom out of a wall and the structural solver brings down whatever is no longer supported. There are five buildings (Cinder Bungalow, Rainbow House, Block Warehouse, Pixel Tower, Colour Wall) on two plots, and you can rebuild them at any time.
-* **Realistic crushing.** Blocks dropped in the hopper are crushed, and the material rides the conveyor in the block's own colour. It falls off the head drum and builds a layered stockpile: the oldest dust is at the bottom, the newest on top. The total kg and the colour mix are shown on screen.
+* **Big cinder-block buildings.** Every hollow two-core block (1.2 m long, 459 kg) is its own physics object with its own paint colour. Houses are built three times bigger than before, on three large plots: by default a bungalow, a colour wall and a block warehouse. Cut the bottom out of a wall and the structural solver brings down whatever is no longer supported, but the mortar is strong, so walls hold surprisingly big holes. There are five buildings (Cinder Bungalow, Rainbow House, Block Warehouse, Pixel Tower, Colour Wall) and you can rebuild any of them on any plot.
+* **Realistic crushing.** Blocks dropped in the hopper are crushed, and the material rides the conveyor in the block's own colour. It falls off the head drum and builds a layered stockpile: the oldest dust is at the bottom, the newest on top. The total kg and the colour mix are shown on screen, and the pile is as big as the blocks you crushed (loose dust weighs about 1 tonne per cubic metre).
 * **Cement.** Put dust and water in the pan mixer. Each colour you pour in swirls around the tub, and the paddles blend them into one cement colour. The right ratio is about 1 L of water per 3 kg of dust.
 * **Road repair.** Pour cement into the potholes, or load the paver and drive over them. Each patch takes the cement's colour and dries over time. Then roll it with the tandem roller to compact it to a perfect finish (⭐ on the HUD). The breaker excavator can make new potholes.
-* **20 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders.
+* **21 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders.
   * Excavators:
     * TORVA TX330 (rotating sorting grapple)
     * KESTREL K35 mini on rubber tracks (zero tail, canopy, swing-post boom)
@@ -27,6 +27,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * BRUNO BX220 (hydraulic breaker)
     * HALDEN MH24 material handler (raised cab, orange-peel grab)
     * HALDEN WH75 wheeled log-claw excavator (black boom, blade, outriggers)
+    * TORVA BG90 brick grabber: a rotating parallel clamp that lifts two rows of blocks. It is deliberately hard to drive: line the clamp up with the blocks (T / Y), keep it level, and move smoothly or the blocks slip out. Its hydraulics are heavy and keep moving after you let go.
     * AQUAMOLE AMX amphibious with a water tank (it floats in the lake)
     * GRANITE GP300 (pulverizer)
     * GRANITE GX250 crusher bucket (turns blocks into dust inside the bucket)
@@ -40,8 +41,8 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * TORVA DZ80 bulldozer with ripper
     * KESTREL TD6 tracked dumper with a slewing, tipping skip
     * VANTOR CC250 crawler crane with a wrecking ball
-* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 20 with the arrows, then press **Spawn**.
-* **Solid machines.** Arms, buckets, blades and the wrecking ball knock out any block they touch instead of passing through walls. Buckets scoop loose rubble, and machines can drive up onto building foundations.
+* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 21 with the arrows, then press **Spawn**.
+* **Solid machines.** Machines stop at walls instead of passing through them. Keep driving or pressing the arm, blade or bucket against a wall and the blocks it touches crack (they darken) and break loose; heavy machines and fast hits break them sooner. Arms and buckets can't sink into the ground.
 * **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device.
 * **Save slots.** There are five save slots plus an autosave. A save contains every block, machine, the dust pile, the mixer and the road.
 
@@ -53,7 +54,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 | Hammer | Left click | 🔨 |
 | Pick up / throw | Q or right click / G | ✋ / 🧱 |
 | Use (drive, bucket, mixer, pothole) | E | context button |
-| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump, Click/Space tool, C cab camera (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
+| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump, T Y rotate clamp (BG90), Click/Space tool, C cab camera (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
 | Menus | B spawn, M online, H help | top-right buttons |
 
 ## Building from source

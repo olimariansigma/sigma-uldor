@@ -85,7 +85,7 @@ class Game {
     this.mixer = new Mixer(this.scene, this.physics, this.M, SITE.mixerPos);
     this.road = new Road(this.scene);
     this.machines = new Map(); this.nextMachineId = 1;
-    this.plots = [null, null]; this.buildingStatics = new Map(); this.groundHandles = new Set();
+    this.plots = SITE.plots.map(() => null); this.buildingStatics = new Map(); this.groundHandles = new Set();
     this.settings = { hammer: this.prefs.hammer, carry: this.prefs.carry, crusher: 3, grapple: 1 };
     this.net = new Net(); this.setupNet();
     this.myId = 0; this.myName = this.prefs.name || 'Player' + Math.floor(Math.random() * 900 + 100);
@@ -122,9 +122,9 @@ class Game {
     const loop = (t) => {
       if (!this.titleLive) return;
       requestAnimationFrame(loop);
-      const k = (t - t0) / 1000, a = 2.2 + k * 0.035;
-      this.camera.position.set(2 + Math.sin(a) * 27, 7.5 + Math.sin(k * 0.13) * 1.8, -7 + Math.cos(a) * 27);
-      this.camera.lookAt(0, 2.2, -8);
+      const k = (t - t0) / 1000, a = 0.35 + Math.sin(k * 0.03) * 0.55;
+      this.camera.position.set(-6 + Math.sin(a) * 62, 13 + Math.sin(k * 0.11) * 3, -84 + Math.cos(a) * 62);
+      this.camera.lookAt(-8, 5, -84);
       for (const m of this.machines.values()) m.idle(1 / 60, false);
       this.renderer.render(this.scene, this.camera);
     };
@@ -147,7 +147,7 @@ class Game {
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
-        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to bring in any of 10 excavators or new buildings', false, 6000), 6200);
+        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 21 machines or new buildings', false, 6000), 6200);
         setTimeout(() => this.ui.toast('🌐 <b>Multiplayer</b>: host a game and share the code with friends', true, 6000), 12500);
         this.prefs.seenTips = true; this.savePrefs();
       }
@@ -248,11 +248,15 @@ class Game {
   // ======================================================================= world construction
   buildBuilding(defId, plot) {
     const def = BUILDINGS.find((b) => b.id === defId);
-    const at = SITE.plots[plot];
-    const b = def.build(this.types, this.M, { x: at.x, z: at.z });
-    const bld = this.demo.addBuilding(defId, plot, b.specs, 0.15);
+    const at = SITE.plots[plot], S = SITE.buildScale || 1;
+    // authored at 1:1 around the origin, then built S times bigger on the plot
+    const b = def.build(this.types, this.M, { x: 0, z: 0 });
+    const off = new THREE.Vector3(at.x, 0, at.z);
+    for (const sp of b.specs) { sp.pos.multiplyScalar(S).add(off); sp.size.multiplyScalar(S); }
+    for (const st of b.statics) { st.pos.multiplyScalar(S).add(off); st.size.multiplyScalar(S); }
+    const bld = this.demo.addBuilding(defId, plot, b.specs, 0.15 * S, S);
     const group = new THREE.Group();
-    for (const d of b.decor) { const m = new THREE.Mesh(d.geo, d.mat); m.castShadow = true; m.receiveShadow = true; group.add(m); }
+    for (const d of b.decor) { const m = new THREE.Mesh(d.geo, d.mat); m.scale.setScalar(S); m.position.copy(off); m.castShadow = true; m.receiveShadow = true; group.add(m); }
     this.scene.add(group);
     const body = this.physics.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     const handles = [], rects = [];
@@ -287,6 +291,7 @@ class Game {
       scene: this.scene, physics: this.physics, M: this.M, terrainCollider: terrain,
       groundAt: (x, z) => g.groundAt(x, z),
       isGround: (c) => c.handle === terrain.handle || g.groundHandles.has(c.handle),
+      isPiece: (c) => g.demo.byCollider.has(c.handle),
     };
     return this._mctx;
   }
@@ -330,12 +335,15 @@ class Game {
     this.clearWorld();
     this.buildBuilding('bungalow', 0);
     this.buildBuilding('wall', 1);
+    this.buildBuilding('warehouse', 2);
     this.road.defaultHoles();
     const add = (spec, x, z, yaw) => { const m = this.createMachine(spec, this.nextMachineId, new THREE.Vector3(x, 0, z), yaw); return m; };
-    add('tx330', -20, 6, Math.PI);
+    add('tx330', -62, -52, Math.PI);
+    add('bg90', -14, -54, Math.PI);
+    add('hr450', 52, -55, Math.PI);
+    add('wh75', -36, -20, Math.PI);
     add('amx', 27, -14, Math.PI / 2);
     add('lc200', 18, 14, -Math.PI / 2);
-    add('wh75', -9, 5, Math.PI);
     add('cr64', 4, 21, Math.PI / 2);
     this.player.teleport(this.spawnPoint());
   }
@@ -345,7 +353,7 @@ class Game {
     for (const bid of [...this.buildingStatics.keys()]) { const st = this.buildingStatics.get(bid); this.scene.remove(st.group); this.physics.world.removeRigidBody(st.body); }
     this.buildingStatics.clear(); this.groundHandles.clear();
     this.demo.clearAll();
-    this.plots = [null, null];
+    this.plots = SITE.plots.map(() => null);
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
     this.mixer.empty();
     this.road.restore([]);
@@ -356,7 +364,7 @@ class Game {
 
   serializeWorld(forSave = false) {
     return {
-      v: 2,
+      v: 3,
       buildings: this.demo.buildings.map((b) => ({ def: b.def, plot: b.plot, removed: b.removed })),
       plots: this.plots,
       pieces: this.demo.serializePieces(),
@@ -372,12 +380,17 @@ class Game {
     if (this.driving) this.exitLocal(true);
     this.clearWorld();
     this.demo.authority = !mirror;
-    for (const b of w.buildings) {
-      const bld = this.buildBuilding(b.def, b.plot);
-      if (b.removed) this.removeBuildingFull(bld.id);
+    // saves from before v3.2 used small buildings on other plots: keep everything else, rebuild the plots fresh
+    const legacy = !w.v || w.v < 3;
+    if (legacy) { this.buildBuilding('bungalow', 0); this.buildBuilding('wall', 1); this.buildBuilding('warehouse', 2); }
+    else {
+      for (const b of w.buildings) {
+        const bld = this.buildBuilding(b.def, b.plot);
+        if (b.removed) this.removeBuildingFull(bld.id);
+      }
+      this.plots = w.plots.slice();
+      this.demo.restorePieces(w.pieces, forSave);
     }
-    this.plots = w.plots.slice();
-    this.demo.restorePieces(w.pieces, forSave);
     for (const s of w.machines) {
       const m = this.createMachine(s.spec, s.id, new THREE.Vector3(s.pose[0], 0, s.pose[1]), s.pose[2]);
       m.restorePose(s.pose);
@@ -853,7 +866,7 @@ class Game {
       pl.driving = a[i + 8];
     }
     const nm = a[i++];
-    for (let k = 0; k < nm; k++, i += 11) {
+    for (let k = 0; k < nm; k++, i += 14) {
       const m = this.machines.get(a[i]);
       if (!m || m === this.driving) continue;
       m.applyPose(a, i);
@@ -1016,6 +1029,7 @@ class Game {
         swing: clamp(-input.armX, -1, 1), boom: clamp(-input.armY, -1, 1),
         stick: (input.held('stickIn') ? 1 : 0) - (input.held('stickOut') ? 1 : 0),
         curl: (input.held('curlIn') ? 1 : 0) - (input.held('curlOut') ? 1 : 0),
+        rot: (input.held('rotR') ? 1 : 0) - (input.held('rotL') ? 1 : 0),
         grabToggle: input.pressed('grab'),
       };
       m.drive(dt, ctl, machList);
@@ -1057,7 +1071,7 @@ class Game {
       this.crusher.update(dt, this.demo, this.fx, this.audio, null);
       for (const p of this.demo.pieces) if (p.state === HELD && p.holdLocal) {
         const m = this.machines.get(p.holder); if (!m) continue;
-        const mw = new THREE.Matrix4().multiplyMatrices(m.attach.matrixWorld, p.holdLocal);
+        const mw = new THREE.Matrix4().multiplyMatrices(m.holdFrame().matrixWorld, p.holdLocal);
         const pos = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(); mw.decompose(pos, q, s);
         this.demo.placeCarried(p, pos, q, 1);
       }

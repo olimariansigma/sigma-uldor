@@ -23,10 +23,15 @@ export function buildExcavator(m) {
   const lim = sp.boom === 'long' ? { boom: [-1.5, 0.35], stick: [0.35, 2.7], curl: [-0.9, 1.9] } : sp.boom === 'straight' ? { boom: [-1.32, 0.5], stick: [0.3, 2.6], curl: [-0.9, 2.0] } : { boom: [-1.25, 0.62], stick: [0.25, 2.55], curl: [-1.0, 2.1] };
   m.rig = {
     family: 'excavator', drive: sp.under === 'wheels' || sp.under === 'spider' ? 'car' : 'tank', swing: true,
-    limits: { swing: null, ...lim }, rates: { swing: 0.7, boom: 0.5, stick: 0.7, curl: 1.1 },
+    limits: { swing: null, ...lim, ...(sp.attach === 'brickclamp' ? { rot: null } : {}) }, rates: { swing: 0.7, boom: 0.5, stick: 0.7, curl: 1.1, rot: 0.75 },
     apply(mm) {
       mm.upper.rotation.y = mm.swing; mm.boomG.rotation.x = mm.boom; mm.stickG.rotation.x = mm.stickA; mm.attach.rotation.x = mm.curl;
-      for (const j of mm.att.jaws) { const a = j.sign * (mm.open * j.max - 0.08); if (j.axis === 'y') j.obj.rotation.y = a; else j.obj.rotation.x = a; }
+      for (const j of mm.att.jaws) {
+        if (j.slide) { j.obj.position.y = j.sign * (j.closed + (j.openY - j.closed) * mm.open); continue; }
+        const a = j.sign * (mm.open * j.max - 0.08); if (j.axis === 'y') j.obj.rotation.y = a; else j.obj.rotation.x = a;
+      }
+      if (mm.att.rotor) mm.att.rotor.rotation.z = mm.rot || 0;
+      if (mm.att.clampRods) for (const c of mm.att.clampRods) { c.rod.position.y = c.sgn * 0.51; c.rod.scale.y = c.sgn * Math.max(0.05, Math.abs(c.J.position.y) - 0.51); }
       if (mm.tiltPivot) mm.tiltPivot.rotation.x = Math.max(-0.5, Math.min(0, mm.boom * 0.45));
       for (const w of mm.steerWheels) w.rotation.y = mm.steerVis;
       if (mm.att.crushJaw) mm.att.crushJaw.rotation.x = mm.crushing ? Math.sin(performance.now() * 0.03) * 0.12 : 0;
@@ -320,8 +325,13 @@ function cab(m) {
     const roof = new THREE.Shape(); roof.moveTo(-cw2 / 2 - 0.03, zb - 0.03); roof.lineTo(cw2 / 2 + 0.03, zb - 0.03); roof.lineTo(cw2 / 2 + 0.03, zf + 0.06); roof.lineTo(-cw2 / 2 - 0.03, zf + 0.06); roof.closePath();
     const rg = new THREE.ExtrudeGeometry(roof, { depth: 0.07, bevelEnabled: true, bevelSize: 0.035, bevelThickness: 0.035, bevelSegments: 3 });
     rg.rotateX(Math.PI / 2); rg.translate(0, ch + 0.07, 0);
-    add(shell, rg, sp.cab === 'elevated' || sp.paintCab ? K.paint : K.black);
+    add(shell, rg, K.paint);
     add(shell, mergeG([rbox(0.5, 0.03, 0.5, 0.01, -0.1, ch + 0.11, 0.0)]), K.glass, false); // roof hatch
+    // LED light bar on the roof edge, tinted sun visor over the windscreen, radio antenna and beacon base
+    add(shell, mergeG([rbox(0.72, 0.075, 0.1, 0.025, 0, ch + 0.2, zf - 0.04), bx(0.05, 0.08, 0.05, -0.3, ch + 0.15, zf - 0.04), bx(0.05, 0.08, 0.05, 0.3, ch + 0.15, zf - 0.04),
+      cy(0.006, 0.006, 0.62, 6, -cw2 / 2 + 0.08, ch + 0.42, zb + 0.12), cy(0.022, 0.026, 0.05, 10, -cw2 / 2 + 0.08, ch + 0.13, zb + 0.12)]), K.black);
+    add(shell, mergeG([0, 1, 2, 3].map((i) => bx(0.13, 0.045, 0.012, -0.24 + i * 0.16, ch + 0.2, zf + 0.012))), K.lens, false);
+    { const v = bx(cw2 - 0.04, 0.012, 0.24, 0, 0, 0); v.rotateX(-0.18); v.translate(0, ch + 0.02, zf + 0.1); add(shell, v, K.glass, false); }
     // pillars (rounded tubes) + window frames / rubber seals
     const fr = [];
     for (const s of [-1, 1]) {

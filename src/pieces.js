@@ -128,6 +128,31 @@ export class TypeRegistry {
       for (let i = 0; i < 6; i++) p.push(box(0.55, 0.14, 0.42, (i % 2 ? 0.29 : -0.29), -0.24 + Math.floor(i / 2) * 0.15, -0.27, 0xd4c9b6));
       return merge(p);
     }, 'wood');
+    // ---- exterior details: outdoor AC unit, electricity meter box, wall lamp, rainwater downpipe
+    this.prop('aircon', [0.85, 0.62, 0.32], 20, () => {
+      const p = [box(0.85, 0.62, 0.3, 0, 0, 0, 0xe9e9e4), box(0.86, 0.04, 0.31, 0, 0.3, 0, 0xd2d2cc), box(0.86, 0.04, 0.31, 0, -0.3, 0, 0xc4c4be)];
+      p.push(cyl(0.22, 0.22, 0.02, 24, -0.12, 0, 0.151, 0x2a2c2f, Math.PI / 2), cyl(0.05, 0.05, 0.03, 12, -0.12, 0, 0.16, 0x9a9da2, Math.PI / 2));
+      for (let i = 0; i < 5; i++) p.push(box(0.46, 0.012, 0.012, -0.12, -0.19 + i * 0.095, 0.165, 0x55585c));
+      for (let i = 0; i < 9; i++) p.push(box(0.012, 0.5, 0.012, 0.2 + i * 0.022, 0, 0.152, 0xb9bab5));
+      p.push(box(0.1, 0.06, 0.25, 0.37, -0.34, 0, 0x6a6c70), box(0.1, 0.06, 0.25, -0.37, -0.34, 0, 0x6a6c70));
+      p.push(cyl(0.012, 0.012, 0.4, 8, 0.43, 0.05, -0.1, 0x9a7a40, 0, 0, Math.PI / 2), cyl(0.012, 0.012, 0.4, 8, 0.43, -0.02, -0.1, 0x5a5a5a, 0, 0, Math.PI / 2));
+      return merge(p);
+    }, 'metal');
+    this.prop('meter', [0.36, 0.5, 0.16], 6, () => merge([
+      box(0.36, 0.5, 0.15, 0, 0, 0, 0x9aa0a4), box(0.37, 0.03, 0.16, 0, 0.255, 0, 0x7f868b), box(0.22, 0.14, 0.01, 0, 0.08, 0.076, 0x1d2830),
+      box(0.18, 0.06, 0.01, 0, 0.08, 0.081, 0xc8d6c0), box(0.04, 0.04, 0.02, 0.12, -0.15, 0.08, 0x333333), box(0.3, 0.02, 0.01, 0, -0.2, 0.076, 0xd8b020),
+      cyl(0.02, 0.02, 0.4, 8, -0.1, -0.45, -0.02, 0x333333),
+    ]), 'metal');
+    this.prop('walllamp', [0.2, 0.32, 0.22], 4, () => merge([
+      box(0.14, 0.2, 0.03, 0, 0, -0.095, 0x1b1c1e), box(0.04, 0.04, 0.14, 0, 0.04, -0.02, 0x1b1c1e),
+      box(0.16, 0.2, 0.16, 0, -0.03, 0.04, 0x232427), box(0.13, 0.15, 0.13, 0, -0.03, 0.04, 0xfff1c4), box(0.2, 0.04, 0.2, 0, 0.09, 0.04, 0x1b1c1e),
+    ]), 'metal');
+    this.prop('downpipe', [0.12, 2.6, 0.14], 3, () => {
+      const p = [cyl(0.045, 0.045, 2.45, 12, 0, 0.05, 0, 0x8e9499)];
+      for (let i = 0; i < 4; i++) p.push(box(0.12, 0.03, 0.12, 0, -1.0 + i * 0.7, -0.01, 0x6f757a));
+      p.push(cyl(0.045, 0.06, 0.2, 12, 0, -1.2, 0.07, 0x8e9499, -0.7), cyl(0.07, 0.045, 0.12, 12, 0, 1.25, 0, 0x8e9499));
+      return merge(p);
+    }, 'metal');
     this.prop('tv', [1.1, 1.0, 0.45], 30, () => merge([
       box(1.1, 0.5, 0.45, 0, -0.25, 0, 0x4a3426), box(1.0, 0.04, 0.02, 0, -0.25, 0.23, 0x2a1d14),
       box(1.0, 0.6, 0.05, 0, 0.3, -0.05, 0x111111), box(0.94, 0.54, 0.01, 0, 0.3, -0.02, 0x1e2a36), box(0.2, 0.05, 0.15, 0, 0.0, -0.05, 0x222222),
@@ -207,7 +232,7 @@ export class TypeRegistry {
   }
 }
 
-const PROP_KG = { sofa: 45, fridge: 70, table: 25, bed: 55, kitchen: 85, shelf: 35, crate: 30, drum: 45, pallet: 160, tv: 28 };
+const PROP_KG = { sofa: 45, fridge: 70, table: 25, bed: 55, kitchen: 85, shelf: 35, crate: 30, drum: 45, pallet: 160, tv: 28, aircon: 40, meter: 6, walllamp: 2, downpipe: 4 };
 
 function avgVertexColor(g) {
   const c = g.attributes.color; if (!c) return 0x888888;

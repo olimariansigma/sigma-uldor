@@ -16,7 +16,7 @@ export class Input {
     const map = {
       KeyW: 'fwd', ArrowUp: 'up', KeyS: 'back', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'sleft', KeyD: 'right', ArrowRight: 'sright',
       ShiftLeft: 'sprint', ShiftRight: 'sprint', Space: 'jump', KeyQ: 'pickup', KeyG: 'throw', KeyE: 'use', KeyB: 'shop', KeyM: 'multi', KeyH: 'help', KeyC: 'cam',
-      KeyR: 'stickOut', KeyF: 'stickIn', KeyZ: 'curlIn', KeyX: 'curlOut', Escape: 'esc', Enter: 'use',
+      KeyR: 'stickOut', KeyF: 'stickIn', KeyZ: 'curlIn', KeyX: 'curlOut', KeyT: 'rotL', KeyY: 'rotR', Escape: 'esc', Enter: 'use',
     };
     this.map = map;
     window.addEventListener('keydown', (e) => {

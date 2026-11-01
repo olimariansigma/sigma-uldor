@@ -216,6 +216,17 @@ function foundation(b, M, cx, cz, W, D, base, extras = []) {
 
 const win = (u0, c0, w = 1.2, h = 6) => ({ u0, u1: u0 + w, c0, c1: c0 + h, kind: 'window' });
 
+// exterior fittings on the outside of the walls (lamps, meter box, AC unit, downpipes at the corners)
+function fittings(b, { cx, cz, W, D, base, top, lamps = [], meter = null, ac = null, pipes = true }) {
+  const fz = cz + D / 2;
+  for (const x of lamps) b.add('walllamp', cx - W / 2 + x, base + 2.3, fz + 0.11, 0, 0, 0);
+  if (meter != null) b.add('meter', cx - W / 2 + meter, base + 1.25, fz + 0.08, 0, 0, 0);
+  if (ac) b.add('aircon', cx + W / 2 + 0.33, 0.31, cz + ac, 0, 0, 0, qY(Math.PI / 2));
+  if (pipes) for (const [x, z, r] of [[cx - W / 2 + 0.12, fz + 0.08, 0], [cx + W / 2 - 0.12, fz + 0.08, 0], [cx - W / 2 + 0.12, cz - D / 2 - 0.08, Math.PI], [cx + W / 2 - 0.12, cz - D / 2 - 0.08, Math.PI]]) {
+    if (top - base > 2.4) b.add('downpipe', x, base + 1.3, z, 0, 0, 0, qY(r));
+  }
+}
+
 // ---------------------------------------------------------------------------
 export const BUILDINGS = [
   {
@@ -243,6 +254,7 @@ export const BUILDINGS = [
       gables(b, { cx, cz, W, D, top, pitch, color: () => PAINT.cinder, c0: courses });
       const { ridgeY } = gableRoof(b, { cx, cz, W, D, top, pitch });
       chimney(b, { x: cx + W / 2 + 0.2, z: cz - 0.8, base, topY: ridgeY + 0.6, color: PAINT.red });
+      fittings(b, { cx, cz, W, D, base, top, lamps: [5.35, 9.9], meter: 7.3, ac: 1.6 });
       b.add('sofa', cx - 3.2, base + 0.425, cz + 1.8, 0, 0, 0, qY(Math.PI));
       b.add('tv', cx - 3.2, base + 0.5, cz - 1.2, 0, 0, 0);
       b.add('shelf', cx - 4.75, base + 0.95, cz - 2.6, 0, 0, 0, qY(Math.PI / 2));
@@ -275,6 +287,7 @@ export const BUILDINGS = [
       gables(b, { cx, cz, W, D, top, pitch, color, c0: cps * 2 + 1 });
       const { ridgeY } = gableRoof(b, { cx, cz, W, D, top, pitch });
       chimney(b, { x: cx - W / 2 - 0.2, z: cz + 2.0, base, topY: ridgeY + 0.8, color: PAINT.white });
+      fittings(b, { cx, cz, W, D, base, top: base + 2.6, lamps: [4.15], meter: 6.2, ac: -1.4 });
       const fy = base + (cps + 1) * H;
       b.add('sofa', cx - 2.6, base + 0.425, cz + 1.9, 0, 0, 0, qY(Math.PI));
       b.add('kitchen', cx + 2.6, base + 0.46, cz - D / 2 + 0.55, 0, 0, 0);
@@ -307,6 +320,7 @@ export const BUILDINGS = [
       const pitch = THREE.MathUtils.degToRad(14);
       gables(b, { cx, cz, W, D, top, pitch, color: () => PAINT.cinder, c0: courses });
       gableRoof(b, { cx, cz, W, D, top, pitch, type: 'metalroof', ov: 0.4, ovx: 0.3 });
+      fittings(b, { cx, cz, W, D, base, top, lamps: [1.4, 5.8, 7.0, 11.8], meter: 8.9, ac: 2.0 });
       for (let i = 0; i < 5; i++) b.add('pallet', cx - 5.2 + (i % 3) * 1.6, base + 0.425, cz - 3.0 + Math.floor(i / 3) * 1.5, 0, 0, 0);
       for (let i = 0; i < 6; i++) b.add('crate', cx + 2.2 + (i % 3) * 1.15, base + 0.5 + (i >= 3 ? 1.0 : 0), cz - 3.4, 0, 0, 0);
       for (let i = 0; i < 5; i++) b.add('drum', cx - 5.6 + i * 0.7, base + 0.45, cz + 4.0, 0, 0, 0);

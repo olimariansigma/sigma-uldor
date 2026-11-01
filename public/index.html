@@ -30,7 +30,7 @@
       <div id="titleMsg" class="title-msg"></div>
     </div>
   </div>
-  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v3.1</span></div>
+  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v3.2</span></div>
 </div>
 
 <!-- HUD -->
@@ -88,6 +88,10 @@
     <button data-act="stickIn" class="tb"><i data-ic="armIn"></i><small>ARM IN</small></button>
     <button data-act="curlIn" class="tb"><i data-ic="curlIn"></i><small>CURL</small></button>
     <button data-act="curlOut" class="tb"><i data-ic="curlOut"></i><small>DUMP</small></button>
+  </div>
+  <div id="tbtns-rot" class="hidden">
+    <button data-act="rotL" class="tb"><i data-ic="curlOut"></i><small>ROT</small></button>
+    <button data-act="rotR" class="tb"><i data-ic="curlIn"></i><small>ROT</small></button>
   </div>
   <button data-act="use" id="tbUse" class="tb tb-use hidden">ENTER</button>
   <button data-act="cam" id="tbCam" class="tb tb-cam hidden"><i data-ic="camera"></i></button>
@@ -163,7 +167,9 @@
         <li><kbd>W S</kbd> drive · <kbd>A D</kbd> steer</li>
         <li><kbd>←</kbd> <kbd>→</kbd> swing · <kbd>↑</kbd> <kbd>↓</kbd> boom</li>
         <li><kbd>R</kbd> / <kbd>F</kbd> arm out / in · <kbd>Z</kbd> / <kbd>X</kbd> curl / dump</li>
-        <li><kbd>Click</kbd> / <kbd>Space</kbd> tool: grab, breaker, gate, crusher, vibration, paving</li>
+        <li><kbd>Click</kbd> / <kbd>Space</kbd> tool: grab, clamp, breaker, gate, crusher, vibration, paving</li>
+        <li><kbd>T</kbd> / <kbd>Y</kbd> rotate the BG90 brick clamp</li>
+        <li>Drive or press the arm into a wall to grind it down. Bricks are sticky: keep pushing.</li>
         <li><kbd>C</kbd> cab camera · <kbd>E</kbd> climb out</li>
       </ul>
     </div>

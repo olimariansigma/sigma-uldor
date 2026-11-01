@@ -57,7 +57,7 @@ export function buildWorld(scene, renderer, physics, M) {
   // ---------- terrain (heightfield with a lake bowl) ----------
   const grass = T.grassTextures();
   const dirt = T.dirtTextures();
-  const TS = SITE.terrainSize, N = TS;
+  const TS = SITE.terrainSize, N = SITE.terrainSeg || TS, STEP = TS / N;
   const tGeo = new THREE.PlaneGeometry(TS, TS, N, N).rotateX(-Math.PI / 2);
   const tp = tGeo.attributes.position;
   const mask = new Float32Array(tp.count * 2);
@@ -201,8 +201,10 @@ export function buildWorld(scene, renderer, physics, M) {
   neighbor(36, SITE.streetZ + 21, 11.5, 8, brickA, 0x5a3a30);
   neighbor(-46, SITE.streetZ + 20, 10, 8, brickA, 0x46494d);
   // neighbour lots on our side
-  neighbor(-52, -6, 10, 8.5, brickA, 0x3d4247, Math.PI / 2);
-  neighbor(52, -16, 11, 8, brickB, 0x6b4a3a, -Math.PI / 2);
+  neighbor(-128, -20, 10, 8.5, brickA, 0x3d4247, Math.PI / 2);
+  neighbor(116, -30, 11, 8, brickB, 0x6b4a3a, -Math.PI / 2);
+  neighbor(-128, -70, 11, 8, brickB, 0x545a60, Math.PI / 2);
+  neighbor(116, -90, 10, 8.5, brickA, 0x5a3a30, -Math.PI / 2);
 
   // ---------- distant hills ----------
   const hillGeo = new THREE.RingGeometry(300, 1100, 128, 8).rotateX(-Math.PI / 2);
@@ -237,7 +239,7 @@ export function buildWorld(scene, renderer, physics, M) {
   const body = physics.world.createRigidBody(physics.R.RigidBodyDesc.fixed());
   // heightfield: heights[col * (rows + 1) + row], columns along x, rows along z
   const hf = new Float32Array((N + 1) * (N + 1));
-  for (let col = 0; col <= N; col++) for (let row = 0; row <= N; row++) hf[col * (N + 1) + row] = terrainHeight(-TS / 2 + col, -TS / 2 + row);
+  for (let col = 0; col <= N; col++) for (let row = 0; row <= N; row++) hf[col * (N + 1) + row] = terrainHeight(-TS / 2 + col * STEP, -TS / 2 + row * STEP);
   const terrainCollider = physics.world.createCollider(physics.R.ColliderDesc.heightfield(N, N, hf, new physics.R.Vector3(TS, 1, TS)).setFriction(1.0), body);
   for (const [x, z, w, d] of [[0, TS / 2 + 200, 1000, 400], [0, -TS / 2 - 200, 1000, 400], [TS / 2 + 200, 0, 400, TS], [-TS / 2 - 200, 0, 400, TS]]) {
     physics.world.createCollider(physics.R.ColliderDesc.cuboid(w / 2, 1, d / 2).setTranslation(x, -1, z).setFriction(1.0), body);
@@ -288,15 +290,16 @@ function buildTrees(scene, M) {
     variants.push({ trunk, leaves: merge(blobs) });
   }
   const spots = [];
-  for (let i = 0; i < 70; i++) {
+  const { lotMin: l0, lotMax: l1 } = SITE;
+  for (let i = 0; i < 130; i++) {
     let x, z;
     const side = i % 4;
-    if (side === 0) { x = -45 - r() * 30; z = -48 + r() * 70; }
-    else if (side === 1) { x = 45 + r() * 30; z = -48 + r() * 70; }
-    else if (side === 2) { x = -75 + r() * 150; z = -42 - r() * 26; }
-    else { x = -70 + r() * 140; z = SITE.streetZ + 12.5 + (r() < 0.5 ? 0 : 14) + r() * 2; if (Math.abs(((x + 46) % 20)) < 6) continue; }
-    if (Math.abs(x + 52) < 8 && Math.abs(z + 6) < 7) continue;
-    if (Math.abs(x - 52) < 8 && Math.abs(z + 16) < 7) continue;
+    if (side === 0) { x = l0.x - 6 - r() * 34; z = l0.y - 10 + r() * (l1.y - l0.y + 12); }
+    else if (side === 1) { x = l1.x + 6 + r() * 34; z = l0.y - 10 + r() * (l1.y - l0.y + 12); }
+    else if (side === 2) { x = l0.x - 30 + r() * (l1.x - l0.x + 60); z = l0.y - 6 - r() * 22; }
+    else { x = -110 + r() * 220; z = SITE.streetZ + 12.5 + (r() < 0.5 ? 0 : 14) + r() * 2; if (Math.abs(((x + 46) % 20)) < 6) continue; }
+    if (Math.abs(x + 128) < 9 && (Math.abs(z + 20) < 8 || Math.abs(z + 70) < 8)) continue;
+    if (Math.abs(x - 116) < 9 && (Math.abs(z + 30) < 8 || Math.abs(z + 90) < 8)) continue;
     spots.push([x, z, 0.8 + r() * 0.6, r() * Math.PI * 2, Math.floor(r() * 3)]);
   }
   variants.forEach((v, vi) => {

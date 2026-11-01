@@ -26,6 +26,7 @@ export function buildExcavator(m) {
     limits: { swing: null, ...lim, ...(sp.attach === 'brickclamp' ? { rot: null } : {}) }, rates: { swing: 0.7, boom: 0.5, stick: 0.7, curl: 1.1, rot: 0.75 },
     apply(mm) {
       mm.upper.rotation.y = mm.swing; mm.boomG.rotation.x = mm.boom; mm.stickG.rotation.x = mm.stickA; mm.attach.rotation.x = mm.curl;
+      if (mm.updateLink) mm.updateLink();
       for (const j of mm.att.jaws) {
         if (j.slide) { j.obj.position.y = j.sign * (j.closed + (j.openY - j.closed) * mm.open); continue; }
         const a = j.sign * (mm.open * j.max - 0.08); if (j.axis === 'y') j.obj.rotation.y = a; else j.obj.rotation.x = a;
@@ -42,13 +43,13 @@ export function buildExcavator(m) {
 
 // =============================================================================== undercarriages
 function tracks(m) {
-  const sp = m.spec, K = m.mats, g = sp.gauge || 1.19, rubber = sp.under === 'rubber';
+  const sp = m.spec, K = m.mats, rubber = sp.under === 'rubber', g = sp.gauge || (rubber ? 1.19 : 1.3), tl = rubber ? 4.45 : 4.7;
   for (const s of [-1, 1]) {
-    const tu = buildTrackUnit(null, { length: 4.45, radius: 0.38, width: rubber ? 0.5 : 0.6, rollers: rubber ? 5 : 7, frameColor: rubber ? K.accent : K.under, rubber, mats: K, side: s });
+    const tu = buildTrackUnit(null, { length: tl, radius: 0.38, width: rubber ? 0.5 : 0.6, rollers: rubber ? 5 : 8, frameColor: rubber ? K.accent : K.under, rubber, mats: K, side: s });
     tu.group.position.x = s * g; tu.group.rotation.y = s > 0 ? 0 : 0; m.under.add(tu.group); m.tracks.push(tu);
   }
   carbody(m, g);
-  m.underBoxes = [[-g, 0.58, 0, 0.62, 0.8, 4.45], [g, 0.58, 0, 0.62, 0.8, 4.45], [0, 0.7, 0, 1.8, 0.6, 1.8]];
+  m.underBoxes = [[-g, 0.58, 0, 0.62, 0.8, tl], [g, 0.58, 0, 0.62, 0.8, tl], [0, 0.7, 0, 1.8, 0.6, 1.8]];
   m.radius = 2.4;
 }
 
@@ -193,83 +194,127 @@ function blade(m) {
 function upperHouse(m) {
   const sp = m.spec, K = m.mats, U = m.upper;
   const zt = sp.zeroTail, hv = sp.heavy;
-  add(U, mergeG([rbox(2.5, 0.2, 3.3, 0.04, 0, 0.1, -0.35), bx(2.3, 0.14, 3.0, 0, -0.04, -0.35)]), K.black);
-  // counterweight
-  const tail = zt ? -1.55 : hv ? -2.45 : -2.25;
-  const cw = new THREE.Shape();
-  cw.moveTo(-1.25, -1.15); cw.lineTo(1.25, -1.15); cw.lineTo(1.25, tail + 0.65); cw.quadraticCurveTo(1.15, tail + 0.05, 0, tail); cw.quadraticCurveTo(-1.15, tail + 0.05, -1.25, tail + 0.65); cw.closePath();
-  const cwH = hv ? 1.15 : 0.95;
-  const cwg = new THREE.ExtrudeGeometry(cw, { depth: cwH, bevelEnabled: true, bevelSize: 0.06, bevelThickness: 0.06, bevelSegments: 4, curveSegments: 24 });
-  cwg.rotateX(Math.PI / 2); cwg.translate(0, 0.23 + cwH, 0);
-  add(U, cwg, K.paint);
-  const band = new THREE.ExtrudeGeometry(cw, { depth: 0.12, bevelEnabled: false, curveSegments: 24 });
-  band.rotateX(Math.PI / 2); band.scale(1.012, 1, 1.012); band.translate(0, 0.32, 0);
-  add(U, band, K.accent);
-  const top = 0.29 + cwH;
-  add(U, mergeG([new THREE.TorusGeometry(0.07, 0.024, 8, 16).translate(0.75, top + 0.03, tail + 0.55), new THREE.TorusGeometry(0.07, 0.024, 8, 16).translate(-0.75, top + 0.03, tail + 0.55),
-    bx(0.1, 0.06, 0.18, 0.75, top - 0.01, tail + 0.55), bx(0.1, 0.06, 0.18, -0.75, top - 0.01, tail + 0.55)]), K.dark);
-  // rear camera, tail lights with chrome bezels, hazard band, brand
-  add(U, mergeG([rbox(0.14, 0.1, 0.12, 0.02, 0, top - 0.15, tail - 0.02)]), K.black);
-  add(U, cy(0.025, 0.025, 0.02, 12, 0, top - 0.15, tail - 0.085, Math.PI / 2), K.glass);
+  // proportions of a real machine of this class: ~2.9 m wide house, tail swing radius ~3 m (30 t)
+  const W = zt ? 2.5 : hv ? 3.1 : 2.9, hw = W / 2;
+  const front = zt ? 1.45 : 1.55;              // front edge of the deck (cab front)
+  const R = zt ? 1.5 : hv ? 3.35 : 3.05;       // tail swing radius
+  const cwF = -R + (zt ? 0.75 : hv ? 1.25 : 1.15); // counterweight front face
+  const hoodF = zt ? -0.3 : -0.42;             // engine hood front, just behind the cab
+  const hh = zt ? 1.2 : hv ? 1.78 : 1.62;      // hood top
+  const cwT = hh - (zt ? 0.06 : 0.1);          // counterweight top, a little below the hood
+  const deckY = 0.22;
+  const cwB = zt ? 0.06 : 0.09, RB = R + cwB; // counterweight bevel: its real surface is on radius RB
+  const arcZ = (x, r = RB) => -Math.sqrt(Math.max(0, r * r - x * x));
+  m.houseW = W; m.tailR = R;
+  // outline of the house seen from above: straight front, rear on the swing circle
+  const outline = (zFront, inset = 0) => {
+    const h2 = hw - inset, r = R - inset, c2 = -Math.sqrt(r * r - h2 * h2);
+    const sh = new THREE.Shape();
+    sh.moveTo(-h2, zFront); sh.lineTo(h2, zFront); sh.lineTo(h2, c2);
+    sh.absarc(0, 0, r, Math.atan2(c2, h2), Math.atan2(c2, -h2), true);
+    sh.lineTo(-h2, zFront);
+    return sh;
+  };
+  const upExtrude = (shape, y0, y1, bevel = 0.05, seg = 3) => {
+    const g = new THREE.ExtrudeGeometry(shape, { depth: Math.max(0.01, y1 - y0 - 2 * bevel), bevelEnabled: bevel > 0, bevelSize: bevel, bevelThickness: bevel, bevelSegments: seg, curveSegments: 36 });
+    g.rotateX(Math.PI / 2); g.translate(0, y1 - bevel, 0); return g;
+  };
+  // ---- upper frame / deck (dark), with the swing-circle tail
+  add(U, mergeG([upExtrude(outline(front), 0.0, deckY, 0.025, 2), bx(W - 0.4, 0.14, front + R - 0.6, 0, -0.04, (front - R) / 2 + 0.1)]), K.black);
+  // ---- counterweight: heavy casting on the swing radius, rounded top edge
+  add(U, upExtrude(outline(cwF), deckY, cwT, cwB, 5), K.paint);
+  // dark bumper band low around the tail, lifting eyes, tail lights, rear camera, brand, hazard stripes
+  { const band = upExtrude(outline(cwF + 0.15, -(cwB + 0.012)), deckY + 0.06, deckY + 0.22, 0.015, 1); add(U, band, K.accent); }
+  const eyes = [];
+  for (const s of [-1, 1]) eyes.push(new THREE.TorusGeometry(0.075, 0.026, 8, 16).translate(s * hw * 0.55, cwT + 0.05, cwF - 0.35), bx(0.12, 0.06, 0.2, s * hw * 0.55, cwT, cwF - 0.35));
+  add(U, mergeG(eyes), K.dark);
   for (const s of [-1, 1]) {
-    add(U, rbox(0.22, 0.11, 0.05, 0.02, s * 0.62, 0.52, tail + 0.07), K.chrome);
-    add(U, bx(0.18, 0.08, 0.02, s * 0.62, 0.52, tail + 0.04), K.red, false).userData.keep = true;
-    stick(U, 'crush', 0.24, s * 1.262, 0.75, -1.55, s * Math.PI / 2);
+    const x = s * (hw - (zt ? 0.25 : 0.42)), z = arcZ(x), ang = Math.atan2(x, -z);
+    const tl = new THREE.Group(); tl.position.set(x, deckY + (cwT - deckY) * 0.62, z - 0.004); tl.rotation.y = Math.PI + ang; U.add(tl);
+    add(tl, rbox(0.26, 0.12, 0.06, 0.02, 0, 0, 0.0), K.chrome);
+    add(tl, bx(0.21, 0.08, 0.02, 0, 0, 0.03), K.red, false).userData.keep = true;
+    stick(U, 'crush', zt ? 0.2 : 0.26, s * (hw + 0.012), deckY + (hh - deckY) * 0.55, (hoodF + cwF) / 2 - 0.1, s * Math.PI / 2);
   }
-  const hz = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.18), K.hazard); hz.position.set(0, 0.72, tail - 0.06); hz.rotation.y = Math.PI; U.add(hz);
-  const brand = label(sp.brand, 1.1, 0.3, lum(sp.paint) > 0.55 ? '#15171a' : '#ffffff'); brand.position.set(0, 0.25 + cwH * 0.72, tail - 0.075); brand.rotation.y = Math.PI; U.add(brand);
-  stick(U, 'warn', 0.16, 0.85, 0.95, tail + 0.3, Math.PI);
-  // engine hood with chamfered profile
-  const hh = hv ? 1.38 : zt ? 1.1 : 1.24;
-  const hood = new THREE.Shape();
-  hood.moveTo(-1.18, 0.2); hood.lineTo(-1.18, hh - 0.14); hood.lineTo(-1.08, hh); hood.lineTo(-0.2, hh); hood.lineTo(-0.1, hh - 0.12); hood.lineTo(-0.1, 0.2); hood.closePath();
-  const hg = new THREE.ExtrudeGeometry(hood, { depth: 2.46, bevelEnabled: true, bevelSize: 0.015, bevelThickness: 0.015, bevelSegments: 1 });
-  hg.rotateY(Math.PI / 2); hg.translate(-1.23, 0, 0);
-  add(U, hg, K.paint);
-  // seams, hinge strip, latches, side door outlines + handles
-  add(U, mergeG([bx(2.4, 0.012, 0.012, 0, hh + 0.016, -0.62), bx(2.4, 0.012, 0.012, 0, hh + 0.016, -0.95), bx(0.012, 0.012, 0.9, 0.0, hh + 0.016, -0.65),
-    bx(0.012, 0.85, 0.012, 1.246, 0.66, -0.15), bx(0.012, 0.85, 0.012, 1.246, 0.66, -1.12), bx(0.012, 0.012, 0.97, 1.246, 1.08, -0.63), bx(0.012, 0.85, 0.012, -1.246, 0.66, -0.6), bx(0.012, 0.85, 0.012, -1.246, 0.66, -1.12)]), K.black);
-  add(U, mergeG([pinX(0.018, 2.3, 0, hh + 0.01, -0.18), bx(0.03, 0.04, 0.12, 1.26, 0.85, -0.4), bx(0.03, 0.04, 0.12, -1.26, 0.85, -0.85), bx(0.08, 0.02, 0.05, 0.6, hh + 0.02, -1.12), bx(0.08, 0.02, 0.05, -0.6, hh + 0.02, -1.12)]), K.chrome);
-  grille(U, 0.85, 0.42, 0.55, hh + 0.012, -0.63, 0).rotation.x = -Math.PI / 2;
-  grille(U, 0.8, 0.5, 1.247, 0.68, -0.63, Math.PI / 2);
-  // exhaust: muffler stack with perforated heat shield and hinged rain cap
-  const stacks = hv ? [-0.55, -0.85] : [-0.75];
+  add(U, mergeG([rbox(0.16, 0.11, 0.13, 0.02, 0, cwT - 0.08, -RB - 0.03)]), K.black);
+  add(U, cy(0.028, 0.028, 0.02, 12, 0, cwT - 0.08, -RB - 0.1, Math.PI / 2), K.glass);
+  { const brand = label(sp.brand, zt ? 0.9 : 1.3, zt ? 0.24 : 0.34, lum(sp.paint) > 0.55 ? '#15171a' : '#ffffff'); brand.position.set(0, deckY + (cwT - deckY) * 0.62, -RB - 0.008); brand.rotation.y = Math.PI; U.add(brand); }
+  { const hz = new THREE.Mesh(new THREE.PlaneGeometry(zt ? 0.9 : 1.5, 0.12), K.hazard); hz.position.set(0, deckY + 0.36, -RB - 0.006); hz.rotation.y = Math.PI; U.add(hz); }
+  stick(U, 'warn', 0.16, hw * 0.62, cwT - 0.18, arcZ(hw * 0.62) - 0.006, Math.PI + Math.atan2(hw * 0.62, -arcZ(hw * 0.62)));
+  // ---- engine hood: chamfered box from the counterweight to behind the cab
+  const hl = hoodF - cwF;
+  { const ch = zt ? 0.1 : 0.16, sh = new THREE.Shape();
+    sh.moveTo(-hw + 0.01, deckY); sh.lineTo(hw - 0.01, deckY); sh.lineTo(hw - 0.01, hh - ch); sh.lineTo(hw - 0.01 - ch, hh); sh.lineTo(-hw + 0.01 + ch, hh); sh.lineTo(-hw + 0.01, hh - ch); sh.closePath();
+    const g = new THREE.ExtrudeGeometry(sh, { depth: hl - 0.03, bevelEnabled: true, bevelSize: 0.015, bevelThickness: 0.015, bevelSegments: 1 });
+    g.translate(0, 0, cwF + 0.015); add(U, g, K.paint); }
+  // hood panel seams, hinges and latches; side doors with louvres
+  const seam = [], chrome = [];
+  const zA = cwF + hl * 0.42, zB = cwF + hl * 0.74;
+  seam.push(bx(W - 0.4, 0.012, 0.012, 0, hh + 0.02, zA), bx(W - 0.4, 0.012, 0.012, 0, hh + 0.02, zB), bx(0.012, 0.012, hl - 0.2, 0, hh + 0.02, cwF + hl / 2));
+  for (const s of [-1, 1]) {
+    const x = s * (hw + 0.012), y0 = deckY + 0.12, y1 = hh - 0.24;
+    for (const z of [cwF + 0.1, zA, zB, hoodF - 0.08]) seam.push(bx(0.012, y1 - y0, 0.012, x, (y0 + y1) / 2, z));
+    seam.push(bx(0.012, 0.012, hl - 0.18, x, y1, cwF + hl / 2), bx(0.012, 0.012, hl - 0.18, x, y0, cwF + hl / 2));
+    chrome.push(bx(0.03, 0.05, 0.14, x + s * 0.012, (y0 + y1) / 2, zA + 0.14), bx(0.03, 0.05, 0.14, x + s * 0.012, (y0 + y1) / 2, zB + 0.14));
+    for (const z of [cwF + 0.25, zA - 0.12]) chrome.push(cy(0.018, 0.018, 0.1, 8, x + s * 0.01, y1 - 0.06, z, Math.PI / 2));
+    grille(U, (zA - cwF) * 0.62, (y1 - y0) * 0.62, x + s * 0.004, (y0 + y1) / 2, (cwF + zA) / 2, s * Math.PI / 2);
+    grille(U, (zB - zA) * 0.7, (y1 - y0) * 0.5, x + s * 0.004, y0 + (y1 - y0) * 0.62, (zA + zB) / 2, s * Math.PI / 2);
+  }
+  add(U, mergeG(seam), K.black); add(U, mergeG(chrome), K.chrome);
+  // radiator louvre on top behind the cab, engine hatch, exhaust stack(s) with heat shield, air pre-cleaner, AC unit
+  grille(U, hw * 0.75, hl * 0.32, hw * 0.48, hh + 0.022, zB + (hoodF - zB) * 0.5, 0).rotation.x = -Math.PI / 2;
+  grille(U, hw * 0.6, hl * 0.22, -hw * 0.45, hh + 0.022, cwF + hl * 0.22, 0).rotation.x = -Math.PI / 2;
+  add(U, mergeG([pinX(0.018, W - 0.5, 0, hh + 0.022, hoodF - 0.12), bx(0.1, 0.02, 0.06, hw * 0.4, hh + 0.026, zA + 0.06), bx(0.1, 0.02, 0.06, -hw * 0.4, hh + 0.026, zA + 0.06)]), K.chrome);
+  const stacks = hv ? [-hw + 0.5, -hw + 0.85] : [-hw + (zt ? 0.35 : 0.55)];
+  const sz = cwF + (zt ? 0.25 : 0.42), st = zt ? 0.4 : 0.62;
   for (const x of stacks) {
-    add(U, mergeG([cy(0.075, 0.075, 0.55, 16, x, hh + 0.25, -0.9), cy(0.09, 0.09, 0.08, 16, x, hh + 0.04, -0.9)]), K.black);
-    add(U, cy(0.1, 0.1, 0.3, 16, x, hh + 0.22, -0.9, 0, 0, 0, true), K.galv);
-    add(U, mergeG([cy(0.09, 0.09, 0.02, 16, x, hh + 0.56, -0.86, -0.4)]), K.black);
+    add(U, mergeG([cy(0.075, 0.075, st, 16, x, hh + st / 2, sz), cy(0.095, 0.095, 0.08, 16, x, hh + 0.04, sz), cy(0.085, 0.07, 0.06, 16, x, hh + st + 0.02, sz)]), K.black);
+    add(U, cy(0.11, 0.11, st * 0.55, 16, x, hh + st * 0.45, sz, 0, 0, 0, true), K.galv);
+    add(U, mergeG([cy(0.09, 0.09, 0.02, 16, x, hh + st + 0.05, sz + 0.04, -0.4)]), K.black);
   }
-  add(U, mergeG([cy(0.12, 0.13, 0.3, 18, 0.6, hh + 0.14, -0.5), cy(0.15, 0.12, 0.08, 18, 0.6, hh + 0.33, -0.5)]), K.plastic);
-  // hand rails along the hood
+  add(U, mergeG([cy(0.12, 0.14, zt ? 0.2 : 0.32, 18, -hw * 0.18, hh + 0.16, hoodF - 0.45), cy(0.16, 0.13, 0.09, 18, -hw * 0.18, hh + (zt ? 0.24 : 0.36), hoodF - 0.45)]), K.plastic);
+  add(U, mergeG([rbox(0.55, 0.2, 0.42, 0.04, hw * 0.45, hh + 0.1, cwF + 0.35)]), K.dark);
+  grille(U, 0.48, 0.34, hw * 0.45, hh + 0.205, cwF + 0.35, 0).rotation.x = -Math.PI / 2;
+  // ---- right-front block: fuel tank, hydraulic tank, tool box (lower than the hood)
+  const bxIn = zt ? -0.75 : -0.66, top = zt ? 0.92 : 1.32;
+  { const tb = new THREE.Shape();
+    tb.moveTo(bxIn, hoodF); tb.lineTo(-hw, hoodF); tb.lineTo(-hw, front - 0.28); tb.quadraticCurveTo(-hw + 0.02, front - 0.02, -hw + 0.28, front); tb.lineTo(bxIn, front); tb.lineTo(bxIn, hoodF);
+    add(U, upExtrude(tb, deckY, top, 0.035, 3), K.paint); }
+  const bw = hw + bxIn, bzc = (hoodF + front) / 2, bl = front - hoodF;
+  add(U, mergeG([bx(bw - 0.12, 0.02, bl - 0.2, (bxIn - hw) / 2, top + 0.008, bzc)]), K.tread);
+  { const sx = -hw - 0.042, y0 = deckY + 0.1, y1 = top - 0.12, zs = [hoodF + 0.08, hoodF + bl * 0.36, hoodF + bl * 0.7, front - 0.3];
+    const sm = [];
+    for (const z of zs) sm.push(bx(0.012, y1 - y0, 0.012, sx, (y0 + y1) / 2, z));
+    sm.push(bx(0.012, 0.012, zs[3] - zs[0], sx, y1, (zs[0] + zs[3]) / 2), bx(0.012, 0.012, zs[3] - zs[0], sx, y0, (zs[0] + zs[3]) / 2));
+    add(U, mergeG(sm), K.black);
+    add(U, mergeG([bx(0.03, 0.05, 0.14, sx - 0.012, (y0 + y1) / 2, zs[1] - 0.14), bx(0.03, 0.05, 0.14, sx - 0.012, (y0 + y1) / 2, zs[2] - 0.14), bx(0.03, 0.05, 0.14, sx - 0.012, (y0 + y1) / 2, zs[3] - 0.14)]), K.chrome);
+    add(U, rbox(0.012, 0.26, 0.05, 0.005, sx, (y0 + y1) / 2, (zs[1] + zs[2]) / 2), K.glass, false); // hydraulic oil sight gauge
+    add(U, mergeG([cy(0.08, 0.08, 0.05, 16, -hw + 0.3, top + 0.03, hoodF + bl * 0.2), cy(0.05, 0.05, 0.04, 12, -hw + 0.3, top + 0.06, hoodF + bl * 0.2), cy(0.06, 0.06, 0.12, 12, -hw + 0.32, top + 0.07, hoodF + bl * 0.55)]), K.chrome);
+    stick(U, 'ce', 0.16, sx - 0.001, (y0 + y1) / 2 + 0.1, zs[3] - 0.2, -Math.PI / 2); }
+  // steps up to the deck (front-right corner) and handrails along the block and the hood
+  add(U, mergeG([bx(0.42, 0.04, 0.32, -hw + 0.05, -0.25, front - 0.35), bx(0.04, 0.3, 0.04, -hw - 0.14, -0.1, front - 0.2), bx(0.04, 0.3, 0.04, -hw - 0.14, -0.1, front - 0.5)]), K.dark);
+  add(U, bx(0.38, 0.02, 0.3, -hw + 0.05, -0.23, front - 0.35), K.tread);
   const railMat = hv ? m.ctx.M.paintYellow : K.paint;
-  for (const s of [-1, 1]) add(U, rail([[s * 1.15, hh + 0.36, -0.25], [s * 1.15, hh + 0.36, -1.05]], 0.02, hh), railMat);
-  // right-front tool box / tanks
-  const tb = new THREE.Shape();
-  tb.moveTo(-0.48, -0.1); tb.lineTo(-1.25, -0.1); tb.lineTo(-1.25, 1.25); tb.quadraticCurveTo(-1.22, 1.45, -1.0, 1.48); tb.lineTo(-0.48, 1.48); tb.closePath();
-  const tbg = new THREE.ExtrudeGeometry(tb, { depth: zt ? 0.62 : 0.82, bevelEnabled: true, bevelSize: 0.03, bevelThickness: 0.03, bevelSegments: 3 });
-  tbg.rotateX(Math.PI / 2); tbg.translate(0, zt ? 0.82 : 1.02, 0);
-  add(U, tbg, K.paint);
-  add(U, mergeG([bx(0.012, 0.6, 1.2, -1.285, 0.6, 0.65), bx(0.012, 0.012, 1.2, -1.285, 0.95, 0.65), bx(0.012, 0.012, 1.2, -1.285, 0.28, 0.65)]), K.black);
-  add(U, mergeG([bx(0.03, 0.04, 0.14, -1.3, 0.75, 0.2), cy(0.07, 0.07, 0.05, 16, -0.85, 1.07, 0.15), cy(0.025, 0.025, 0.02, 10, -1.29, 0.5, 1.15, 0, 0, Math.PI / 2)]), K.chrome);
-  add(U, rbox(0.012, 0.22, 0.05, 0.005, -1.288, 0.62, 1.15), K.glass, false); // hydraulic sight gauge
-  add(U, mergeG([bx(0.3, 0.04, 0.4, -1.38, 0.35, 1.0), bx(0.3, 0.04, 0.4, -1.38, 0.0, 1.0)]), K.tread);
-  add(U, rail([[-1.2, 1.4, 0.3], [-1.2, 1.4, 1.3]], 0.02, 1.02), railMat);
-  workLight(U, K, -0.9, 1.15, 1.45, 0, 0.2);
-  mirror(U, K, V(-1.2, 1.05, 1.3), V(-1.35, 1.55, 1.4), 0.3);
-  stick(U, 'ce', 0.16, -1.29, 0.85, 0.95, -Math.PI / 2);
-  // boom foot bracket: thick plates, bosses, pin, retainers, grease points
-  add(U, mergeG([rbox(0.12, 0.9, 0.9, 0.03, 0.1, 0.55, 1.05), rbox(0.12, 0.9, 0.9, 0.03, -0.52, 0.55, 1.05), cy(0.16, 0.16, 0.16, 20, 0.12, 0.78, 1.28, 0, 0, Math.PI / 2), cy(0.16, 0.16, 0.16, 20, -0.54, 0.78, 1.28, 0, 0, Math.PI / 2)]), K.paint);
+  add(U, rail([[-hw + 0.08, top + 0.72, hoodF + 0.15], [-hw + 0.08, top + 0.72, front - 0.3], [-hw + 0.3, top + 0.72, front - 0.08]], 0.02, top), railMat);
+  add(U, rail([[-hw + 0.1, hh + 0.42, hoodF - 0.15], [-hw + 0.1, hh + 0.42, cwF + 0.25]], 0.02, hh), railMat);
+  add(U, rail([[hw - 0.1, hh + 0.36, zB - 0.1], [hw - 0.1, hh + 0.36, cwF + 0.25]], 0.02, hh), railMat);
+  workLight(U, K, -hw + 0.35, top + 0.14, front - 0.12, 0, 0.2);
+  mirror(U, K, V(-hw + 0.12, top + 0.05, front - 0.2), V(-hw - 0.12, top + 0.6, front - 0.05), 0.3);
+  // ---- boom foot bracket: thick plates, bosses, pin, retainers, grease points, hoses from the valve block
+  add(U, mergeG([rbox(0.12, 0.9, 0.9, 0.03, 0.1, 0.55, 1.05), rbox(0.12, 0.9, 0.9, 0.03, -0.52, 0.55, 1.05), cy(0.16, 0.16, 0.16, 20, 0.12, 0.78, 1.28, 0, 0, Math.PI / 2), cy(0.16, 0.16, 0.16, 20, -0.54, 0.78, 1.28, 0, 0, Math.PI / 2),
+    rbox(0.74, 0.2, 0.7, 0.03, -0.21, 0.2, 1.0)]), K.paint);
   add(U, mergeG([pinX(0.09, 0.85, -0.21, 0.78, 1.28), bolts([V(0.2, 0.84, 1.24), V(0.2, 0.72, 1.32)], V(1, 0, 0), 0.014), bolts([V(-0.62, 0.84, 1.24), V(-0.62, 0.72, 1.32)], V(-1, 0, 0), 0.014), cy(0.01, 0.01, 0.05, 6, 0.1, 1.02, 1.28)]), K.steel);
   add(U, mergeG([hose([[0.05, 0.25, 0.4], [0.0, 0.5, 0.9], [-0.1, 0.75, 1.5]], 0.025, 16), hose([[-0.05, 0.25, 0.4], [-0.15, 0.5, 0.9], [-0.25, 0.7, 1.52]], 0.025, 16), hose([[-0.15, 0.25, 0.35], [-0.3, 0.45, 0.95], [-0.38, 0.62, 1.55]], 0.022, 16)]), K.black);
+  // ---- heavy machines: walkways with handrails on both sides, ladder
   if (hv) {
     for (const s of [-1, 1]) {
-      add(U, bx(0.45, 0.05, 2.6, s * 1.48, 0.2, -0.85), K.tread);
-      add(U, rail([[s * 1.68, 1.1, -2.1], [s * 1.68, 1.1, 0.4]], 0.022, 0.22), m.ctx.M.paintYellow);
-      add(U, rail([[s * 1.68, 0.65, -2.1], [s * 1.68, 0.65, 0.4]], 0.018), m.ctx.M.paintYellow);
+      add(U, bx(0.45, 0.05, R + 0.2, s * (hw + 0.23), 0.2, (hoodF - R) / 2 + 0.3), K.tread);
+      add(U, rail([[s * (hw + 0.43), 1.1, -R + 0.6], [s * (hw + 0.43), 1.1, hoodF + 0.6]], 0.022, 0.22), m.ctx.M.paintYellow);
+      add(U, rail([[s * (hw + 0.43), 0.65, -R + 0.6], [s * (hw + 0.43), 0.65, hoodF + 0.6]], 0.018), m.ctx.M.paintYellow);
     }
-    add(U, ladder(1.7, -0.95, 0.2, 0.9, 0.42, 0.27, -0.15), m.ctx.M.paintYellow);
+    add(U, ladder(hw + 0.45, -0.95, 0.2, 0.9, 0.42, 0.27, -0.15), m.ctx.M.paintYellow);
   }
-  m.upperBoxes = [[0, 0.65, -0.55, 2.5, 1.1, 3.1], [-0.86, 0.6, 0.7, 0.8, 1.0, 1.6]];
+  m.upperBoxes = [[0, (deckY + hh) / 2, (hoodF - R) / 2, W, hh - deckY, hoodF + R], [(bxIn - hw) / 2, (deckY + top) / 2, bzc, bw, top - deckY, bl], [0, 0.12, (front + hoodF) / 2, W, 0.24, front - hoodF]];
+  m.radius = Math.max(m.radius || 0, R * 0.85);
 }
 
 // remote demolition robot body (no cab)
@@ -290,8 +335,10 @@ function robotUpper(m) {
 // =============================================================================== cab
 function cab(m) {
   const sp = m.spec, K = m.mats, U = m.upper;
+  // tinted, reflective safety glass: you see the operator and the seat, not straight through the cab
+  const GL = new THREE.MeshPhysicalMaterial({ color: 0x34474f, roughness: 0.04, metalness: 0.2, transparent: true, opacity: 0.52, envMapIntensity: 1.9, depthWrite: false, side: THREE.DoubleSide });
   const c = new THREE.Group();
-  if (sp.mini) { c.position.set(0.2, 0.2, -0.15); c.scale.setScalar(0.92 / m.s); } else c.position.set(0.76, 0.2, 0.6);
+  if (sp.mini) { c.position.set(0.2, 0.2, -0.15); c.scale.setScalar(0.92 / m.s); } else c.position.set((m.houseW || 2.5) / 2 - 0.5, 0.2, 0.6);
   U.add(c); m.cab = c;
   const cw2 = 0.98, ch = 1.72, zf = 0.95, zb = -0.85, cd = zf - zb;
   let shell = c;
@@ -326,12 +373,12 @@ function cab(m) {
     const rg = new THREE.ExtrudeGeometry(roof, { depth: 0.07, bevelEnabled: true, bevelSize: 0.035, bevelThickness: 0.035, bevelSegments: 3 });
     rg.rotateX(Math.PI / 2); rg.translate(0, ch + 0.07, 0);
     add(shell, rg, K.paint);
-    add(shell, mergeG([rbox(0.5, 0.03, 0.5, 0.01, -0.1, ch + 0.11, 0.0)]), K.glass, false); // roof hatch
+    add(shell, mergeG([rbox(0.5, 0.03, 0.5, 0.01, -0.1, ch + 0.11, 0.0)]), GL, false); // roof hatch
     // LED light bar on the roof edge, tinted sun visor over the windscreen, radio antenna and beacon base
     add(shell, mergeG([rbox(0.72, 0.075, 0.1, 0.025, 0, ch + 0.2, zf - 0.04), bx(0.05, 0.08, 0.05, -0.3, ch + 0.15, zf - 0.04), bx(0.05, 0.08, 0.05, 0.3, ch + 0.15, zf - 0.04),
       cy(0.006, 0.006, 0.62, 6, -cw2 / 2 + 0.08, ch + 0.42, zb + 0.12), cy(0.022, 0.026, 0.05, 10, -cw2 / 2 + 0.08, ch + 0.13, zb + 0.12)]), K.black);
     add(shell, mergeG([0, 1, 2, 3].map((i) => bx(0.13, 0.045, 0.012, -0.24 + i * 0.16, ch + 0.2, zf + 0.012))), K.lens, false);
-    { const v = bx(cw2 - 0.04, 0.012, 0.24, 0, 0, 0); v.rotateX(-0.18); v.translate(0, ch + 0.02, zf + 0.1); add(shell, v, K.glass, false); }
+    { const v = bx(cw2 - 0.04, 0.012, 0.24, 0, 0, 0); v.rotateX(-0.18); v.translate(0, ch + 0.02, zf + 0.1); add(shell, v, GL, false); }
     // pillars (rounded tubes) + window frames / rubber seals
     const fr = [];
     for (const s of [-1, 1]) {
@@ -342,10 +389,10 @@ function cab(m) {
     }
     fr.push(bx(cw2, 0.06, 0.06, 0, 0.62, zf - 0.08), bx(cw2, 0.05, 0.05, 0, ch - 0.03, zf - 0.19));
     add(shell, mergeG(fr), K.black);
-    const g1 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, ch - 0.68), K.glass); g1.position.set(0, 0.62 + (ch - 0.62) / 2, zf - 0.13); g1.rotation.x = -0.09; shell.add(g1);
-    const g2 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, 0.55), K.glass); g2.position.set(0, 0.32, zf - 0.04); shell.add(g2);
-    for (const s of [-1, 1]) { const g3 = new THREE.Mesh(new THREE.PlaneGeometry(cd - 0.15, ch - 0.1), K.glass); g3.rotation.y = Math.PI / 2; g3.position.set(s * (cw2 / 2 - 0.01), ch / 2 + 0.02, (zf + zb) / 2 - 0.05); shell.add(g3); }
-    const g4 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.2, 0.55), K.glass); g4.position.set(0, ch - 0.45, zb + 0.035); g4.rotation.y = Math.PI; shell.add(g4);
+    const g1 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, ch - 0.68), GL); g1.position.set(0, 0.62 + (ch - 0.62) / 2, zf - 0.13); g1.rotation.x = -0.09; shell.add(g1);
+    const g2 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, 0.55), GL); g2.position.set(0, 0.32, zf - 0.04); shell.add(g2);
+    for (const s of [-1, 1]) { const g3 = new THREE.Mesh(new THREE.PlaneGeometry(cd - 0.15, ch - 0.1), GL); g3.rotation.y = Math.PI / 2; g3.position.set(s * (cw2 / 2 - 0.01), ch / 2 + 0.02, (zf + zb) / 2 - 0.05); shell.add(g3); }
+    const g4 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.2, 0.55), GL); g4.position.set(0, ch - 0.45, zb + 0.035); g4.rotation.y = Math.PI; shell.add(g4);
     // door: hinges, handle, step, grab handle
     add(shell, mergeG([bx(0.03, 0.03, 0.14, cw2 / 2 + 0.02, 0.95, 0.3), tubeAB(V(cw2 / 2 + 0.03, 0.45, 0.55), V(cw2 / 2 + 0.03, 1.25, 0.55), 0.016, 8), pinX(0.015, 0.05, cw2 / 2 + 0.02, 0.4, -0.05), pinX(0.015, 0.05, cw2 / 2 + 0.02, 1.3, -0.05)]), K.chrome);
     add(shell, bx(0.25, 0.03, 0.35, cw2 / 2 + 0.15, -0.25, 0.3), K.tread);
@@ -387,7 +434,7 @@ function cab(m) {
   for (const x of [-0.1, 0.1]) { const lv = add(shell, mergeG([cy(0.012, 0.012, 0.35, 6, x, 0.25, 0.48, -0.4), cy(0.025, 0.025, 0.08, 8, x, 0.42, 0.55, -0.4)]), K.plastic, false); lv.userData.keep = true; }
   m.seat = m.anchor(shell, 0, 1.32, -0.15);
   m.door = m.anchor(c, 0.75, 0, 0.25);
-  const cb = [0.76, 1.1, 0.65, 1.0, 1.8, 1.9];
+  const cb = [c.position.x, 1.1, 0.65, 1.0, 1.8, 1.9];
   if (sp.cab === 'elevated') cb[1] = 2.3 + 1.1;
   if (sp.mini) { cb[0] = 0.2; cb[2] = -0.15; cb[3] = 1.0 / m.s * 0.92; cb[4] = 1.8 / m.s * 0.92; cb[5] = 1.9 / m.s * 0.92; cb[1] = cb[4] / 2 + 0.2; }
   m.upperBoxes.push(cb);
@@ -491,12 +538,41 @@ function arm(m) {
   // hydraulic cylinders
   for (const s of [-1, 1]) cylinder(m, m.anchor(U, (sp.mini ? -0.55 : -0.21) + s * 0.36, 0.42, sp.mini ? 2.0 : 1.95), m.anchor(m.boomG, s * 0.36, lug[1] - 0.08, lug[0]), 0.11, 0.065);
   cylinder(m, m.anchor(m.boomG, 0, knee[1] + 0.03, knee[0]), m.anchor(m.stickG, 0, 0.5, -0.6), 0.1, 0.06);
-  const ca = m.att.cylAnchor;
-  cylinder(m, m.anchor(m.stickG, 0, 0.5, 0.45), m.anchor(m.attach, ca.x, ca.y, ca.z), 0.085, 0.05);
+  linkage(m, stickLen, armMat, ak);
+  cylinder(m, m.anchor(m.stickG, 0, 0.5, 0.45), m.linkJ, 0.085, 0.05);
   // colliders: boom (2 boxes), stick, attachment parts. These break walls they touch.
   m.colliderSets.push({ obj: m.boomG, boxes: [[0, P(1.4, 0.55)[1], P(1.4, 0)[0], 0.5, 0.6 * ky + 0.1, 2.8 * kz, -Math.atan2(1.2 * ky, 2.7 * kz)], [0, P(4.2, 0.65)[1], P(4.2, 0)[0], 0.5, 0.5, 2.8 * kz, Math.atan2(1.2 * ky, 2.8 * kz)]], breaks: true });
   m.colliderSets.push({ obj: m.stickG, boxes: [[0, 0.1, stickLen / 2 - 0.25, 0.4, 0.45, stickLen + 0.5]], breaks: true });
   for (const c of m.att.colliders) m.colliderSets.push({ obj: c.obj, boxes: c.boxes, breaks: true, k: ak });
+}
+
+// four-bar bucket linkage, as on a real excavator: a pair of idler links (dog-bones) pinned to the stick and an
+// H-link to the coupler's upper pin. The bucket cylinder drives the joint J between them; J is solved each pose.
+function linkage(m, L, armMat, k = 1) {
+  const K = m.mats, S = m.stickG, B0 = m.att.cylAnchor;
+  const Iy = 0.2 * k, Iz = L - 0.48 * k, Li = 0.5 * k, Lp = 0.42 * k;
+  const bar = (x, len, w, r) => [rbox(0.05, w, len, 0.02, x, 0, len / 2), cy(r, r, 0.06, 18, x, 0, 0, 0, 0, Math.PI / 2), cy(r, r, 0.06, 18, x, 0, len, 0, 0, Math.PI / 2)];
+  // idler pivot on the stick: boss through the stick with pin + retainers
+  add(S, mergeG([cy(0.085 * k, 0.085 * k, 0.5, 18, 0, Iy, Iz, 0, 0, Math.PI / 2), rbox(0.44, 0.2 * k, 0.3 * k, 0.03, 0, Iy - 0.06 * k, Iz)]), armMat);
+  add(S, mergeG([pinX(0.045 * k, 0.76, 0, Iy, Iz), bolts([V(0.39, Iy + 0.03, Iz), V(-0.39, Iy + 0.03, Iz)], V(1, 0, 0), 0.012)]), K.steel);
+  const idler = new THREE.Group(); idler.position.set(0, Iy, Iz); S.add(idler);
+  add(idler, mergeG([...bar(0.33, Li, 0.12 * k, 0.07 * k), ...bar(-0.33, Li, 0.12 * k, 0.07 * k)]), K.dark);
+  const hl = new THREE.Group(); S.add(hl);
+  add(hl, mergeG([...bar(0.26, Lp, 0.15 * k, 0.075 * k), ...bar(-0.26, Lp, 0.15 * k, 0.075 * k), cy(0.05 * k, 0.05 * k, 0.5, 14, 0, -0.02, Lp * 0.48, 0, 0, Math.PI / 2), rbox(0.46, 0.06 * k, 0.12 * k, 0.02, 0, 0.05 * k, Lp * 0.48)]), armMat);
+  add(hl, mergeG([pinX(0.045 * k, 0.8, 0, 0, 0), cy(0.008, 0.008, 0.04, 6, 0.2, 0.09 * k, 0)]), K.steel);
+  m.linkJ = new THREE.Object3D(); S.add(m.linkJ);
+  m.updateLink = () => {
+    const c = m.curl, by = B0.y * Math.cos(c) - B0.z * Math.sin(c), bz = L + B0.y * Math.sin(c) + B0.z * Math.cos(c);
+    const dy = by - Iy, dz = bz - Iz, d = Math.max(1e-4, Math.hypot(dy, dz));
+    const a = (Li * Li - Lp * Lp + d * d) / (2 * d), h = Math.sqrt(Math.max(0, Li * Li - a * a));
+    const py = Iy + a * dy / d, pz = Iz + a * dz / d;
+    let jy = py - h * dz / d, jz = pz + h * dy / d;
+    const ky = py + h * dz / d; if (ky > jy) { jy = ky; jz = pz - h * dy / d; }
+    m.linkJ.position.set(0, jy, jz);
+    idler.rotation.x = -Math.atan2(jy - Iy, jz - Iz);
+    hl.position.set(0, jy, jz); hl.rotation.x = -Math.atan2(by - jy, bz - jz);
+  };
+  m.updateLink();
 }
 
 export function cylinder(m, a, b, rBarrel, rRod) {

@@ -333,7 +333,7 @@ export class Machine {
   }
 
   animateTracks(dist, dyaw) {
-    const g = (this.spec.gauge || (this.family === 'crane' ? 1.75 : this.family === 'dozer' ? 1.25 : 1.19)) * this.s;
+    const g = (this.spec.gauge || (this.family === 'crane' ? 1.75 : this.family === 'dozer' ? 1.25 : this.spec.under === 'steel' ? 1.3 : 1.19)) * this.s;
     if (this.tracks.length) {
       const dl = (dist + dyaw * g) / this.s, dr = (dist - dyaw * g) / this.s;
       if (Math.abs(dl) > 1e-5 || Math.abs(dr) > 1e-5) { this.tracks[0].move(dr); this.tracks[1].move(dl); }

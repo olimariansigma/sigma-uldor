@@ -1,4 +1,4 @@
-// 21 machines on one generic Machine class. Builders live in mx-excavator.js and mx-vehicles.js; each one sets
+// 22 machines on one generic Machine class. Builders live in mx-excavator.js and mx-vehicles.js; each one sets
 // up groups, colliders and a "rig" that maps the five control channels (swing, boom, stick, curl, open) onto it.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
@@ -21,6 +21,7 @@ export const MACHINES = [
   { id: 'bx220', tons: 22, family: EX, name: 'BRUNO BX220 Breaker', brand: 'BRUNO', model: 'BX220', icon: '🔨', desc: 'Hydraulic hammer. Switch it on and it chews through walls, and through the road.', scale: 0.95, paint: 0xc41e1e, accent: 0x1b1b1b, under: 'steel', cab: 'cab', boom: 'mono', attach: 'breaker', speed: 2.4 },
   { id: 'mh24', tons: 24, family: EX, name: 'HALDEN MH24 Material Handler', brand: 'HALDEN', model: 'MH24', icon: '🐙', desc: 'Raised cab on a riser, straight boom and a five-tine orange-peel grab.', scale: 1.0, paint: 0xf4f4f0, accent: 0x1f5fa8, under: 'steel', gauge: 1.32, cab: 'elevated', boom: 'straight', stickLen: 4.0, attach: 'orangepeel', speed: 2.0 },
   { id: 'wh75', tons: 7.5, family: EX, name: 'HALDEN WH75 Claw', brand: 'HALDEN', model: 'WH75', icon: '🦀', desc: 'Wheeled log-claw excavator with dozer blade, outriggers and a black boom. The claw grabs a whole load of blocks.', scale: 0.85, paint: 0xf06a10, accent: 0x18191b, armPaint: 0x1c1d1f, under: 'wheels', cab: 'cab', boom: 'mono', stickLen: 3.2, attach: 'claw', blade: true, speed: 6.0, paintCab: true },
+  { id: 'wh200', tons: 38, family: EX, name: 'HALDEN WH200 Big Claw', brand: 'HALDEN', model: 'WH200', icon: '🦞', desc: 'Huge wheeled material handler: raised cab, outriggers, dual tyres and a giant log claw that grabs a whole wall section of blocks in one bite.', scale: 1.12, paint: 0x6a3da6, accent: 0xf2b705, armPaint: 0x232427, under: 'wheels', cab: 'elevated', boom: 'straight', stickLen: 4.4, attach: 'claw', attachScale: 1.75, speed: 4.8 },
   { id: 'bg90', tons: 24, family: EX, name: 'TORVA BG90 Brick Grabber', brand: 'TORVA', model: 'BG90', icon: '🧱', desc: 'Dedicated block handler with a rotating parallel clamp that lifts two rows of blocks at once. Precision work: rotate the clamp in line with the blocks, keep it level and move smoothly, or they slip out. Heavy, slow hydraulics.', scale: 0.95, paint: 0x2b63c6, accent: 0xf2b705, under: 'steel', cab: 'cab', boom: 'mono', attach: 'brickclamp', speed: 2.2, inertia: true },
   { id: 'amx', tons: 25, family: EX, name: 'AQUAMOLE AMX Amphibious', brand: 'AQUAMOLE', model: 'AMX', icon: '🦆', desc: 'Pontoon tracks so it floats. Carries a sealed water tank to fetch water from the lake.', scale: 0.95, paint: 0x18a598, accent: 0xf2f2ee, under: 'pontoon', cab: 'cab', boom: 'mono', stickLen: 3.8, attach: 'tank', amphibious: true, speed: 2.0 },
   { id: 'gp300', tons: 32, family: EX, name: 'GRANITE GP300 Pulverizer', brand: 'GRANITE', model: 'GP300', icon: '🦷', desc: 'Concrete pulverizer jaws that rip and crunch walls apart.', scale: 1.05, paint: 0x5f656b, accent: 0xff7a00, under: 'steel', cab: 'cab', boom: 'mono', attach: 'pulverizer', speed: 2.4 },
@@ -144,6 +145,7 @@ export class Machine {
     const W = this.ctx.physics.world, s = this.s;
     for (const set of this.colliderSets) {
       const body = W.createRigidBody(RAPIER.RigidBodyDesc.kinematicPositionBased());
+      const s = this.s * (set.k || 1); // set.k: extra scale of a scaled-up attachment
       for (const [x, y, z, sx, sy, sz, rx = 0] of set.boxes) {
         const rq = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, 0));
         W.createCollider(RAPIER.ColliderDesc.cuboid(sx * s / 2, sy * s / 2, sz * s / 2).setTranslation(x * s, y * s, z * s).setRotation(rq).setFriction(1.0), body);

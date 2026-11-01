@@ -30,7 +30,7 @@
       <div id="titleMsg" class="title-msg"></div>
     </div>
   </div>
-  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v3.2</span></div>
+  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v3.3</span></div>
 </div>
 
 <!-- HUD -->
@@ -55,6 +55,10 @@
     <button class="hud-btn sq" id="settingsBtn" title="Settings"><i data-ic="gear"></i></button>
   </div>
   <div id="crosshair"><div></div></div>
+  <div id="hotbar">
+    <button class="hb on" data-tool="hammer"><span class="k">1</span><i data-ic="hammer"></i><small>HAMMER</small></button>
+    <button class="hb empty" data-tool="trowel"><span class="k">2</span><i data-ic="trowel"></i><small>TROWEL</small><b class="amt" id="trowelAmt">empty</b><i class="sw" id="trowelSw"></i></button>
+  </div>
   <div id="carry" class="hidden"><span id="carryIcon"></span><span id="carryVal">0/3</span></div>
   <div id="bucketHud" class="hidden"><span id="bucketSw"></span><span id="bucketVal"></span></div>
   <div id="prompt" class="hidden"></div>
@@ -158,6 +162,7 @@
         <li><kbd>Q</kbd> / <kbd>Right click</kbd> pick up blocks (hold)</li>
         <li><kbd>G</kbd> throw (auto-aims into the crusher hopper)</li>
         <li><kbd>E</kbd> use: drive a machine, fill / pour your bucket, open the mixer</li>
+        <li><kbd>1</kbd> hammer · <kbd>2</kbd> cement trowel: click on the ground to lay cement</li>
         <li><kbd>B</kbd> spawn menu · <kbd>M</kbd> online · <kbd>H</kbd> help</li>
       </ul>
     </div>
@@ -177,8 +182,8 @@
       <h3>Dust → cement → road</h3>
       <ul>
         <li>Rubble in the crusher hopper is crushed into dust that keeps the block's colour. It rides the conveyor onto the pile.</li>
-        <li>Scoop dust from the pile and pour it into the <b>mixer</b>, add water from the <b>lake</b>.</li>
-        <li>The paddles blend the colours into cement. Pour it into potholes (skip, paver or your bucket), then roll them flat with the roller.</li>
+        <li>Put dust in the <b>mixer</b> (button, bucket or a machine) and add any amount of water (hose button or lake water). The paddles turn it into cement.</li>
+        <li><b>Take cement</b> onto your trowel, then click the ground to lay cement tiles anywhere, or click a pothole to fill it. Machines (skip, paver) work too; roll repaired potholes flat with the roller.</li>
       </ul>
     </div>
   </div>

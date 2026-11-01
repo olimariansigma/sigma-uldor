@@ -178,7 +178,7 @@ function wear(demo, p, dmg, at, sfx) {
 function grab(m, demo, gp, sfx, capScale) {
   const room = Math.round(m.att.pieces * capScale) - m.held.length;
   if (room <= 0) return;
-  const s = m.s;
+  const s = m.s * (m.spec.attachScale || 1);
   const cand = demo.piecesInSphere(gp, 1.4 * s, [LOOSE]);
   const intact = demo.intactNear(gp, 0.85 * s, 12);
   const all = [...cand, ...intact].sort((a, b) => a.pos.distanceToSquared(gp) - b.pos.distanceToSquared(gp)).slice(0, room);

@@ -2,7 +2,7 @@
 // phone can join by typing the code. JSON messages for events, Float32Array buffers for fast snapshots.
 import { Peer } from 'peerjs';
 
-const PREFIX = 'wreckingyard-v32-';
+const PREFIX = 'wreckingyard-v33-';
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CHUNK = 48000;
 const ICE = {

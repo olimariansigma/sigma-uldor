@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { MACHINES, controlsFor } from './machines.js';
 import { BUILDINGS } from './buildings.js';
-import { fmtKg } from './crusher.js';
+import { fmtKg, fmtL, KG } from './crusher.js';
 import { ic, iconize, fillIcons } from './icons.js';
 
 const $ = (id) => document.getElementById(id);
@@ -14,10 +14,10 @@ const TOOL = { brickclamp: 'Rotating brick clamp', grapple: 'Sorting grapple', s
 const FAMILY = { roller: ['Tandem roller', 'Twin vibrating drums', 'Articulated drums'], paver: ['Paver', 'Hopper + screed', 'Rubber tracks'], loader: ['Wheel loader', '3 m bucket', 'Articulated wheels'],
   dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'] };
 const UNDER = { steel: 'Steel tracks', rubber: 'Rubber tracks', wheels: 'Wheels + outriggers', pontoon: 'Floating pontoons', spider: 'Walking legs', robot: 'Remote tracks' };
-const TONS = { bg90: 24, tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
+const TONS = { wh200: 38, bg90: 24, tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
 export function machineInfo(sp) {
   if (sp.family === 'excavator') {
-    const type = sp.under === 'robot' ? 'Demolition robot' : sp.under === 'spider' ? 'Walking excavator' : sp.under === 'wheels' ? 'Wheeled excavator' : sp.under === 'pontoon' ? 'Amphibious excavator' : sp.boom === 'long' ? 'High-reach demolition' : sp.scale < 0.6 ? 'Mini excavator' : 'Crawler excavator';
+    const type = sp.under === 'robot' ? 'Demolition robot' : sp.under === 'spider' ? 'Walking excavator' : sp.under === 'wheels' ? (sp.cab === 'elevated' ? 'Wheeled material handler' : 'Wheeled excavator') : sp.under === 'pontoon' ? 'Amphibious excavator' : sp.boom === 'long' ? 'High-reach demolition' : sp.scale < 0.6 ? 'Mini excavator' : 'Crawler excavator';
     return { type, tool: TOOL[sp.attach] || 'Attachment', drive: UNDER[sp.under] || 'Tracks', tons: TONS[sp.id], speed: sp.speed };
   }
   const f = FAMILY[sp.family] || ['Machine', 'Tool', 'Tracks'];
@@ -40,6 +40,10 @@ export class UI {
     this.cache = {};
     fillIcons();
     this.setupShowroom();
+    document.querySelectorAll('#hotbar .hb').forEach((b) => {
+      b.addEventListener('click', (e) => { e.stopPropagation(); this.game.selectTool(b.dataset.tool); });
+      b.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    });
   }
 
   isOpen() { return PANELS.some((id) => !$(id).classList.contains('hidden')) || !!(this.game.showroom && this.game.showroom.active); }
@@ -206,24 +210,40 @@ export class UI {
   // ------------------------------------------------------------------ mixer
   renderMixer() {
     const g = this.game, mx = g.mixer, body = $('mixerBody');
-    const key = [mx.dust | 0, mx.water | 0, mx.cement | 0, mx.status, g.bucket.kind, g.bucket.kg | 0, g.crusher.pileKg | 0].join('|');
+    const me = g.players.get(g.myId), tc = me ? me.cement : { kg: 0 };
+    const key = [mx.dust | 0, mx.water | 0, mx.cement | 0, mx.status, g.bucket.kind, g.bucket.kg | 0, g.crusher.pileKg | 0, tc.kg | 0].join('|');
     if (this.cache.mixer === key && body.children.length) return;
     this.cache.mixer = key;
     body.innerHTML = `
       <div class="mix-grid">
         <div class="mix-cell"><div>Dust</div><div class="v">${fmtKg(mx.dust)}</div><div class="sw" style="background:${hex(mx.dustCol)};opacity:${mx.dust ? 1 : 0.2}"></div></div>
-        <div class="mix-cell"><div>Water</div><div class="v">${Math.round(mx.water)} L</div><div class="sw" style="background:#3d7080;opacity:${mx.water ? 1 : 0.2}"></div></div>
+        <div class="mix-cell"><div>Water</div><div class="v">${fmtL(mx.water)}</div><div class="sw" style="background:#3d7080;opacity:${mx.water ? 1 : 0.2}"></div></div>
         <div class="mix-cell"><div>Cement</div><div class="v">${fmtKg(mx.cement)}</div><div class="sw" style="background:${hex(mx.cementCol)};opacity:${mx.cement ? 1 : 0.2}"></div></div>
       </div>
-      <p><b>${mx.status}</b> · mix ratio needs roughly 1 L of water per 3 kg of dust. Dust pile: <b>${fmtKg(g.crusher.pileKg)}</b></p>`;
+      <p><b>${mx.status}</b> · Put dust in and add any amount of water: the paddles turn it all into cement. Dust pile: <b>${fmtKg(g.crusher.pileKg)}</b> · Your trowel: <b>${fmtKg(tc.kg)}</b></p>`;
     const row = document.createElement('div'); row.className = 'btn-row';
-    row.appendChild(this.btn('➕ 50 kg dust from pile', '', () => g.act('mixer', { op: 'dust', kg: 50 }), g.crusher.pileKg < 1));
-    row.appendChild(this.btn('➕ 250 kg dust', '', () => g.act('mixer', { op: 'dust', kg: 250 }), g.crusher.pileKg < 1));
+    const step = 25 / KG;
+    row.appendChild(this.btn('➕ 25 kg dust from the pile', '', () => g.act('mixer', { op: 'dust', kg: step }), g.crusher.pileKg < 1));
+    row.appendChild(this.btn('💧 Add water (hose)', 'alt', () => g.act('mixer', { op: 'water' })));
     const b = g.bucket;
-    row.appendChild(this.btn(b.kind ? `🪣 Pour my ${b.kind} in (${Math.round(b.kg)})` : '🪣 Your bucket is empty', 'alt', () => g.act('bucketPour', { target: 'mixer' }), !b.kind || b.kind === 'cement'));
-    row.appendChild(this.btn('🪣 Fill my bucket with cement', 'alt', () => g.act('bucketFill', { source: 'mixer' }), mx.cement < 1 || (b.kind && b.kind !== 'cement') || b.kg >= 25));
+    if (b.kind && b.kind !== 'cement') row.appendChild(this.btn(`🪣 Pour my bucket of ${b.kind} in`, 'alt', () => g.act('bucketPour', { target: 'mixer' })));
+    row.appendChild(this.btn(ic('trowel', 'inl') + 'Take cement on my trowel', '', () => { g.act('takeCement', {}); }, mx.cement < 0.5));
     row.appendChild(this.btn('🫗 Empty the tub', 'red', () => g.act('mixer', { op: 'empty' })));
     body.appendChild(row);
+  }
+
+  // tool slots: hammer / trowel with how much cement is on it
+  setHotbar() {
+    const g = this.game, me = g.players.get(g.myId);
+    const kg = me ? me.cement.kg : 0;
+    document.querySelectorAll('#hotbar .hb').forEach((b) => b.classList.toggle('on', b.dataset.tool === g.tool));
+    const tb = document.querySelector('#hotbar [data-tool="trowel"]');
+    tb.classList.toggle('empty', !(kg > 0));
+    $('trowelAmt').textContent = kg > 0 ? fmtKg(kg) : 'empty';
+    $('trowelSw').style.background = kg > 0 ? hex(me.cement.color) : 'transparent';
+    const big = document.querySelector('#tbtns-foot [data-act="hammer"]');
+    if (big) { const want = g.tool === 'trowel' ? 'trowel' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${want === 'trowel' ? 'LAY' : 'SMASH'}</small>`; } }
+    if (g.player && g.player.avatar) g.player.avatar.setTool(g.tool, me && me.cement.kg > 0 ? me.cement.color : null);
   }
 
   // ------------------------------------------------------------------ HUD
@@ -276,7 +296,7 @@ export class UI {
     el.classList.toggle('hidden', !b.kind);
     if (!b.kind) return;
     $('bucketSw').style.background = b.kind === 'water' ? '#3d7080' : hex(b.color);
-    $('bucketVal').textContent = `${b.kind} ${Math.round(b.kg)} ${b.kind === 'water' ? 'L' : 'kg'}`;
+    $('bucketVal').textContent = `${b.kind} ${b.kind === 'water' ? fmtL(b.kg) : fmtKg(b.kg)}`;
   }
   setPrompt(html) {
     const el = $('prompt');
@@ -287,6 +307,7 @@ export class UI {
   setCrosshair(active, visible = true) { const c = $('crosshair'); c.classList.toggle('target', active); c.style.display = visible ? '' : 'none'; }
   setMode(mode, touch, machine = null) {
     $('vehicleHud').classList.toggle('hidden', mode !== 'machine');
+    $('hotbar').classList.toggle('hidden', mode === 'machine');
     if (machine) {
       const ctl = controlsFor(machine);
       const setBtn = (act, txt) => { const el = document.querySelector(`#tbtns-exc [data-act="${act}"]`); if (!el) return; el.classList.toggle('hidden', !txt); if (txt) el.innerHTML = txt.includes('<') ? iconize(txt) : `${ic({ stickOut: 'armOut', stickIn: 'armIn', curlIn: 'curlIn', curlOut: 'curlOut' }[act] || 'grab')}<small>${txt}</small>`; };
@@ -318,7 +339,7 @@ export class UI {
       scoop: m.payload.kg ? m.payload.kind : m.held.length ? 'loaded' : 'empty', blade: 'ready', bed: 'ready', ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
     $('vhGrab').textContent = st ?? (m.open > 0.5 ? 'OPEN' : 'CLOSED');
     const cap = a.bulk ? m.capacity() : Math.max(1, a.pieces);
-    $('vhLoad').textContent = a.bulk ? (m.payload.kg ? `${Math.round(m.payload.kg)} ${m.payload.kind === 'water' ? 'L water' : 'kg ' + m.payload.kind}` : (m.held.length ? `${m.held.length} pcs` : 'empty')) : a.pieces ? `${m.held.length} pcs` : '—';
+    $('vhLoad').textContent = a.bulk ? (m.payload.kg ? `${m.payload.kind === 'water' ? fmtL(m.payload.kg) + ' water' : fmtKg(m.payload.kg) + ' ' + m.payload.kind}` : (m.held.length ? `${m.held.length} pcs` : 'empty')) : a.pieces ? `${m.held.length} pcs` : '—';
     $('vhFill').style.width = (a.bulk ? Math.min(100, m.payload.kg / cap * 100) : Math.min(100, m.held.length / cap * 100)) + '%';
     $('vhFill').style.background = m.payload.kind === 'water' ? '#3d7080' : m.payload.kg ? hex(m.payload.color) : '#7fd0ff';
   }

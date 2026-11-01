@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
-import { tube, fmtKg } from './crusher.js';
+import { tube, fmtKg, fmtL } from './crusher.js';
 
 const R_TUB = 1.3, FLOOR = 1.42, DEPTH = 0.95;
 const WATER = new THREE.Color(0x4a7d8c);
@@ -235,29 +235,25 @@ export class Mixer {
   // authority: run the mixing process; returns true when the state changed meaningfully
   simulate(dt) {
     const before = this.status;
+    // any amount of water works: the paddles turn all the dust in the tub into cement in a couple of seconds
     if (this.dust > 0 && this.water > 0) {
-      const ratio = this.water / this.dust;
-      if (ratio < 0.12) { this.status = 'Too dry – add water'; this.progress = Math.min(this.progress + dt * 0.02, 0.6); }
-      else if (ratio > 0.9) { this.status = 'Too wet – add dust'; this.progress = Math.min(this.progress + dt * 0.02, 0.6); }
-      else {
-        this.status = 'Mixing…';
-        this.progress += dt / (6 + (this.dust + this.water) / 500);
-        if (this.progress >= 1) {
-          const w = Math.min(this.water, this.dust * 0.45);
-          const made = this.dust + w;
-          const col = this.mixedColor();
-          this.cementCol.copy(col);
-          this.cement += made;
-          this.dust = 0; this.water -= w; this.progress = 0;
-          this.batches = [{ c: col.clone(), kg: this.cement }];
-          this.status = 'Cement ready!';
-          this.refresh();
-          return true;
-        }
+      this.status = 'Mixing…';
+      this.progress += dt / 2.5;
+      if (this.progress >= 1) {
+        const w = Math.min(this.water, this.dust * 0.3);
+        const col = this.mixedColor();
+        this.cementCol.copy(col);
+        this.cement += this.dust;
+        this.dust = 0; this.water -= w; this.progress = 0;
+        if (this.water < 0.5) this.water = 0;
+        this.batches = [{ c: col.clone(), kg: this.cement }];
+        this.status = 'Cement ready!';
+        this.refresh();
+        return true;
       }
-    } else if (this.cement > 0) this.status = this.water > 0 ? 'Cement ready (extra water)' : 'Cement ready!';
-    else if (this.dust > 0) this.status = 'Needs water';
-    else if (this.water > 0) this.status = 'Needs dust';
+    } else if (this.cement > 0) this.status = 'Cement ready!';
+    else if (this.dust > 0) this.status = 'Add some water';
+    else if (this.water > 0) this.status = 'Add dust';
     else this.status = 'Empty';
     return before !== this.status;
   }
@@ -299,7 +295,7 @@ export class Mixer {
     c.font = '14px monospace';
     const sw = (col, x, y) => { c.fillStyle = '#' + col.getHexString(); c.fillRect(x, y - 11, 14, 14); };
     c.fillStyle = '#cfe8ff'; c.fillText(`DUST   ${fmtKg(this.dust)}`, 10, 46); if (this.dust) sw(this.dustCol, 220, 46);
-    c.fillStyle = '#cfe8ff'; c.fillText(`WATER  ${Math.round(this.water)} L`, 10, 66);
+    c.fillStyle = '#cfe8ff'; c.fillText(`WATER  ${fmtL(this.water)}`, 10, 66);
     c.fillStyle = '#cfe8ff'; c.fillText(`CEMENT ${fmtKg(this.cement)}`, 10, 86); if (this.cement) sw(this.cementCol, 220, 86);
     c.fillStyle = '#ffd34d'; c.fillText(this.status, 10, 110);
     c.fillStyle = '#1e3350'; c.fillRect(10, 124, 236, 14);

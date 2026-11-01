@@ -9,12 +9,13 @@ import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE } from './demolition.js'
 import { BUILDINGS } from './buildings.js';
 import { FX } from './fx.js';
 import { Audio } from './audio.js';
-import { Crusher, fmtKg } from './crusher.js';
+import { Crusher, fmtKg, KG } from './crusher.js';
 import { Mixer } from './mixer.js';
 import { Road } from './road.js';
 import { Machine, MACHINES, controlsFor } from './machines.js';
 import { machineInteract, releaseAll } from './machineLogic.js';
 import { Showroom } from './showroom.js';
+import { Slabs, SLAB, SLAB_KG } from './slabs.js';
 import { renderLogo } from './logo3d.js';
 import { Player } from './player.js';
 import { Avatar, SHIRTS } from './avatar.js';
@@ -27,6 +28,7 @@ const $ = (id) => document.getElementById(id);
 const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 const clamp = THREE.MathUtils.clamp;
 const BUCKET = 50;
+const TROWEL = 1150; // cement the trowel holds (simulation units, 10 kg in game weight)
 const NET_HZ = 15;
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
@@ -84,6 +86,10 @@ class Game {
     this.crusher = new Crusher(this.scene, this.physics, this.M, SITE.crusherPos, SITE.crusherRot);
     this.mixer = new Mixer(this.scene, this.physics, this.M, SITE.mixerPos);
     this.road = new Road(this.scene);
+    this.slabs = new Slabs(this.scene);
+    this.slabGhost = new THREE.Mesh(new THREE.BoxGeometry(SLAB, 0.04, SLAB), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }));
+    this.slabGhost.visible = false; this.slabGhost.renderOrder = 3; this.scene.add(this.slabGhost);
+    this.tool = 'hammer';
     this.machines = new Map(); this.nextMachineId = 1;
     this.plots = SITE.plots.map(() => null); this.buildingStatics = new Map(); this.groundHandles = new Set();
     this.settings = { hammer: this.prefs.hammer, carry: this.prefs.carry, crusher: 3, grapple: 1 };
@@ -147,7 +153,7 @@ class Game {
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
-        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 21 machines or new buildings', false, 6000), 6200);
+        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 22 machines or new buildings', false, 6000), 6200);
         setTimeout(() => this.ui.toast('🌐 <b>Multiplayer</b>: host a game and share the code with friends', true, 6000), 12500);
         this.prefs.seenTips = true; this.savePrefs();
       }
@@ -233,7 +239,7 @@ class Game {
   carriedBy(pid) { const out = []; for (const p of this.demo.pieces) if (p.state === CARRIED && p.holder === pid) out.push(p); return out; }
 
   addPlayerEntry(id, name, shirt, local = false) {
-    const e = { id, name, shirt, local, pos: new THREE.Vector3().copy(SITE.playerSpawn), yaw: 0, speed: 0, grounded: true, swingT: -1, driving: -1, bucket: { kind: null, kg: 0, color: new THREE.Color(0.5, 0.5, 0.5) }, target: null };
+    const e = { id, name, shirt, local, pos: new THREE.Vector3().copy(SITE.playerSpawn), yaw: 0, speed: 0, grounded: true, swingT: -1, driving: -1, bucket: { kind: null, kg: 0, color: new THREE.Color(0.5, 0.5, 0.5) }, cement: { kg: 0, color: new THREE.Color(0.6, 0.6, 0.6) }, target: null };
     if (local) e.avatar = this.player.avatar;
     else { e.avatar = new Avatar(this.scene, { shirt, name }); }
     this.players.set(id, e);
@@ -357,6 +363,7 @@ class Game {
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
     this.mixer.empty();
     this.road.restore([]);
+    this.slabs.clear();
     this.nextMachineId = 1;
     for (const p of this.players.values()) p.bucket.kind = null;
     this.bucket.kind = null; this.bucket.kg = 0;
@@ -369,9 +376,9 @@ class Game {
       plots: this.plots,
       pieces: this.demo.serializePieces(),
       machines: [...this.machines.values()].map((m) => m.serialize()),
-      crusher: this.crusher.serialize(), mixer: this.mixer.serialize(), road: this.road.serialize(),
+      crusher: this.crusher.serialize(), mixer: this.mixer.serialize(), road: this.road.serialize(), slabs: this.slabs.serialize(),
       settings: { crusher: this.settings.crusher, grapple: this.settings.grapple },
-      players: forSave ? [] : [...this.players.values()].map((p) => ({ id: p.id, name: p.name, shirt: p.shirt, driving: p.driving, bucket: [p.bucket.kind, p.bucket.kg, p.bucket.color.r, p.bucket.color.g, p.bucket.color.b] })),
+      players: forSave ? [] : [...this.players.values()].map((p) => ({ id: p.id, name: p.name, shirt: p.shirt, driving: p.driving, bucket: [p.bucket.kind, p.bucket.kg, p.bucket.color.r, p.bucket.color.g, p.bucket.color.b], cement: [p.cement.kg, p.cement.color.r, p.cement.color.g, p.cement.color.b] })),
       nextMachineId: this.nextMachineId,
     };
   }
@@ -400,7 +407,7 @@ class Game {
     // re-attach held pieces on the authority side
     if (!mirror) for (const p of this.demo.pieces) if (p.state === HELD) { const m = this.machines.get(p.holder); if (m && p.holdLocal) m.held.push({ p, local: p.holdLocal }); }
     this.nextMachineId = w.nextMachineId || this.nextMachineId;
-    this.crusher.restore(w.crusher); this.mixer.restore(w.mixer); this.road.restore(w.road);
+    this.crusher.restore(w.crusher); this.mixer.restore(w.mixer); this.road.restore(w.road); this.slabs.restore(w.slabs || []);
     if (w.settings) Object.assign(this.settings, w.settings);
     this.crusher.rate = this.settings.crusher;
   }
@@ -524,6 +531,7 @@ class Game {
       case 'setting': this.settings[d.key] = d.value; this.crusher.rate = this.settings.crusher; this.events.push(['set', { crusher: this.settings.crusher, grapple: this.settings.grapple }]); break;
       case 'mixer': {
         if (d.op === 'empty') this.mixer.empty();
+        if (d.op === 'water') { const l = Math.min(this.mixer.room('water'), 1 / KG * 10); if (l > 0) { this.mixer.addWater(l); this.sfx.splash(this.mixer.tubCenter, 0.5); } }
         if (d.op === 'dust') {
           const want = Math.min(d.kg, this.mixer.room('dust'));
           const got = this.crusher.take(want);
@@ -541,7 +549,10 @@ class Game {
         this.mixerDirty = true;
         break;
       }
-      case 'bucketFill': this.bucketFill(pid, d.source); break;
+      case 'bucketFill': if (d.source === 'mixer') this.takeCement(pid); else this.bucketFill(pid, d.source); break;
+      case 'takeCement': this.takeCement(pid); break;
+      case 'layCement': this.layCement(pid, d.x, d.z); break;
+      case 'pourCement': this.pourCement(pid, d.target, d.id); break;
       case 'bucketPour': this.bucketPour(pid, d.target, d.target === 'paver' ? d.id : d.hole); break;
       case 'newWorld': if (pid === this.myId) { this.newWorld(); if (this.net.isHost) this.broadcastWorld(); } break;
     }
@@ -600,6 +611,87 @@ class Game {
     } else used = b.kg;
     this.setBucket(pid, b.kind, b.kg - used, b.color);
     this.sfx.chips(pl.pos.clone().add(new THREE.Vector3(0, 1, 0)), new THREE.Vector3(), b.kind === 'water' ? 0x6aa0b0 : b.color.getHex(), 8, 0.05, 1.2);
+  }
+
+  // ======================================================================= cement trowel
+  setCement(pid, kg, color) {
+    const pl = this.players.get(pid); if (!pl) return;
+    pl.cement.kg = kg > 0.5 ? kg : 0; if (color) pl.cement.color.copy(color);
+    this.events.push(['cem', pid, pl.cement.kg, pl.cement.color.r, pl.cement.color.g, pl.cement.color.b]);
+    if (pid === this.myId) this.onMyCement();
+  }
+  onMyCement() {
+    const c = this.players.get(this.myId).cement;
+    if (c.kg > 0 && !this.hadCement) this.selectTool('trowel');
+    if (c.kg <= 0 && this.tool === 'trowel') this.selectTool('hammer');
+    this.hadCement = c.kg > 0;
+    this.ui.setHotbar();
+  }
+  selectTool(t) {
+    if (t === 'trowel' && !(this.players.get(this.myId).cement.kg > 0)) { this.ui.toast('🪣 No cement on the trowel. Take some from the mixer first.'); return; }
+    this.tool = t;
+    this.player.avatar.setTool(t);
+    this.ui.setHotbar();
+  }
+  takeCement(pid) {
+    const pl = this.players.get(pid); if (!pl) return;
+    const room = TROWEL - pl.cement.kg;
+    if (room <= 1 || this.mixer.cement < 0.5) { if (this.mixer.cement < 0.5) this.tell(pid, '⚠️ No cement in the mixer yet. Put dust in and add water.'); return; }
+    const got = this.mixer.takeCement(room);
+    const tot = pl.cement.kg + got.kg;
+    this.setCement(pid, tot, pl.cement.kg ? pl.cement.color.clone().lerp(got.color, got.kg / tot) : got.color);
+    this.mixerDirty = true;
+    this.tell(pid, `🪣 ${fmtKg(tot)} of cement on your trowel. Click (or tap 🔨) on the ground to lay it.`, true);
+  }
+  // lay one tile of cement at a ground point, or fill the pothole under it
+  layCement(pid, x, z) {
+    const pl = this.players.get(pid); if (!pl || pl.cement.kg <= 0.5) return;
+    const pp = pid === this.myId ? this.player.pos : pl.pos; // the local entry's pos is not tracked
+    if (Math.hypot(x - pp.x, z - pp.z) > 9) return;
+    const c = pl.cement;
+    const h = this.road.nearest({ x, y: 0, z }, 1.4);
+    if (h >= 0) {
+      const used = this.road.fill(h, c.kg, c.color);
+      if (used > 0) {
+        this.events.push(['road', this.road.serialize()]);
+        const hole = this.road.holes[h];
+        if (hole.filled >= hole.need) this.tell(pid, '🛣️ Pothole repaired! Roll it flat with the roller for a ⭐', true);
+        this.setCement(pid, c.kg - used, c.color);
+        this.sfx.chips(new THREE.Vector3(x, 0.2, z), new THREE.Vector3(0, -1, 0), c.color.getHex(), 6, 0.05, 1);
+      }
+      return;
+    }
+    if (lakeDist(x, z) < 1.2) return;
+    const [ix, iz] = Slabs.cellOf(x, z);
+    const cx = ix * SLAB, cz = iz * SLAB;
+    const y = Math.max(this.groundAt(cx - 0.5, cz - 0.5), this.groundAt(cx + 0.5, cz + 0.5), this.groundAt(cx, cz));
+    const used = Math.min(c.kg, SLAB_KG);
+    if (!this.slabs.set(ix, iz, y, c.color, 0)) { this.tell(pid, '⚠️ That is a lot of cement! Too many tiles in the yard.'); return; }
+    this.events.push(['slab', ix, iz, y, c.color.r, c.color.g, c.color.b]);
+    this.setCement(pid, c.kg - used, c.color);
+    this.sfx.chips(new THREE.Vector3(cx, y + 0.1, cz), new THREE.Vector3(0, 1, 0), c.color.getHex(), 5, 0.05, 1);
+    this.sfx.dust(new THREE.Vector3(cx, y + 0.1, cz), c.color.getHex(), 1, 0.4, { alpha: 0.25 });
+  }
+  pourCement(pid, target, id) {
+    const pl = this.players.get(pid); if (!pl || pl.cement.kg <= 0.5) return;
+    const c = pl.cement;
+    if (target === 'paver') {
+      const m = this.machines.get(id); if (!m) return;
+      const used = Math.min(c.kg, m.capacity() - m.payload.kg);
+      if (used > 0) { const tot = m.payload.kg + used; m.payload.color.copy(m.payload.kg ? m.payload.color.clone().lerp(c.color, used / tot) : c.color); m.payload.kind = 'cement'; m.payload.kg = tot; m.payDirty = true; this.setCement(pid, c.kg - used, c.color); }
+    }
+  }
+  // where the trowel would lay: the ground point under the crosshair (within reach), else just in front of you
+  trowelTarget() {
+    const r = this.aimRay(), p = this.player.pos;
+    let x = p.x + Math.sin(this.player.bodyYaw) * 1.6, z = p.z + Math.cos(this.player.bodyYaw) * 1.6;
+    if (r && r.dir.y < -0.05) {
+      const gy = this.groundAt(p.x, p.z);
+      const t = (r.origin.y - gy) / -r.dir.y;
+      const hx = r.origin.x + r.dir.x * t, hz = r.origin.z + r.dir.z * t;
+      if (Math.hypot(hx - p.x, hz - p.z) < 7) { x = hx; z = hz; }
+    }
+    return { x, z };
   }
 
   // ======================================================================= driving
@@ -799,6 +891,7 @@ class Game {
       e.driving = p.driving;
       e.bucket.kind = p.bucket[0]; e.bucket.kg = p.bucket[1]; e.bucket.color.setRGB(p.bucket[2], p.bucket[3], p.bucket[4]);
       e.avatar.setBucket(e.bucket.kind, e.bucket.kg, e.bucket.color);
+      if (p.cement) { e.cement.kg = p.cement[0]; e.cement.color.setRGB(p.cement[1], p.cement[2], p.cement[3]); }
     }
     const me = w.players.find((p) => p.id === this.myId);
     if (me && me.shirt !== this.players.get(this.myId).shirtApplied) {
@@ -836,6 +929,8 @@ class Game {
       case 'set': Object.assign(this.settings, e[1]); this.crusher.rate = this.settings.crusher; break;
       case 'dep': this.crusher.deposit(e[1], new THREE.Color(e[2], e[3], e[4])); break;
       case 'tally': this.crusher.totalKg += e[1]; this.crusher.tally.set(e[2], (this.crusher.tally.get(e[2]) || 0) + e[1]); break;
+      case 'slab': this.slabs.set(e[1], e[2], e[3], new THREE.Color(e[4], e[5], e[6]), 0); break;
+      case 'cem': { const pl = this.players.get(e[1]); if (pl) { pl.cement.kg = e[2]; pl.cement.color.setRGB(e[3], e[4], e[5]); if (e[1] === this.myId) this.onMyCement(); } break; }
       case 'inv': {
         const pl = this.players.get(e[1]); if (!pl) return;
         pl.bucket.kind = e[2]; pl.bucket.kg = e[3]; pl.bucket.color.setRGB(e[4], e[5], e[6]);
@@ -948,17 +1043,27 @@ class Game {
     if (Math.hypot(p.x - mp.x, p.z - mp.z) < 2.6 || (Math.hypot(p.x - tc.x, p.z - tc.z) < 2.3 && p.y > 1.0)) {
       return { text: `${key('E')}Open the cement mixer controls`, label: 'MIXER', run: () => this.ui.open('mixerPanel') };
     }
+    // trowel cement: paver hopper
+    const mc = this.players.get(this.myId).cement;
+    if (mc.kg > 0) {
+      for (const m of this.machines.values()) if (m.family === 'paver') {
+        const hp = m.att.mouth.getWorldPosition(new THREE.Vector3());
+        if (Math.hypot(p.x - hp.x, p.z - hp.z) < 2.6) return { text: `${key('E')}Tip your trowel cement into the paver hopper (${fmtKg(m.payload.kg)})`, label: 'POUR', run: () => this.act('pourCement', { target: 'paver', id: m.id }) };
+      }
+      const h = this.road.nearest(p, 1.8);
+      if (h >= 0) return { text: `${key('E')}Fill the pothole (${fmtKg(this.road.holes[h].filled)} of ${fmtKg(this.road.holes[h].need)})`, label: 'FILL', run: () => this.act('layCement', { x: this.road.holes[h].x, z: this.road.holes[h].z }) };
+    }
     // paver hopper
     if (b.kind === 'cement') {
       for (const m of this.machines.values()) if (m.family === 'paver') {
         const hp = m.att.mouth.getWorldPosition(new THREE.Vector3());
-        if (Math.hypot(p.x - hp.x, p.z - hp.z) < 2.6) return { text: `${key('E')}Pour cement into the paver hopper (${Math.round(m.payload.kg)} kg)`, label: 'POUR', run: () => this.act('bucketPour', { target: 'paver', id: m.id }) };
+        if (Math.hypot(p.x - hp.x, p.z - hp.z) < 2.6) return { text: `${key('E')}Pour cement into the paver hopper (${fmtKg(m.payload.kg)})`, label: 'POUR', run: () => this.act('bucketPour', { target: 'paver', id: m.id }) };
       }
     }
     // potholes
     if (b.kind === 'cement') {
       const h = this.road.nearest(p, 1.6);
-      if (h >= 0) return { text: `${key('E')}Pour cement into the pothole (${Math.round(this.road.holes[h].filled)}/${this.road.holes[h].need} kg)`, label: 'POUR', run: () => this.act('bucketPour', { target: 'hole', hole: h }) };
+      if (h >= 0) return { text: `${key('E')}Pour cement into the pothole (${fmtKg(this.road.holes[h].filled)} of ${fmtKg(this.road.holes[h].need)})`, label: 'POUR', run: () => this.act('bucketPour', { target: 'hole', hole: h }) };
     }
     // lake
     if (lakeDist(p.x, p.z) < 1.25 && (!b.kind || (b.kind === 'water' && b.kg < BUCKET))) return { text: `${key('E')}Fill your bucket with lake water`, label: 'WATER', run: () => this.act('bucketFill', { source: 'lake' }) };
@@ -1017,12 +1122,27 @@ class Game {
     if (this.mode === 'foot') {
       this.updateCamera(dt);
       this.player.update(dt, input, this.cam.yaw, this.aimRay());
+      if (input.pressed('tool1')) this.selectTool('hammer');
+      if (input.pressed('tool2')) this.selectTool('trowel');
+      // trowel: hold click / the action button to lay cement tiles where you aim
+      this.trowelT = (this.trowelT || 0) - dt;
+      const me = this.players.get(this.myId);
+      if (this.tool === 'trowel' && me.cement.kg > 0) {
+        const t = this.trowelTarget(), [ix, iz] = Slabs.cellOf(t.x, t.z);
+        const gx = ix * SLAB, gz = iz * SLAB, hole = this.road.nearest({ x: t.x, y: 0, z: t.z }, 1.4);
+        this.slabGhost.visible = true;
+        if (hole >= 0) { const h = this.road.holes[hole]; this.slabGhost.position.set(h.x, 0.08, h.z); this.slabGhost.scale.set(h.r * 1.9, 1, h.r * 1.9); }
+        else { this.slabGhost.position.set(gx, this.groundAt(gx, gz) + 0.09, gz); this.slabGhost.scale.set(1, 1, 1); }
+        this.slabGhost.material.color.copy(me.cement.color);
+        if (input.held('hammer') && this.trowelT <= 0 && !uiOpen) { this.trowelT = 0.22; this.player.swingT = -1; this.act('layCement', t); this.audio.click(); }
+      } else this.slabGhost.visible = false;
       const c = this.contextAction();
       ctxPrompt = c;
       if (c && c.run && input.pressed('use')) c.run();
       this.ui.setCrosshair(!!this.player.target, true);
       this.ui.setCarry(this.carriedBy(this.myId).length, this.settings.carry);
     } else {
+      this.slabGhost.visible = false;
       const m = this.driving;
       const ctl = {
         drive: clamp(input.moveY, -1, 1), steer: clamp(input.moveX, -1, 1),
@@ -1078,6 +1198,7 @@ class Game {
     }
     this.mixer.update(dt);
     this.road.update(dt);
+    this.slabs.update(dt);
     this.updatePlayers(dt);
     this.fx.update(dt, this.camera);
 
@@ -1139,7 +1260,7 @@ class Game {
     this.demo.vanish(p);
     this.crusher.crushVisual(kg, color, at, this.fx, this.audio);
     this.events.push(['crush', kg, color.r, color.g, color.b, at.toArray().map((v) => +v.toFixed(2))]);
-    this.ui.popup(`+${kg} kg`, at, '#' + color.getHexString());
+    this.ui.popup('+' + fmtKg(kg), at, '#' + color.getHexString());
   }
 
   updatePlayers(dt) {

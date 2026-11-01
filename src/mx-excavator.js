@@ -477,6 +477,14 @@ function arm(m) {
   m.attach = new THREE.Group(); m.attach.position.set(0, 0, stickLen); m.stickG.add(m.attach);
   m.att = buildAttachment(sp.attach, sp.attach === 'breaker' && sp.under === 'robot' ? { ...K, small: true } : (sp.armPaint && sp.attach === 'claw' ? K : K));
   m.attach.add(m.att.group);
+  // oversized tools (e.g. the WH200's giant claw): scale the attachment, its colliders and its grip
+  const ak = sp.attachScale || 1;
+  if (ak !== 1) {
+    m.att.group.scale.setScalar(ak);
+    m.att.grabR = (m.att.grabR || 1) * ak;
+    if (m.att.pieces) m.att.pieces = Math.round(m.att.pieces * ak * ak);
+    if (m.att.cylAnchor) m.att.cylAnchor = m.att.cylAnchor.clone().multiplyScalar(ak);
+  }
   m.grabPoint = m.att.grab;
   for (const p of m.att.probes) m.probes.push(p);
   m.probes.push({ obj: m.anchor(m.stickG, 0, 0, stickLen * 0.75), r: 0.38 }, { obj: m.anchor(m.stickG, 0, 0.4, -0.4), r: 0.38 });
@@ -488,7 +496,7 @@ function arm(m) {
   // colliders: boom (2 boxes), stick, attachment parts. These break walls they touch.
   m.colliderSets.push({ obj: m.boomG, boxes: [[0, P(1.4, 0.55)[1], P(1.4, 0)[0], 0.5, 0.6 * ky + 0.1, 2.8 * kz, -Math.atan2(1.2 * ky, 2.7 * kz)], [0, P(4.2, 0.65)[1], P(4.2, 0)[0], 0.5, 0.5, 2.8 * kz, Math.atan2(1.2 * ky, 2.8 * kz)]], breaks: true });
   m.colliderSets.push({ obj: m.stickG, boxes: [[0, 0.1, stickLen / 2 - 0.25, 0.4, 0.45, stickLen + 0.5]], breaks: true });
-  for (const c of m.att.colliders) m.colliderSets.push({ obj: c.obj, boxes: c.boxes, breaks: true });
+  for (const c of m.att.colliders) m.colliderSets.push({ obj: c.obj, boxes: c.boxes, breaks: true, k: ak });
 }
 
 export function cylinder(m, a, b, rBarrel, rRod) {

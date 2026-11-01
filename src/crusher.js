@@ -510,7 +510,15 @@ export class Crusher {
   }
 }
 
-export function fmtKg(kg) { return kg >= 1000 ? (kg / 1000).toFixed(kg >= 10000 ? 1 : 2) + ' t' : Math.round(kg) + ' kg'; }
+// Game weights: a 1.2 m cinder block weighs 4 kg in this game. The simulation keeps its own mass units (so pile
+// sizes, bucket loads and flows stay in proportion); everything shown to the player goes through KG.
+export const KG = 4 / 459;
+function fmtAmount(v, unit) {
+  if (v >= 1000) return (v / 1000).toFixed(v >= 10000 ? 1 : 2) + (unit === 'kg' ? ' t' : ' m³');
+  return (v >= 10 ? Math.round(v) : Math.round(v * 10) / 10) + ' ' + unit;
+}
+export function fmtKg(kg) { return fmtAmount(kg * KG, 'kg'); }
+export function fmtL(l) { return fmtAmount(l * KG, 'L'); }
 
 export function tube(a, b, r, seg = 10) {
   const d = b.clone().sub(a), len = d.length();

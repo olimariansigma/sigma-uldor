@@ -104,6 +104,19 @@ export class Avatar {
     this.bucket.add(this.bucketFill);
     this.bucket.position.set(0, -0.25, 0);
     this.bucketPivot = this.bucket;
+    // cement trowel (shown instead of the hammer when it is selected): wooden handle, steel ferrule, pointed blade with cement
+    this.trowel = new THREE.Group(); this.arms[1].hand.add(this.trowel); this.trowel.visible = false;
+    const tH = new THREE.Mesh(cyl(0.024, 0.02, 0.2, 10, 0, 0, 0, null, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x9a6a3a, roughness: 0.6 }));
+    tH.position.z = 0.04;
+    const tF = new THREE.Mesh(cyl(0.012, 0.012, 0.12, 8, 0, 0, 0, null, -0.6), new THREE.MeshStandardMaterial({ color: 0x8e9499, metalness: 0.8, roughness: 0.3 }));
+    tF.position.set(0, -0.03, 0.17);
+    const bs = new THREE.Shape(); bs.moveTo(-0.07, 0); bs.lineTo(0.07, 0); bs.lineTo(0, 0.22); bs.closePath();
+    const tB = new THREE.Mesh(new THREE.ExtrudeGeometry(bs, { depth: 0.006, bevelEnabled: false }).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xb8bec4, metalness: 0.85, roughness: 0.25 }));
+    tB.position.set(0, -0.07, 0.18); tB.castShadow = true;
+    this.trowelLoad = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x9a9a95, roughness: 0.9 }));
+    this.trowelLoad.scale.set(1, 0.5, 1.4); this.trowelLoad.position.set(0, -0.064, 0.25);
+    this.trowel.add(tH, tF, tB, this.trowelLoad);
+    this.tool = 'hammer';
     this.setHammer(1);
     if (name) this.setName(name);
     this.phase = 0;
@@ -119,6 +132,11 @@ export class Avatar {
     const hm = new THREE.Mesh(new THREE.BoxGeometry(head[1], head[0], head[2]), new THREE.MeshStandardMaterial({ color: level === 3 ? 0xf2b200 : 0x2c2e31, metalness: 0.6, roughness: 0.45 }));
     hm.position.set(0, 0, len - 0.12); hm.castShadow = true;
     this.hammer.add(handle, hm);
+  }
+
+  setTool(t, color = null) {
+    this.tool = t;
+    if (color) this.trowelLoad.material.color.copy(color);
   }
 
   setName(name, color = '#ffffff') {
@@ -152,7 +170,9 @@ export class Avatar {
     if (!st.grounded) { L.rotation.x = -0.4; R.rotation.x = 0.3; }
     this.torso.position.y = 0.62 + Math.abs(Math.cos(this.phase)) * 0.03 * amp;
     this.torso.rotation.x = 0;
-    this.hammer.visible = !st.carrying;
+    this.hammer.visible = !st.carrying && this.tool !== 'trowel';
+    this.trowel.visible = !st.carrying && this.tool === 'trowel';
+    this.trowel.rotation.x = st.swingT >= 0 ? -0.6 : -0.2;
     if (st.carrying) {
       AL.sh.rotation.set(-1.45, 0, 0.1); AR.sh.rotation.set(-1.45, 0, -0.1);
     } else if (st.swingT >= 0) {

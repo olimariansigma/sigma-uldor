@@ -73,7 +73,7 @@ export class Player {
     // ---- actions
     this.cooldown -= dt;
     this.target = this.aimPiece(aim);
-    if (input.held('hammer') && this.swingT < 0 && this.cooldown <= 0 && !carried.length) { this.swingT = 0; this.hitDone = false; }
+    if (input.held('hammer') && g.tool !== 'trowel' && this.swingT < 0 && this.cooldown <= 0 && !carried.length) { this.swingT = 0; this.hitDone = false; }
     if (this.swingT >= 0) {
       this.swingT += dt / [0.5, 0.46, 0.5, 0.4][g.settings.hammer];
       if (this.swingT > 0.55 && !this.hitDone) { this.hitDone = true; this.strike(aim); }
@@ -127,19 +127,20 @@ export class Player {
   throwOne(aim, p) {
     const g = this.game;
     const from = this.pos.clone().add(new THREE.Vector3(0, 1.75, 0)).addScaledVector(new THREE.Vector3(Math.sin(this.bodyYaw), 0, Math.cos(this.bodyYaw)), 0.95);
-    const tgt = g.crusher.feedTarget.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.6, 0, (Math.random() - 0.5) * 1.6));
+    const tgt = g.crusher.feedTarget.clone().add(new THREE.Vector3((Math.random() - 0.5) * 0.4, 0, (Math.random() - 0.5) * 1.0));
     const toT = tgt.clone().sub(from);
     const look = new THREE.Vector3(aim.dir.x, 0, aim.dir.z).normalize();
     const facing = look.dot(new THREE.Vector3(toT.x, 0, toT.z).normalize());
     let vel;
     if (toT.length() < 11 && facing > 0.35) {
-      const grav = 9.81, apex = Math.max(from.y, tgt.y) + 1.4;
+      // high lob so the big blocks clear the crusher's engine housing and drop straight into the hopper
+      const grav = 9.81, apex = Math.max(from.y, tgt.y) + 3.2;
       const vy = Math.sqrt(2 * grav * (apex - from.y));
       const T = vy / grav + Math.sqrt(2 * (apex - tgt.y) / grav);
       vel = new THREE.Vector3(toT.x / T, vy, toT.z / T);
     } else vel = new THREE.Vector3(aim.dir.x, aim.dir.y + 0.25, aim.dir.z).normalize().multiplyScalar(8.5);
     vel.add(new THREE.Vector3(this.vel.x, 0, this.vel.z));
-    g.act('throw', { id: p.id, pos: from.toArray(), vel: vel.toArray(), spin: [(Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 6] });
+    g.act('throw', { id: p.id, pos: from.toArray(), vel: vel.toArray(), spin: [(Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2] });
     g.audio.throwSnd(from);
   }
 }

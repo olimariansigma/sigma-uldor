@@ -51,6 +51,7 @@ const P = {
   ball: '<path d="M12 2v8"/><circle cx="12" cy="15" r="6" fill="currentColor"/>',
   paver: '<path d="M2 18h20M4 18v-5h9l2-4h5v9"/><path d="M2 21h20" stroke-dasharray="2 2"/>',
   check: '<path d="M4.5 12.5l5 5L20 7"/>',
+  trowel: '<path d="M3 21l5-5"/><path d="M8.5 15.5l2.2-2.2"/><path d="M10.5 13.5L21 3l-2 9-9 1.5z" fill="currentColor"/>',
   wifi: '<path d="M2 9a15 15 0 0120 0M5.5 12.5a10 10 0 0113 0M9 16a5 5 0 016 0"/><circle cx="12" cy="19.2" r="1" fill="currentColor"/>',
 };
 

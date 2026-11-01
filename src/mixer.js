@@ -186,7 +186,9 @@ export class Mixer {
   get capacity() { return Math.PI * R_TUB * R_TUB * (DEPTH - 0.08); }
   room(kind) {
     const free = Math.max(0, this.capacity - this.volume);
-    return kind === 'water' ? free * 1000 : kind === 'cement' ? free * 2100 : free * 1500;
+    // water soaks into the dust (fills the gaps between grains), so a tub full of dry dust still takes water
+    if (kind === 'water') return Math.max(free * 1000, this.dust * 0.35 - this.water);
+    return kind === 'cement' ? free * 2100 : free * 1500;
   }
 
   pushBatch(c, kg) {

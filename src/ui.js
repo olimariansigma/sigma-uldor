@@ -216,20 +216,21 @@ export class UI {
   renderMixer() {
     const g = this.game, mx = g.mixer, body = $('mixerBody');
     const me = g.players.get(g.myId), tc = me ? me.cement : { kg: 0 };
-    const key = [mx.dust | 0, mx.water | 0, mx.cement | 0, mx.status, g.bucket.kind, g.bucket.kg | 0, g.crusher.pileKg | 0, tc.kg | 0].join('|');
+    const key = [mx.dust | 0, mx.water | 0, mx.progress != null ? Math.round(mx.progress * 10) : 0, mx.cement | 0, mx.status, g.bucket.kind, g.bucket.kg | 0, g.crusher.pileKg | 0, tc.kg | 0].join('|');
     if (this.cache.mixer === key && body.children.length) return;
     this.cache.mixer = key;
+    const fillPct = Math.min(100, (mx.volume / mx.capacity) * 100), full = mx.room('dust') < 1;
     body.innerHTML = `
       <div class="mix-grid">
         <div class="mix-cell"><div>Dust</div><div class="v">${fmtKg(mx.dust)}</div><div class="sw" style="background:${hex(mx.dustCol)};opacity:${mx.dust ? 1 : 0.2}"></div></div>
         <div class="mix-cell"><div>Water</div><div class="v">${fmtL(mx.water)}</div><div class="sw" style="background:#3d7080;opacity:${mx.water ? 1 : 0.2}"></div></div>
         <div class="mix-cell"><div>Cement</div><div class="v">${fmtKg(mx.cement)}</div><div class="sw" style="background:${hex(mx.cementCol)};opacity:${mx.cement ? 1 : 0.2}"></div></div>
       </div>
-      <p><b>${mx.status}</b> · Put dust in and add any amount of water: the paddles turn it all into cement. Dust pile: <b>${fmtKg(g.crusher.pileKg)}</b> · Your trowel: <b>${fmtKg(tc.kg)}</b></p>`;
+      <p><b>${full && mx.dust > 0 && !mx.water ? 'Tub full of dust: add water to mix it' : full ? 'Tub full' : mx.status}</b> · Tub ${Math.round(fillPct)} % full · Dust pile: <b>${fmtKg(g.crusher.pileKg)}</b> · Your trowel: <b>${fmtKg(tc.kg)}</b></p>`;
     const row = document.createElement('div'); row.className = 'btn-row';
     const step = 25 / KG;
-    row.appendChild(this.btn('➕ 25 kg dust from the pile', '', () => g.act('mixer', { op: 'dust', kg: step }), g.crusher.pileKg < 1));
-    row.appendChild(this.btn('💧 Add water (hose)', 'alt', () => g.act('mixer', { op: 'water' })));
+    row.appendChild(this.btn(full ? '➕ Tub full' : '➕ 25 kg dust from the pile', '', () => g.act('mixer', { op: 'dust', kg: step }), g.crusher.pileKg < 1 || full));
+    row.appendChild(this.btn('💧 Add water (hose)', 'alt', () => g.act('mixer', { op: 'water' }), mx.room('water') < 0.5));
     const b = g.bucket;
     if (b.kind && b.kind !== 'cement') row.appendChild(this.btn(`🪣 Pour my bucket of ${b.kind} in`, 'alt', () => g.act('bucketPour', { target: 'mixer' })));
     row.appendChild(this.btn(ic('trowel', 'inl') + 'Take cement on my trowel', '', () => { g.act('takeCement', {}); }, mx.cement < 0.5));

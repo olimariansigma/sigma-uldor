@@ -257,7 +257,7 @@ export function cmuGeometry(len) {
     s.holes.push(hole);
   }
   const bev = 0.005;
-  const g = new THREE.ExtrudeGeometry(s, { depth: h - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 1, curveSegments: 2 });
+  const g = new THREE.ExtrudeGeometry(s, { depth: h - bev * 2, bevelEnabled: true, bevelThickness: bev, bevelSize: bev, bevelSegments: 1, curveSegments: 1 });
   g.rotateX(-Math.PI / 2); g.translate(0, -h / 2 + bev, 0);
   g.scale((w - 0.002) / (w + 2 * bev), 1, (d - 0.002) / (d + 2 * bev));
   // baked occlusion: faces inside the cores are darker, deeper = darker

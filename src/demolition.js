@@ -23,6 +23,7 @@ export class Demolition {
     this.group = new THREE.Group(); scene.add(this.group);
     this.staticBody = this.world.createRigidBody(RAPIER.RigidBodyDesc.fixed());
     this.dirty = new Set();
+    this.boundsDirty = new Set(); this.boundsT = 0;
     this.changes = [];         // [id, state, holder] since last network flush (authority)
     this.rr = 0;               // round-robin cursor for snapshots
   }
@@ -42,7 +43,9 @@ export class Demolition {
       const parts = t.parts.map((p) => {
         const im = new THREE.InstancedMesh(p.geo, p.mat, n);
         im.castShadow = !p.noShadow; im.receiveShadow = !p.noShadow;
-        im.frustumCulled = false;
+        // culled as a batch with a bounding sphere we keep up to date (updateBounds), so buildings that are
+        // off screen or outside the shadow camera cost nothing
+        im.frustumCulled = true; im.userData.pcs = [];
         im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         if (p.mat === this.types.M.glass) im.renderOrder = 2;
         this.group.add(im); b.meshes.push(im);
@@ -64,6 +67,7 @@ export class Demolition {
         up: [], down: [], side: [], holder: -1, holdLocal: null, target: null, sent: null,
       };
       if (t.tint) for (const im of p.parts) im.setColorAt(p.idx, color || _c.setScalar(1));
+      for (const im of p.parts) im.userData.pcs.push(p);
       this.pieces.push(p);
       this.writeMatrix(p);
       p.collider = this.world.createCollider(
@@ -74,6 +78,7 @@ export class Demolition {
     for (const im of b.meshes) { im.instanceMatrix.needsUpdate = true; if (im.instanceColor) im.instanceColor.needsUpdate = true; }
     this.computeAdjacency(b);
     if (this.authority) this.recompute(b);
+    this.updateBounds(b);
     return b;
   }
 
@@ -96,7 +101,19 @@ export class Demolition {
   dustColor(p) { return p.color ? p.color : _c.set(p.type.dust); }
   chipColor(p) { return p.color ? p.color.getHex() : p.type.chip; }
 
+  updateBounds(b) {
+    const mn = new THREE.Vector3(), mx = new THREE.Vector3();
+    for (const im of b.meshes) {
+      mn.setScalar(Infinity); mx.setScalar(-Infinity); let big = 0;
+      for (const p of im.userData.pcs) { if (p.state === GONE) continue; mn.min(p.pos); mx.max(p.pos); big = Math.max(big, p.size.x, p.size.y, p.size.z); }
+      if (!isFinite(mn.x)) { im.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 0.001); continue; }
+      const c = mn.clone().add(mx).multiplyScalar(0.5);
+      im.boundingSphere = new THREE.Sphere(c, mn.distanceTo(mx) / 2 + big + 3);
+    }
+  }
+
   writeMatrix(p, scale = 1) {
+    this.boundsDirty.add(p.b);
     _s.copy(p.type.unit ? p.size : ONE).multiplyScalar(scale * (p.k || 1));
     _m.compose(p.pos, p.quat, _s);
     for (const im of p.parts) im.setMatrixAt(p.idx, _m);
@@ -346,6 +363,12 @@ export class Demolition {
 
   // ---------------------------------------------------------------- per frame
   update(dt) {
+    this.boundsT -= dt;
+    if (this.boundsT <= 0 && this.boundsDirty.size) {
+      this.boundsT = 0.25;
+      for (const bid of this.boundsDirty) { const b = this.buildings[bid]; if (b && !b.removed) this.updateBounds(b); }
+      this.boundsDirty.clear();
+    }
     if (this.authority) {
       for (const bid of this.dirty) this.recompute(this.buildings[bid]);
       this.dirty.clear();

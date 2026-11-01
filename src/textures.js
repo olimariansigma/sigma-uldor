@@ -104,6 +104,9 @@ function grayToCanvas(arr, w, h, map = (v) => v) {
 }
 
 const cache = {};
+// HD texture pack (texpack.js) overrides the procedural surfaces when it loaded
+let HD = null;
+export function setPack(p) { HD = p; }
 function cached(key, fn) { return cache[key] || (cache[key] = fn()); }
 
 // ---------- Brick masonry atlas ----------
@@ -182,6 +185,7 @@ export function brickTextures(palette = 'red') {
 
 // ---------- Concrete ----------
 export function concreteTextures(tint = [168, 166, 160], seed = 3) {
+  if (HD && HD.concrete) return HD.concrete;
   return cached('concrete' + tint.join() + seed, () => {
     const S = 512;
     const n = fbm(S, S, 8, 5, seed), f = fbm(S, S, 96, 2, seed + 7);
@@ -208,6 +212,7 @@ export function concreteTextures(tint = [168, 166, 160], seed = 3) {
 
 // ---------- Asphalt shingles (1 m x 1 m tile, 4 courses) ----------
 export function shingleTextures() {
+  if (HD && HD.shingles) return HD.shingles;
   return cached('shingle', () => {
     const S = 512, rows = 4, tabs = 3;
     const n = fbm(S, S, 64, 2, 41);
@@ -241,6 +246,8 @@ export function shingleTextures() {
 
 // ---------- Wood planks ----------
 export function woodTextures(kind = 'pine') {
+  if (HD && kind === 'pine' && HD.pine) return HD.pine;
+  if (HD && kind === 'floor' && HD.floor) return HD.floor;
   return cached('wood' + kind, () => {
     const S = 512, planks = kind === 'floor' ? 6 : 4;
     const grainN = fbm(S, S, 4, 4, kind.length * 11);
@@ -269,6 +276,7 @@ export function woodTextures(kind = 'pine') {
 
 // ---------- Ground ----------
 export function grassTextures() {
+  if (HD && HD.grass) return HD.grass;
   return cached('grass', () => {
     const S = 1024;
     const n = fbm(S, S, 6, 5, 11), f = fbm(S, S, 128, 2, 12);
@@ -294,6 +302,7 @@ export function grassTextures() {
 }
 
 export function dirtTextures() {
+  if (HD && HD.yard) return HD.yard;
   return cached('dirt', () => {
     const S = 1024;
     const n = fbm(S, S, 5, 5, 21), f = fbm(S, S, 160, 2, 22), m2 = fbm(S, S, 24, 3, 23);
@@ -323,6 +332,7 @@ export function dirtTextures() {
 }
 
 export function asphaltTextures() {
+  if (HD && HD.asphalt) return HD.asphalt;
   return cached('asphalt', () => {
     const S = 512;
     const n = fbm(S, S, 6, 4, 31), f = fbm(S, S, 200, 1, 32);
@@ -341,6 +351,7 @@ export function asphaltTextures() {
 }
 
 export function gravelTextures() {
+  if (HD && HD.dust) return HD.dust;
   return cached('gravel', () => {
     const S = 512;
     const c = canvas(S, S), ctx = c.getContext('2d');
@@ -384,6 +395,7 @@ export function chainLinkTexture() {
 }
 
 export function corrugatedTextures(rgb = [190, 196, 200]) {
+  if (HD && HD.metal) return HD.metal;
   return cached('corr' + rgb.join(), () => {
     const W = 256, H = 256;
     const n = fbm(W, H, 8, 3, 61);
@@ -525,6 +537,7 @@ export function skyCloudTexture() {
 // ---------- v2 additions ----------
 // Light cast-concrete (cinder block). Kept bright so per-block paint colours read true.
 export function cinderTextures() {
+  if (HD && HD.cinder) return HD.cinder;
   return cached('cinder', () => {
     const S = 512;
     const n = fbm(S, S, 6, 4, 141), f = fbm(S, S, 160, 2, 142), g = fbm(S, S, 40, 2, 143);

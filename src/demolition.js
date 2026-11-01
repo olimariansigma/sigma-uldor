@@ -170,7 +170,9 @@ export class Demolition {
   recompute(b) {
     const n = b.count, s0 = b.start;
     // big buildings: spans scale with the building, and bricks bond harder (STICK) so walls hold bigger holes
-    const S = b.scale || 1, reach = S * (S > 1 ? 1.8 : 1);
+    // A block needs something under it, or a short bonded chain sideways to a supported block. A block
+    // hanging off a single neighbour (or a pier block only touching a wall face) falls instead of floating.
+    const S = b.scale || 1, reach = S;
     const dist = new Float64Array(n).fill(1e9);
     const heap = new MinHeap();
     for (let i = 0; i < n; i++) {
@@ -188,7 +190,7 @@ export class Demolition {
       };
       const span = (q) => Math.hypot(q.cx - p.cx, q.cz - p.cz) * Math.max(p.type.stiff || 1, q.type.stiff || 1);
       for (const q of p.up) relax(q, 0);
-      for (const q of p.side) relax(q, span(q) + 0.05 * S);
+      for (const q of p.side) relax(q, span(q) + 0.25 * S);
       for (const q of p.down) relax(q, span(q) + 0.3 * S);
     }
     let fell = 0; const at = new THREE.Vector3();

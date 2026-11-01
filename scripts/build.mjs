@@ -19,6 +19,20 @@ for (const f of fs.readdirSync(path.join(root, 'public'))) {
   text = text.replace(/url\((fonts\/[^)]+\.woff2)\)/g, (m, f) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(root, 'public', f)).toString('base64')})`);
   fs.writeFileSync(css, text);
 }
+// HD textures: browsers won't hand local image files to WebGL, but local scripts load fine everywhere (Electron,
+// Android WebView, file://). So each texture ships as a tiny script holding it as a data URL (src/texpack.js).
+{
+  const texDir = path.join(dist, 'tex');
+  if (fs.existsSync(texDir)) {
+    for (const f of fs.readdirSync(texDir)) {
+      if (!f.endsWith('.jpg')) continue;
+      const b64 = fs.readFileSync(path.join(texDir, f)).toString('base64');
+      const key = f.replace(/\.jpg$/, '');
+      fs.writeFileSync(path.join(texDir, key + '.js'), `(window.__TEX=window.__TEX||{})[${JSON.stringify(key)}]="data:image/jpeg;base64,${b64}";`);
+      fs.rmSync(path.join(texDir, f));
+    }
+  }
+}
 await esbuild.build({
   entryPoints: [path.join(root, 'src/main.js')],
   bundle: true,

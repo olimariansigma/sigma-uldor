@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { setAnisotropy } from './textures.js';
+import { setAnisotropy, setPack } from './textures.js';
 import { materials } from './materials.js';
 import { TypeRegistry } from './pieces.js';
 import { buildWorld } from './world.js';
@@ -16,6 +16,7 @@ import { Machine, MACHINES, controlsFor } from './machines.js';
 import { machineInteract, releaseAll } from './machineLogic.js';
 import { Showroom } from './showroom.js';
 import { Slabs, SLAB, SLAB_KG } from './slabs.js';
+import { loadTexturePack } from './texpack.js';
 import { renderLogo } from './logo3d.js';
 import { Player } from './player.js';
 import { Avatar, SHIRTS } from './avatar.js';
@@ -68,7 +69,14 @@ class Game {
     world.timestep = 1 / 60;
     this.physics = { world, R: RAPIER, events: new RAPIER.EventQueue(true) };
 
-    progress(0.15, 'Casting cinder blocks…');
+    progress(0.12, 'Loading HD textures…');
+    await frame();
+    try {
+      const pack = await loadTexturePack(q, Math.min(8, renderer.capabilities.getMaxAnisotropy()), (f) => progress(0.12 + f * 0.12, 'Loading HD textures…'));
+      if (pack) setPack(pack);
+      this.hdTextures = !!pack;
+    } catch (e) { this.hdTextures = false; }
+    progress(0.25, 'Casting cinder blocks…');
     await frame();
     this.M = materials();
     progress(0.3, 'Filling the lake…');

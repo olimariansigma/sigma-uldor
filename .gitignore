@@ -3,3 +3,7 @@ dist/
 build/
 android/build/
 *.keystore
+
+# release builds are over GitHub's 100 MB file limit since the HD texture pack; they are shared separately
+release/*.apk
+release/*.exe

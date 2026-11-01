@@ -30,7 +30,7 @@ export function machineInteract(m, dt, W) {
         if (dmg <= 0) continue;
         anyHit = piece;
         if (wear(demo, piece, dmg / Math.max(1, Math.sqrt(hits.length) * 0.5), p, sfx)) {
-          const dir = m.family === 'crane' && m.ballSt ? m.ballSt.v.clone().clampLength(0, 6) : piece.pos.clone().sub(p).setY(0.25).normalize().multiplyScalar(1.8);
+          const dir = m.family === 'crane' && m.ballSt ? m.ballSt.v.clone().clampLength(0, 6) : piece.pos.clone().sub(p).setY(0.3).normalize().multiplyScalar(2.6);
           const mass = piece.body ? piece.body.mass() : piece.size.x * piece.size.y * piece.size.z * piece.type.density;
           piece.body.applyImpulse({ x: dir.x * mass, y: dir.y * mass, z: dir.z * mass }, true);
         }
@@ -48,13 +48,13 @@ export function machineInteract(m, dt, W) {
         return;
       }
       if (press < 0.02 && v < 0.05) return;
-      hitWith(b.outer, p, q, () => dt * power * (press * 3.5 + Math.min(v, 6) * 2.5));
+      hitWith(b.outer, p, q, () => dt * power * (press * 9 + Math.min(v, 6) * 6));
     });
     // driving the body / tracks / blade into a wall
     if ((m.pushBody || 0) > 0.02 || Math.abs(m.speed) > 0.2) {
       for (const b of m.blockShapes) {
         const { p, q } = m.shapePose(b);
-        hitWith(b.outer, p, q, () => dt * power * (Math.max(m.pushBody || 0, Math.min(1, Math.abs(m.speed))) * 3.2));
+        hitWith(b.outer, p, q, () => dt * power * (Math.max(m.pushBody || 0, Math.min(1, Math.abs(m.speed))) * 6));
       }
     }
     if (anyHit && fxT) {

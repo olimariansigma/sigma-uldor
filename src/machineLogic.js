@@ -2,7 +2,7 @@
 // scooping, bulk material (dust, water, cement), breaker, crusher bucket, roller compaction, paving, wrecking ball.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { INTACT, LOOSE, HELD } from './demolition.js';
+import { INTACT, LOOSE, HELD, machineBit } from './demolition.js';
 import { inWater, terrainHeight } from './site.js';
 
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
@@ -50,6 +50,27 @@ export function machineInteract(m, dt, W) {
       if (press < 0.02 && v < 0.05) return;
       hitWith(b.outer, p, q, () => dt * power * (press * 9 + Math.min(v, 6) * 6));
     });
+    // big loose panels the arm, tool or body presses on / knocks into crack and break into rubble chunks
+    m.bigT = (m.bigT || 0) - dt;
+    if (m.bigT <= 0) {
+      m.bigT = 0.1;
+      const crack = (b, amount) => {
+        const { p, q } = m.shapePose(b);
+        W.physics.world.intersectionsWithShape(p, q, b.outer || b.shape, (c) => {
+          const piece = demo.pieceFromCollider(c);
+          if (piece && piece.state === LOOSE && demo.isBig(piece)) {
+            piece.crack = (piece.crack || 0) + amount;
+            if (piece.crack >= 1) demo.shatter(piece, 0.8);
+          }
+          return true;
+        }, RAPIER.QueryFilterFlags.EXCLUDE_FIXED);
+      };
+      const mv = Math.min(1, Math.abs(m.speed) * 0.5 + m.hyd);
+      if (mv > 0.05) {
+        for (const b of m.breakShapes) crack(b, 0.1 * power * (0.4 + mv));
+        for (const b of m.blockShapes) crack(b, 0.08 * power * Math.min(1, Math.abs(m.speed)));
+      }
+    }
     // driving the body / tracks / blade into a wall
     if ((m.pushBody || 0) > 0.02 || Math.abs(m.speed) > 0.2) {
       for (const b of m.blockShapes) {
@@ -174,7 +195,7 @@ function clampLogic(m, dt, W, gp) {
     if (down.y > -0.72) { releaseAll(m, demo, dt); tell('The clamp tipped over and the blocks slid out!'); }
     else if ((m.accSm > 13 || v.length() > 7.5) && (m.slipT || 0) < performance.now()) {
       m.slipT = performance.now() + 450;
-      const h = m.held.pop(); demo.release(h.p, v.clone().clampLength(0, 4));
+      const h = m.held.pop(); demo.release(h.p, v.clone().clampLength(0, 4), machineBit(m.id));
       tell('Too jerky! A block slipped out of the clamp');
     }
     m.lastVC = v;
@@ -200,8 +221,15 @@ function grab(m, demo, gp, sfx, capScale) {
   const room = Math.round(m.att.pieces * capScale) - m.held.length;
   if (room <= 0) return;
   const s = m.s * (m.spec.attachScale || 1);
-  const cand = demo.piecesInSphere(gp, 1.4 * s, [LOOSE]);
-  const intact = demo.intactNear(gp, 0.85 * s, 12);
+  // a claw closing on a big panel (roof, floor, door) crushes it into rubble chunks and grabs those instead
+  let broke = false;
+  for (const p of [...demo.piecesInSphere(gp, 1.6 * s, [LOOSE]), ...demo.intactNear(gp, 1.0 * s, 6)]) {
+    if (!demo.isBig(p)) continue;
+    if (p.state === INTACT) demo.detach(p);
+    if (demo.shatter(p, 0.25).length) broke = true;
+  }
+  const cand = demo.piecesInSphere(gp, (broke ? 1.9 : 1.4) * s, [LOOSE]);
+  const intact = demo.intactNear(gp, 0.85 * s, 12).filter((p) => !demo.isBig(p));
   const all = [...cand, ...intact].sort((a, b) => a.pos.distanceToSquared(gp) - b.pos.distanceToSquared(gp)).slice(0, room);
   const inv = new THREE.Matrix4().copy(m.holdFrame().matrixWorld).invert();
   const gl = m.holdFrame().worldToLocal(gp.clone());
@@ -234,7 +262,7 @@ function scoop(m, demo, gp, r, room) {
 export function releaseAll(m, demo, dt) {
   const gp = m.grabPoint.getWorldPosition(new THREE.Vector3());
   const vel = m.lastGp ? gp.clone().sub(m.lastGp).divideScalar(Math.max(dt, 1e-3)).clampLength(0, 6) : new THREE.Vector3();
-  for (const h of m.held) demo.release(h.p, vel);
+  for (const h of m.held) demo.release(h.p, vel, machineBit(m.id));
   m.held = [];
 }
 

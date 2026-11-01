@@ -48,6 +48,8 @@ export class TypeRegistry {
     // hollow concrete masonry units (cinder blocks): 400 x 200 x 200 mm, two cores; half block has one core
     def('cmu', { parts: [{ geo: cmuGeometry(0.4), mat: M.cinder }], unit: false, size: new THREE.Vector3(0.4, 0.2, 0.2), tint: true, hp: 2, hang: 0.55, kg: 17, density: 1.4 });
     def('cmuHalf', { parts: [{ geo: cmuGeometry(0.2), mat: M.cinder }], unit: false, size: new THREE.Vector3(0.2, 0.2, 0.2), tint: true, hp: 1, hang: 0.4, kg: 9, density: 1.4 });
+    // rubble chunk: what big panels break into (pool pieces, coloured like the piece they came from)
+    def('rubble', { parts: [{ geo: rubbleGeometry(1.1, 0.5, 0.7), mat: M.cinderSolid }], unit: false, size: new THREE.Vector3(1.1, 0.5, 0.7), tint: true, hp: 2, hang: 1, kg: 300, density: 1.4, dust: 0x9a9890, chip: 0x8a8882 });
     def('cmuSolid', { parts: [{ geo: unit, mat: M.cinderSolid }], tint: true, hp: 2, hang: 0.55, kgm3: 1500, density: 1.4 });
     def('brick', { parts: [{ geo: unit, mat: M.brick }], tint: true, value: 2, hp: 2, hang: 0.75 });
     def('brickY', { parts: [{ geo: unit, mat: M.brickYellow }], tint: true, value: 2, hp: 2, hang: 0.75, dust: 0xb9a07a, chip: 0xc8a46a });
@@ -241,6 +243,22 @@ function avgVertexColor(g) {
 }
 
 // Hollow concrete block: outer shell with rectangular cores, chamfered edges and darkened cores (baked AO).
+// an irregular broken lump inside a w x h x d box: corners pulled in by a position hash, so faces stay joined
+export function rubbleGeometry(w, h, d) {
+  const g = new THREE.BoxGeometry(w, h, d, 4, 2, 3);
+  const pos = g.attributes.position, v = new THREE.Vector3();
+  const hash = (x, y, z) => { const t = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return t - Math.floor(t); };
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    const r = hash(Math.round(v.x * 100), Math.round(v.y * 100), Math.round(v.z * 100));
+    const edge = (Math.abs(v.x) > w * 0.49 ? 1 : 0) + (Math.abs(v.y) > h * 0.49 ? 1 : 0) + (Math.abs(v.z) > d * 0.49 ? 1 : 0);
+    const k = 1 - (0.06 + r * 0.16) * (edge >= 2 ? 1.6 : 1);
+    pos.setXYZ(i, v.x * k, v.y * (1 - r * 0.18), v.z * k);
+  }
+  g.computeVertexNormals();
+  return g;
+}
+
 export function cmuGeometry(len) {
   const w = len, d = 0.2, h = 0.2, shell = 0.032, web = 0.028;
   const s = new THREE.Shape();

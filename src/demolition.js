@@ -8,6 +8,13 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 
 export const INTACT = 0, LOOSE = 1, HELD = 2, CARRIED = 3, GONE = 4;
+export const RUBBLE = '__rubble', RUBBLE_N = 320;
+// collision groups: every machine's parts get one of 15 group bits; a piece a machine just let go of ignores that
+// machine for a moment so it drops out of the claw / bucket instead of wedging between the tines (it still lands
+// in a truck bed or on another machine)
+export const GROUP_ALL = 0xffffffff;
+export const machineBit = (id) => 1 << (1 + (((id % 15) + 15) % 15));
+export const machineGroups = (id) => ((machineBit(id) << 16) | 0xffff) >>> 0;
 
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _c = new THREE.Color();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
@@ -80,6 +87,87 @@ export class Demolition {
     if (this.authority) this.recompute(b);
     this.updateBounds(b);
     return b;
+  }
+
+  // ---------------------------------------------------------------- rubble pool
+  // Big loose pieces (roof and floor panels, doors, slabs) break into rubble chunks that fit the hoppers. The
+  // chunks come from a pool created with every world (same ids on host, clients and in saves), hidden until used.
+  addRubblePool(n = RUBBLE_N) {
+    const t = this.types.get('rubble');
+    const b = { id: this.buildings.length, def: RUBBLE, plot: -1, start: this.pieces.length, count: n, meshes: [], groundY: 0, removed: false, scale: 1, pool: true };
+    this.buildings.push(b);
+    const parts = t.parts.map((pt) => {
+      const im = new THREE.InstancedMesh(pt.geo, pt.mat, n);
+      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = true; im.userData.pcs = [];
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
+      this.group.add(im); b.meshes.push(im);
+      return im;
+    });
+    for (let i = 0; i < n; i++) {
+      const p = { id: this.pieces.length, b: b.id, type: t, size: t.size.clone(), k: 1, pos: new THREE.Vector3(0, -50, 0), quat: new THREE.Quaternion(),
+        color: new THREE.Color(0.6, 0.6, 0.6), kg: 100, state: GONE, hp: t.hp, maxHp: t.hp, idx: i, parts, collider: null, body: null,
+        up: [], down: [], side: [], holder: -1, holdLocal: null, target: null, sent: null, pool: true };
+      for (const im of parts) { im.userData.pcs.push(p); im.setMatrixAt(i, ZERO); }
+      this.pieces.push(p);
+    }
+    for (const im of parts) im.instanceMatrix.needsUpdate = true;
+    this.updateBounds(b);
+    this.poolOrder = [];
+    return b;
+  }
+  isBig(p) { return !p.pool && Math.max(p.size.x, p.size.y, p.size.z) > 1.9; }
+  // bring a pool chunk to life (authority creates it; clients mirror it from the change message)
+  revive(p, pos, quat, color, kg) {
+    if (p.body) { this.byCollider.delete(p.collider.handle); this.world.removeRigidBody(p.body); p.body = null; }
+    p.pos.copy(pos); p.quat.copy(quat); p.color.copy(color); p.kg = kg; p.hp = p.maxHp; p.target = null; p.sent = null; p.crack = 0;
+    this.makeBody(p, !this.authority);
+    for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; }
+    this.writeMatrix(p); this.flagParts(p);
+    (this.poolOrder || (this.poolOrder = [])).push(p.id);
+  }
+  // break a big loose piece into rubble chunks (authority). Returns the chunks.
+  shatter(p, push = 1.5, spread = 0.8) {
+    if (!this.authority || p.pool || p.state === GONE || p.state === INTACT) return [];
+    const at = p.pos.clone(), col = this.dustColor(p).clone(), chip = this.chipColor(p);
+    if (p.type.sound === 'glass') { this.sfx.glass(at); this.vanish(p, false); return []; }
+    const pool = this.buildings.find((b) => b.pool && !b.removed);
+    if (!pool) return [];
+    const vol = p.size.x * p.size.y * p.size.z;
+    const n = THREE.MathUtils.clamp(Math.round(vol / 1.1), 3, 8);
+    // free chunks; when the pool runs out the oldest chunks lying around are recycled
+    const free = [];
+    for (let i = pool.start; i < pool.start + pool.count && free.length < n; i++) if (this.pieces[i].state === GONE) free.push(this.pieces[i]);
+    while (free.length < n && this.poolOrder.length) {
+      const q = this.pieces[this.poolOrder.shift()];
+      if (q && q.state === LOOSE) { this.vanish(q, false); free.push(q); }
+    }
+    if (!free.length) return [];
+    // lay the chunks out on a grid across the two long axes of the piece
+    const ax = [['x', p.size.x], ['y', p.size.y], ['z', p.size.z]].sort((a, b) => b[1] - a[1]);
+    const cols = Math.ceil(Math.sqrt(free.length)), rows = Math.ceil(free.length / cols);
+    this.vanish(p, false);
+    const out = [];
+    free.forEach((q, i) => {
+      const c = i % cols, r = Math.floor(i / cols);
+      const l = new THREE.Vector3();
+      l[ax[0][0]] = ((c + 0.5) / cols - 0.5) * Math.min(ax[0][1] * spread, cols * 1.15);
+      l[ax[1][0]] = ((r + 0.5) / rows - 0.5) * Math.min(ax[1][1] * spread, rows * 0.75);
+      l[ax[2][0]] = 0;
+      const pos = l.applyQuaternion(p.quat).add(at); pos.y += 0.25 + (i % 2) * 0.2 + (spread < 0.5 ? i * 0.45 : 0);
+      const tilt = spread < 0.5 ? 0.15 : 0.6;
+      const quat = new THREE.Quaternion().setFromEuler(new THREE.Euler((Math.random() - 0.5) * tilt, spread < 0.5 ? (Math.random() - 0.5) * 0.4 : Math.random() * Math.PI * 2, (Math.random() - 0.5) * tilt));
+      const tint = col.clone().multiplyScalar(0.85 + Math.random() * 0.3);
+      this.revive(q, pos, quat, tint, Math.max(1, p.kg / free.length));
+      this.setState(q, LOOSE);
+      const m = q.body.mass(), d = pos.clone().sub(at).setY(0.4).normalize();
+      q.body.applyImpulse({ x: d.x * m * push, y: d.y * m * push, z: d.z * m * push }, true);
+      out.push(q);
+    });
+    this.sfx.dust(at, chip, 6, 1.4, { alpha: 0.45 });
+    this.sfx.chips(at, new THREE.Vector3(0, 1, 0), chip, 10, 0.08, 3);
+    this.sfx.impact(p.type.sound === 'metal' ? 'metal' : 'brick', 1, at);
+    return out;
   }
 
   removeBuilding(bid) {
@@ -168,6 +256,7 @@ export class Demolition {
   // Dijkstra over the support graph. Resting on a supported piece costs nothing; spanning sideways or
   // hanging costs metres / (how far that piece type can cantilever). Anything whose total exceeds 1 falls.
   recompute(b) {
+    if (!b || b.pool) return 0;
     const n = b.count, s0 = b.start;
     // big buildings: spans scale with the building, and bricks bond harder (STICK) so walls hold bigger holes
     // A block needs something under it, or a short bonded chain sideways to a supported block. A block
@@ -319,10 +408,11 @@ export class Demolition {
     this.setState(p, HELD, machineId);
     return true;
   }
-  release(p, vel) {
+  release(p, vel, ghostBit = 0) {
     if (p.state !== HELD) return;
     p.body.setBodyType(RAPIER.RigidBodyType.Dynamic, true);
     if (vel) p.body.setLinvel(vel, true);
+    if (p.collider && ghostBit) { p.collider.setCollisionGroups(((0x0001 << 16) | (0xffff & ~ghostBit)) >>> 0); p.ghostT = 0.6; this.ghosts = this.ghosts || new Set(); this.ghosts.add(p); }
     p.holdLocal = null;
     this.setState(p, LOOSE);
   }
@@ -370,6 +460,10 @@ export class Demolition {
       this.boundsT = 0.25;
       for (const bid of this.boundsDirty) { const b = this.buildings[bid]; if (b && !b.removed) this.updateBounds(b); }
       this.boundsDirty.clear();
+    }
+    if (this.ghosts && this.ghosts.size) for (const p of this.ghosts) {
+      p.ghostT -= dt;
+      if (p.ghostT <= 0 || !p.collider) { if (p.collider) p.collider.setCollisionGroups(GROUP_ALL); this.ghosts.delete(p); }
     }
     if (this.authority) {
       for (const bid of this.dirty) this.recompute(this.buildings[bid]);
@@ -429,6 +523,7 @@ export class Demolition {
     const p = this.pieces[id];
     if (!p || p.state === state && p.holder === holder) return;
     if (state === GONE) { this.vanish(p); return; }
+    if (p.pool && p.state === GONE && extra && extra.pos) this.revive(p, new THREE.Vector3().fromArray(extra.pos), new THREE.Quaternion().fromArray(extra.quat), new THREE.Color(extra.col ?? 0x999999), extra.kg || 100);
     if (p.state === INTACT && state !== INTACT) this.detach(p);
     if (extra && extra.pos) { p.pos.fromArray(extra.pos); p.quat.fromArray(extra.quat); p.target = null; if (p.body) { p.body.setTranslation(p.pos, true); p.body.setRotation(p.quat, true); } this.writeMatrix(p); this.flagParts(p); }
     if (p.body) p.body.setEnabled(state === LOOSE);
@@ -448,14 +543,15 @@ export class Demolition {
 
   // ---------------------------------------------------------------- save / sync
   serializePieces() {
-    const states = [], hp = [], xf = {}, holders = {};
+    const states = [], hp = [], xf = {}, holders = {}, pool = {};
     for (const p of this.pieces) {
       states.push(p.state);
       hp.push(p.hp === p.maxHp ? 0 : Math.round(p.hp * 10) / 10);
       if (p.state === LOOSE || p.state === HELD || p.state === CARRIED) xf[p.id] = [...p.pos.toArray(), ...p.quat.toArray()].map((v) => Math.round(v * 1e4) / 1e4);
       if (p.state === HELD || p.state === CARRIED) holders[p.id] = [p.holder, p.holdLocal ? p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) : null];
+      if (p.pool && p.state !== GONE) pool[p.id] = [p.color.getHex(), Math.round(p.kg)];
     }
-    return { states, hp, xf, holders };
+    return { states, hp, xf, holders, pool };
   }
 
   // forSave: carried / held pieces come back as loose rubble
@@ -468,6 +564,11 @@ export class Demolition {
       if (st === GONE) { this.vanish(p); return; }
       const x = data.xf[i];
       if (x) { p.pos.fromArray(x, 0); p.quat.fromArray(x, 3); }
+      if (p.pool) {
+        const pd = (data.pool && data.pool[i]) || [0x999999, 100];
+        this.revive(p, p.pos.clone(), p.quat.clone(), new THREE.Color(pd[0]), pd[1]);
+        p.state = LOOSE;
+      }
       if (p.state === INTACT) {
         this.byCollider.delete(p.collider.handle); this.world.removeCollider(p.collider, false);
         this.makeBody(p, !this.authority);
@@ -487,7 +588,7 @@ export class Demolition {
 
   stats() {
     let intact = 0, loose = 0, gone = 0;
-    for (const p of this.pieces) { if (this.buildings[p.b].removed) continue; if (p.state === INTACT) intact++; else if (p.state === GONE) gone++; else loose++; }
+    for (const p of this.pieces) { if (this.buildings[p.b].removed || this.buildings[p.b].pool) continue; if (p.state === INTACT) intact++; else if (p.state === GONE) gone++; else loose++; }
     return { intact, loose, gone, total: intact + loose + gone };
   }
 }

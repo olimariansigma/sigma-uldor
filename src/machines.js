@@ -7,6 +7,7 @@ import { buildExcavator } from './mx-excavator.js';
 import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, stepCrane } from './mx-vehicles.js';
 import { buildTruck, TRUCK_SIZES } from './mx-truck.js';
 import { terrainHeight, SITE } from './site.js';
+import { machineGroups } from './demolition.js';
 
 const clamp = THREE.MathUtils.clamp;
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion();
@@ -165,7 +166,7 @@ export class Machine {
       const s = this.s * (set.k || 1); // set.k: extra scale of a scaled-up attachment
       for (const [x, y, z, sx, sy, sz, rx = 0, rz = 0] of set.boxes) {
         const rq = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, 0, rz));
-        W.createCollider(RAPIER.ColliderDesc.cuboid(sx * s / 2, sy * s / 2, sz * s / 2).setTranslation(x * s, y * s, z * s).setRotation(rq).setFriction(set.friction ?? 1.0), body);
+        W.createCollider(RAPIER.ColliderDesc.cuboid(sx * s / 2, sy * s / 2, sz * s / 2).setTranslation(x * s, y * s, z * s).setRotation(rq).setFriction(set.friction ?? 1.0).setCollisionGroups(machineGroups(this.id)), body);
         const cub = (d) => new RAPIER.Cuboid(Math.max(0.02, sx * s / 2 + d), Math.max(0.02, sy * s / 2 + d), Math.max(0.02, sz * s / 2 + d));
         const info = { obj: set.obj, off: new THREE.Vector3(x, y, z), rq, shape: cub(-0.03) };
         // inner: may not overlap intact blocks (hard stop). Between inner and outer the machine is pressing

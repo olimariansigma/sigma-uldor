@@ -5,7 +5,7 @@ import { materials } from './materials.js';
 import { TypeRegistry } from './pieces.js';
 import { buildWorld } from './world.js';
 import { SITE, inWater, lakeDist, terrainHeight } from './site.js';
-import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE } from './demolition.js';
+import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE , RUBBLE } from './demolition.js';
 import { BUILDINGS } from './buildings.js';
 import { FX } from './fx.js';
 import { Audio } from './audio.js';
@@ -263,6 +263,7 @@ class Game {
 
   // ======================================================================= world construction
   buildBuilding(defId, plot) {
+    if (defId === RUBBLE) return this.demo.addRubblePool();
     const def = BUILDINGS.find((b) => b.id === defId);
     const at = SITE.plots[plot], S = SITE.buildScale || 1;
     // authored at 1:1 around the origin, then built S times bigger on the plot
@@ -352,6 +353,7 @@ class Game {
     this.buildBuilding('bungalow', 0);
     this.buildBuilding('wall', 1);
     this.buildBuilding('warehouse', 2);
+    this.buildBuilding(RUBBLE, -1);
     this.road.defaultHoles();
     const add = (spec, x, z, yaw) => { const m = this.createMachine(spec, this.nextMachineId, new THREE.Vector3(x, 0, z), yaw); return m; };
     add('tx330', -62, -52, Math.PI);
@@ -410,6 +412,8 @@ class Game {
       this.plots = w.plots.slice();
       this.demo.restorePieces(w.pieces, forSave);
     }
+    // saves from before v3.7 have no rubble pool: add it after everything else so piece ids stay put
+    if (!this.demo.buildings.some((b) => b.pool)) this.buildBuilding(RUBBLE, -1);
     for (const s of w.machines) {
       const m = this.createMachine(s.spec, s.id, new THREE.Vector3(s.pose[0], 0, s.pose[1]), s.pose[2]);
       m.restorePose(s.pose);
@@ -462,6 +466,11 @@ class Game {
       case 'hit': {
         const p = demo.pieces[d.id]; if (!p || p.state === GONE) return;
         const point = v3(d.point), dir = v3(d.dir);
+        // big loose panels (roof, floor, doors) crack under the hammer and break into rubble chunks
+        if (p.state === LOOSE && demo.isBig(p)) {
+          p.crack = (p.crack || 0) + (d.dmg || 1);
+          if (p.crack >= 3) { demo.shatter(p); break; }
+        }
         demo.damage(p, d.dmg || 1, point, dir, d.force || 3);
         if (d.splash > 0) for (const q of demo.intactNear(point, d.splash, 6)) if (q !== p) demo.damage(q, Math.max(1, (d.dmg || 1) - 1), q.pos, dir, 2);
         this.sfx.impact(p.type.sound, 0.7, point);
@@ -862,7 +871,7 @@ class Game {
       const p = this.demo.pieces[id];
       const e = ['ps', id, st, holder];
       if (st === HELD && p.holdLocal) e.push({ local: p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) });
-      else if (st === LOOSE && p.pos) e.push({ pos: p.pos.toArray(), quat: p.quat.toArray() });
+      else if (st === LOOSE && p.pos) e.push(p.pool ? { pos: p.pos.toArray(), quat: p.quat.toArray(), col: p.color.getHex(), kg: Math.round(p.kg) } : { pos: p.pos.toArray(), quat: p.quat.toArray() });
       list.push(e);
     }
     if (this.mixerDirty) { this.mixerDirty = false; this.events.push(['mix', this.mixer.serialize()]); }
@@ -1198,6 +1207,7 @@ class Game {
       for (const m of machList) machineInteract(m, dt, W);
       this.crusher.update(dt, this.demo, this.fx, this.audio, (p) => this.crushPiece(p));
       this.intake.update(dt, this.demo, this.fx, this.audio, this.intakeCb());
+      this.breakBigAtIntakes(dt);
       if (this.mixer.simulate(dt)) this.mixerDirty = true;
       this.mixTimer = (this.mixTimer || 0) - dt;
       if (this.mixer.dust > 0 && this.mixer.water > 0 && this.mixTimer <= 0) { this.mixTimer = 1; this.mixerDirty = true; }
@@ -1268,6 +1278,26 @@ class Game {
       get machines() { return [...g.machines.values()]; },
     };
     return this._mw;
+  }
+
+  // a big panel dropped on the crusher hopper or into the truck intake is broken up so the pieces fit
+  breakBigAtIntakes(dt) {
+    this.bigT = (this.bigT || 0) - dt;
+    if (this.bigT > 0) return;
+    this.bigT = 0.2;
+    const cr = this.crusher, l = new THREE.Vector3();
+    for (const p of this.demo.pieces) {
+      if (p.state !== LOOSE || !this.demo.isBig(p)) continue;
+      cr.toLocal(p.pos, l);
+      if (Math.abs(l.x) > 3.4) continue;
+      const hopper = l.z > -8.8 && l.z < -1.6 && l.y > 1.4 && l.y < 8;
+      const intake = l.z > -35 && l.z < -20.5 && l.y < 3.5;
+      if (!hopper && !intake) continue;
+      // break it right over the opening, chunks gathered in so they drop in instead of spilling over the rim
+      const c = hopper ? cr.root.localToWorld(new THREE.Vector3(0, Math.max(l.y, 4.6), -4.6)) : cr.root.localToWorld(new THREE.Vector3(0, Math.max(l.y, 1.2), THREE.MathUtils.clamp(l.z, -33, -23)));
+      p.pos.copy(c);
+      this.demo.shatter(p, 0, 0.3);
+    }
   }
 
   // intake line callbacks (authority): blocks swallowed by the compactor, cubes crushed in the hopper

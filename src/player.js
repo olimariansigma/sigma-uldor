@@ -30,6 +30,7 @@ export class Player {
   teleport(p) {
     this.pos.copy(p);
     this.body.setTranslation({ x: p.x, y: p.y + HALF + RAD, z: p.z }, true);
+    this.center = new THREE.Vector3(p.x, p.y + HALF + RAD, p.z);
     this.vel.set(0, 0, 0);
   }
 
@@ -51,16 +52,21 @@ export class Player {
     if (inWaterNow) this.vel.y = Math.max(this.vel.y, -1.5);
     if (this.grounded && this.vel.y < 0) this.vel.y = -1;
     if ((this.grounded || inWaterNow) && input.pressed('jump')) { this.vel.y = inWaterNow ? 4 : 7.2; this.grounded = false; }
-    const desired = { x: this.vel.x * dt, y: this.vel.y * dt, z: this.vel.z * dt };
+    // Physics steps at a fixed 60 Hz, but frames can come faster (90 / 120 Hz phones). On a frame without a step
+    // the body still sits where the last step left it, so start from there and include the movement of the
+    // frames that have not been simulated yet; otherwise that movement is thrown away and the walk stutters.
+    const t = this.body.translation();
+    if (!this.center || this.center.distanceToSquared(t) > 1) this.center = new THREE.Vector3(t.x, t.y, t.z);
+    const desired = { x: this.center.x - t.x + this.vel.x * dt, y: this.center.y - t.y + this.vel.y * dt, z: this.center.z - t.z + this.vel.z * dt };
     this.cc.computeColliderMovement(this.collider, desired, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS);
     const mv = this.cc.computedMovement();
     this.grounded = this.cc.computedGrounded();
     if (this.grounded && this.vel.y < 0) this.vel.y = -1;
     if (!this.grounded && mv.y > desired.y + 0.001 && this.vel.y > 0) this.vel.y = 0;
-    const t = this.body.translation();
     const np = { x: t.x + mv.x, y: t.y + mv.y, z: t.z + mv.z };
     if (np.y < -8) { const s = g.spawnPoint(); np.x = s.x; np.y = s.y + 1; np.z = s.z; this.vel.set(0, 0, 0); }
     this.body.setNextKinematicTranslation(np);
+    this.center.set(np.x, np.y, np.z);
     this.pos.set(np.x, np.y - HALF - RAD, np.z);
 
     const moving = wish.lengthSq() > 0.01;

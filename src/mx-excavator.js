@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { buildTrackUnit } from './tracks.js';
 import { buildAttachment, sidePlate } from './attachments.js';
-import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, stripeDecal, add, V, exteriorOnly } from './detail.js';
+import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, stripeDecal, add, V, exteriorOnly, tyreLathe, wheelRim } from './detail.js';
 import * as T from './textures.js';
 
 const BOOMS = { mono: { len: 5.6, ky: 1.0 }, long: { len: 9.6, ky: 1.15 }, straight: { len: 7.0, ky: 0.55 } };
@@ -80,19 +80,19 @@ function wheels(m) {
   // toolbox / fuel step on the side
   add(U, mergeG([rbox(0.35, 0.4, 1.0, 0.04, 0.9, 1.0, 0.0), bx(0.36, 0.03, 0.4, 1.0, 0.65, 0.3)]), K.paint);
   add(U, mergeG([bx(0.01, 0.3, 0.9, 1.076, 1.0, 0), bx(0.02, 0.04, 0.12, 1.08, 1.1, 0.3)]), K.black);
-  const tyre = [cy(0.55, 0.55, 0.32, 32, 0, 0, 0, 0, 0, Math.PI / 2), cy(0.5, 0.5, 0.34, 32, 0, 0, 0, 0, 0, Math.PI / 2)];
-  for (let k = 0; k < 24; k++) {
-    const a = (k / 24) * Math.PI * 2;
-    const tb = bx(0.14, 0.05, 0.1, k % 2 ? 0.08 : -0.08, 0, 0); tb.rotateY(k % 2 ? 0.35 : -0.35); tb.translate(0, 0.565, 0); tb.rotateX(a); tyre.push(tb);
-  }
-  const tyreGeo = mergeG(tyre);
-  const rimGeo = mergeG([cy(0.33, 0.33, 0.35, 24, 0, 0, 0, 0, 0, Math.PI / 2), cy(0.14, 0.14, 0.4, 14, 0, 0, 0, 0, 0, Math.PI / 2)]);
-  const nutGeo = boltCircle(V(0.2, 0, 0), 0.2, 10, V(1, 0, 0), 0.022);
+  // dual tyres on steel rims (the outer rim's dish faces out)
+  const tyreGeo = tyreLathe(0.55, 0.32, 0.31, { lugs: 24, style: 'chevron' });
+  const rw = wheelRim(0.31, 0.32, { dish: 0.04, vents: 8 });
   for (const z of [1.35, -1.35]) for (const s of [-1, 1]) {
     const hub = new THREE.Group(); hub.position.set(s * 1.05, 0.56, z); U.add(hub);
     const spin = new THREE.Group(); hub.add(spin);
-    for (const dx of [-0.17, 0.17]) { add(spin, tyreGeo.clone().translate(dx, 0, 0), K.rubber); add(spin, rimGeo.clone().translate(dx, 0, 0), K.grey, false); }
-    add(spin, nutGeo.clone().translate(s > 0 ? 0 : -0.4, 0, 0), K.steel, false);
+    for (const dx of [-0.17, 0.17]) {
+      add(spin, tyreGeo.clone().translate(dx, 0, 0), K.rubber);
+      const flip = s < 0;
+      const rg = rw.rim.clone(), vg = rw.vents.clone();
+      if (flip) { rg.rotateY(Math.PI); vg.rotateY(Math.PI); }
+      add(spin, rg.translate(dx, 0, 0), K.grey, false); add(spin, vg.translate(dx, 0, 0), K.black, false);
+    }
     m.wheels.push(spin);
     if (z > 0) m.steerWheels.push(hub);
     add(hub, mergeG([rbox(0.82, 0.06, 1.3, 0.02, 0, 0.62, 0), bx(0.04, 0.2, 1.2, s * 0.4, 0.52, 0)]), K.paint);

@@ -1,24 +1,13 @@
 // Site vehicles: tandem roller, asphalt paver, wheel loader, bulldozer, tracked dumper, wrecking-ball crawler crane.
 import * as THREE from 'three';
 import { buildTrackUnit } from './tracks.js';
-import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, add, V, exteriorOnly } from './detail.js';
+import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, add, V, exteriorOnly, tyreLathe, wheelRim } from './detail.js';
 import { sidePlate, curvePts, shell } from './attachments.js';
 import { cylinder, lum } from './mx-excavator.js';
 
 const anchor = (p, x, y, z) => { const o = new THREE.Object3D(); o.position.set(x, y, z); p.add(o); return o; };
 
 // --------------------------------------------------------------------------- shared bits
-function tyre(K, r, w, lugs = 22, chevron = true) {
-  const parts = [cy(r, r, w, 36, 0, 0, 0, 0, 0, Math.PI / 2), cy(r * 0.9, r * 0.9, w + 0.02, 36, 0, 0, 0, 0, 0, Math.PI / 2)];
-  for (let k = 0; k < lugs; k++) {
-    const a = (k / lugs) * Math.PI * 2;
-    for (const s of chevron ? [-1, 1] : [0]) {
-      const lug = bx(w * (chevron ? 0.46 : 0.9), r * 0.09, r * 0.13, s * w * 0.25, 0, 0); if (chevron) lug.rotateY(s * 0.5); lug.translate(0, r + r * 0.03, 0); lug.rotateX(a + (s > 0 ? 0.12 : 0)); parts.push(lug);
-    }
-  }
-  return mergeG(parts);
-}
-function rim(K, r, w) { return mergeG([cy(r, r, w, 28, 0, 0, 0, 0, 0, Math.PI / 2), cy(r * 0.42, r * 0.42, w + 0.08, 18, 0, 0, 0, 0, 0, Math.PI / 2), boltCircle(V(w / 2 + 0.04, 0, 0), r * 0.32, 12, V(1, 0, 0), 0.022), boltCircle(V(-w / 2 - 0.04, 0, 0), r * 0.32, 12, V(-1, 0, 0), 0.022)]); }
 function seat(K, parent, x, y, z, ry = 0) {
   const g = new THREE.Group(); g.position.set(x, y, z); g.rotation.y = ry; parent.add(g);
   add(g, mergeG([rbox(0.5, 0.12, 0.5, 0.04, 0, 0.0, 0), rbox(0.48, 0.6, 0.12, 0.04, 0, 0.34, -0.24, -0.15), rbox(0.3, 0.16, 0.1, 0.04, 0, 0.72, -0.31, -0.15), rbox(0.08, 0.06, 0.38, 0.02, -0.29, 0.2, 0), rbox(0.08, 0.06, 0.38, 0.02, 0.29, 0.2, 0)]), K.seat, false);
@@ -265,11 +254,13 @@ export function buildLoader(m) {
   const K = m.mats;
   m.under = new THREE.Group(); m.model.add(m.under); m.upper = m.under;
   m.front = new THREE.Group(); m.front.position.z = 0.2; m.model.add(m.front);
-  const tg = tyre(K, 0.88, 0.62, 20), rg = rim(K, 0.52, 0.6);
+  const tg = tyreLathe(0.88, 0.64, 0.5, { lugs: 20, style: 'chevron' }), rg = wheelRim(0.5, 0.6, { dish: 0.1, vents: 10 });
   for (const [grp, z] of [[m.front, 1.55], [m.under, -1.85]]) for (const s of [-1, 1]) {
     const hub = new THREE.Group(); hub.position.set(s * 1.05, 0.88, z - (grp === m.front ? 0.2 : 0)); grp.add(hub);
     const spin = new THREE.Group(); hub.add(spin);
-    add(spin, tg, K.rubber); add(spin, rg, K.grey, false);
+    add(spin, tg, K.rubber);
+    const rm = add(spin, rg.rim, K.paint, false), rv = add(spin, rg.vents, K.black, false);
+    if (s < 0) { rm.rotation.y = Math.PI; rv.rotation.y = Math.PI; }
     m.wheels.push(spin);
   }
   // rear frame: long rounded engine hood, grille, counterweight bumper, exhaust + intake, cab, ladder

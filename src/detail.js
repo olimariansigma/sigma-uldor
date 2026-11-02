@@ -175,6 +175,37 @@ export function boltCircle(c, R, n, normal, r = 0.016) {
 }
 export function mergeG(list) { return mergeGeometries(list.map(norm), false); }
 
+// ---- wheels. A tyre is an open, rounded carcass (lathed profile: bead, bulging sidewall, shoulder, tread) so the
+// rim inside it stays visible; lugs on the tread. Axis along x.
+export function tyreLathe(r, w, rr, { lugs = 24, style = 'chevron' } = {}) {
+  const hw = w / 2, b = rr * 0.98, side = r - b;
+  const prof = [[b, -hw * 0.8], [b + side * 0.2, -hw * 0.97], [b + side * 0.6, -hw], [r * 0.975, -hw * 0.86], [r, -hw * 0.55], [r, hw * 0.55], [r * 0.975, hw * 0.86], [b + side * 0.6, hw], [b + side * 0.2, hw * 0.97], [b, hw * 0.8]];
+  const g = new THREE.LatheGeometry(prof.map(([x, y]) => new THREE.Vector2(x, y)), 40);
+  g.rotateZ(-Math.PI / 2);
+  const parts = [g];
+  for (let k = 0; k < lugs; k++) {
+    const a = (k / lugs) * Math.PI * 2;
+    if (style === 'chevron') for (const sx of [-1, 1]) { const t = bx(w * 0.4, r * 0.06, r * 0.11, sx * w * 0.24, 0, 0); t.rotateY(sx * 0.42); t.translate(0, r + r * 0.018, 0); t.rotateX(a + (sx > 0 ? Math.PI / lugs : 0)); parts.push(t); }
+    else if (style === 'block') for (const x of [-0.3, 0, 0.3]) { const t = bx(w * 0.24, r * 0.035, r * 0.07, x * w, 0, 0); t.translate(0, r + r * 0.01, 0); t.rotateX(a + (x === 0 ? Math.PI / lugs : 0)); parts.push(t); }
+  }
+  return mergeG(parts);
+}
+// steel rim: barrel with lips, a dished centre disc, hub, cap and nuts (faces +x). Vent holes come back separately
+// so they can use a dark material.
+export function wheelRim(rr, w, { dish = 0.05, vents = 8 } = {}) {
+  const hw = w * 0.43, face = hw - dish;
+  const barrel = new THREE.CylinderGeometry(rr * 0.97, rr * 0.97, w * 0.86, 32, 1, true); barrel.rotateZ(Math.PI / 2);
+  const lip = (x) => new THREE.TorusGeometry(rr, Math.max(0.012, rr * 0.035), 6, 36).rotateY(Math.PI / 2).translate(x, 0, 0);
+  const parts = [barrel, lip(hw), lip(-hw),
+    cy(rr * 0.97, rr * 0.97, 0.025, 32, face, 0, 0, 0, 0, Math.PI / 2),                   // centre disc
+    cy(rr * 0.44, rr * 0.5, 0.1, 24, face + 0.05, 0, 0, 0, 0, Math.PI / 2),              // hub boss
+    cy(rr * 0.2, rr * 0.26, 0.07, 18, face + 0.13, 0, 0, 0, 0, Math.PI / 2),             // hub cap
+    boltCircle(V(face + 0.1, 0, 0), rr * 0.33, 10, V(1, 0, 0), Math.max(0.014, rr * 0.05))];
+  const holes = [];
+  for (let k = 0; k < vents; k++) { const a = (k / vents) * Math.PI * 2; holes.push(cy(rr * 0.11, rr * 0.11, 0.03, 12, face + 0.004, Math.cos(a) * rr * 0.68, Math.sin(a) * rr * 0.68, 0, 0, Math.PI / 2)); }
+  return { rim: mergeG(parts), vents: mergeG(holes) };
+}
+
 // path of handrail tubes through points with stanchions to y0
 export function rail(points, r = 0.02, postsTo = null) {
   const parts = [];

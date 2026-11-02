@@ -2,29 +2,10 @@
 // rear-tipping half-pipe or box body on a telescopic front cylinder. Blocks dropped in the body ride along physically;
 // tipping (Z / X) raises the body around its rear hinge and the tailgate swings open.
 import * as THREE from 'three';
-import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, workLight, mirror, grille, stick, label, add, V, weathered, exteriorOnly } from './detail.js';
+import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, workLight, mirror, grille, stick, label, add, V, weathered, exteriorOnly, tyreLathe, wheelRim } from './detail.js';
 import { cylinder } from './mx-excavator.js';
 
 const anchor = (p, x, y, z) => { const o = new THREE.Object3D(); o.position.set(x, y, z); p.add(o); return o; };
-
-function tyre(r, w, lugs, offroad) {
-  const parts = [cy(r, r, w, 40, 0, 0, 0, 0, 0, Math.PI / 2), cy(r * 0.93, r * 0.93, w + 0.02, 40, 0, 0, 0, 0, 0, Math.PI / 2)];
-  for (let k = 0; k < lugs; k++) {
-    const a = (k / lugs) * Math.PI * 2;
-    if (offroad) {
-      for (const s of [-1, 1]) { const g = bx(w * 0.42, r * 0.06, r * 0.1, s * w * 0.27, 0, 0); g.rotateY(s * 0.35); g.translate(0, r + r * 0.02, 0); g.rotateX(a + (s > 0 ? Math.PI / lugs : 0)); parts.push(g); }
-    } else {
-      for (const x of [-0.3, 0, 0.3]) { const g = bx(w * 0.22, r * 0.035, r * 0.06, x * w, 0, 0); g.translate(0, r + r * 0.012, 0); g.rotateX(a); parts.push(g); }
-    }
-  }
-  return mergeG(parts);
-}
-function rimGeo(r, w, dished) {
-  const parts = [cy(r * 0.62, r * 0.62, w * 0.9, 32, 0, 0, 0, 0, 0, Math.PI / 2), cy(r * 0.3, r * 0.3, w * 0.95, 20, dished ? 0.03 : -0.03, 0, 0, 0, 0, Math.PI / 2)];
-  for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; parts.push(cy(0.03, 0.03, 0.04, 8, w * 0.48, Math.cos(a) * r * 0.42, Math.sin(a) * r * 0.42, 0, 0, Math.PI / 2)); }
-  parts.push(boltCircle(V(w * 0.49, 0, 0), r * 0.22, 10, V(1, 0, 0), 0.018));
-  return mergeG(parts);
-}
 
 // chassis layouts. Axle entries: [z, steer group (1 = first steered axle, 2 = second, 0 = driven twin tyres)]
 export const TRUCK_SIZES = {
@@ -48,8 +29,9 @@ export function buildTruck(m) {
   // ---------------------------------------------------------------- wheels: steered front axle(s), driven axle(s) with twins
   m.steerWheels = []; m.steer2 = [];
   const axles = Z.axles.map(([z, g]) => [z, g > 0, g]), lastAxle = axles.length - 1;
-  const tg = tyre(R, 0.38, 26, trim === 'xt'), tgRear = tyre(R, 0.32, 26, true);
-  const rimF = rimGeo(R, 0.38, true), rimR = rimGeo(R, 0.32, false);
+  const RR = R * 0.6;
+  const tg = tyreLathe(R, 0.38, RR, { lugs: 26, style: trim === 'xt' ? 'chevron' : 'block' }), tgRear = tyreLathe(R, 0.32, RR, { lugs: 26, style: 'chevron' });
+  const rimF = wheelRim(RR, 0.38, { dish: 0.07, vents: 10 }), rimR = wheelRim(RR, 0.32, { dish: 0.03, vents: 10 });
   axles.forEach(([z, front], ai) => {
     for (const s of [-1, 1]) {
       const hub = new THREE.Group(); hub.position.set(s * (front ? 1.04 : 0.98), R, z); U.add(hub);
@@ -58,11 +40,14 @@ export function buildTruck(m) {
       for (const ox of twins) {
         const spin = new THREE.Group(); spin.position.x = s * ox; hub.add(spin);
         add(spin, front ? tg : tgRear, K.rubber);
-        const rm = add(spin, front ? rimF : rimR, front && trim === 'chrome' ? K.chrome : K.grey);
-        if (s < 0) rm.rotation.y = Math.PI;
+        // the outer twin's dish faces out, the inner twin's faces in (towards the hub)
+        const rw = front ? rimF : rimR, flip = (s < 0) !== (ox < 0 && !front);
+        const rm = add(spin, rw.rim, trim === 'chrome' ? K.chrome : K.grey);
+        const rv = add(spin, rw.vents, K.black, false);
+        if (flip) { rm.rotation.y = Math.PI; rv.rotation.y = Math.PI; }
         m.wheels.push(spin);
       }
-      if (front) add(hub, mergeG([cy(0.12, 0.14, 0.12, 18, s * 0.22, 0, 0, 0, 0, Math.PI / 2)]), trim === 'chrome' ? K.chrome : K.dark); // hub cap
+
       // mudguard: arched plastic over the wheel + mud flap
       const mg = [];
       for (let k = 0; k <= 8; k++) {

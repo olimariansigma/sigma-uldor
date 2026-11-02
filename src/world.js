@@ -19,6 +19,13 @@ export function buildWorld(scene, renderer, physics, M) {
   su.turbidity.value = 4.5; su.rayleigh.value = 1.4; su.mieCoefficient.value = 0.004; su.mieDirectionalG.value = 0.82;
   const sunDir = new THREE.Vector3().setFromSphericalCoords(1, THREE.MathUtils.degToRad(48), THREE.MathUtils.degToRad(135));
   su.sunPosition.value.copy(sunDir);
+  // the stock sky shader turns grey when the sun sets: blend towards a dark night gradient instead
+  su.uDay = { value: 1 };
+  sky.material.fragmentShader = sky.material.fragmentShader
+    .replace('void main() {', 'uniform float uDay;\nvoid main() {')
+    .replace('gl_FragColor = vec4( retColor, 1.0 );', `float hz = pow( 1.0 - max( direction.y, 0.0 ), 4.0 );
+      vec3 nightSky = mix( vec3( 0.0025, 0.005, 0.014 ), vec3( 0.018, 0.026, 0.045 ), hz );
+      gl_FragColor = vec4( mix( nightSky, retColor, uDay ), 1.0 );`);
   scene.add(sky);
 
   // environment map from the sky
@@ -150,15 +157,18 @@ export function buildWorld(scene, renderer, physics, M) {
   // street lights
   const poleGeo = merge([cyl(0.08, 0.12, 7, 10, 0, 3.5, 0), cyl(0.05, 0.05, 2.2, 8, 0, 6.9, 1.0, null, Math.PI / 2 - 0.15), box(0.28, 0.12, 0.6, 0, 7.0, 2.1)]);
   const lampGeo = box(0.22, 0.03, 0.5, 0, 6.93, 2.1);
+  const lamps = []; // street lamp heads (for the night lights)
   for (let x = -90; x <= 90; x += 30) {
     for (const [z, r] of [[SITE.streetZ - 3.9, 0], [SITE.streetZ + 9.9, Math.PI]]) {
       if (Math.abs(x) < 20 && r === 0) continue;
       const pole = new THREE.Mesh(poleGeo, M.galvanized); pole.position.set(x + (r ? 15 : 0), 0, z); pole.rotation.y = r; shadowed(pole, true, false); scene.add(pole);
       const lamp = new THREE.Mesh(lampGeo, M.lightLens); lamp.position.copy(pole.position); lamp.rotation.y = r; scene.add(lamp);
+      lamps.push(new THREE.Vector3(0, 6.9, 2.1).applyAxisAngle(new THREE.Vector3(0, 1, 0), r).add(pole.position));
     }
   }
 
   // ---------- neighbourhood across the street ----------
+  const glowMats = []; // house windows that light up at night
   const neighbor = (x, z, w, d, brickMat, roofColor, rot = Math.PI) => {
     const g = new THREE.Group();
     const wallH = 2.9;
@@ -176,7 +186,8 @@ export function buildWorld(scene, renderer, physics, M) {
     const gable = new THREE.Shape(); gable.moveTo(-d / 2, 0); gable.lineTo(0, (d / 2) * Math.tan(pitch)); gable.lineTo(d / 2, 0);
     const gg = new THREE.ShapeGeometry(gable);
     for (const s of [-1, 1]) { const gm = new THREE.Mesh(gg, brickMat); gm.rotation.y = s * Math.PI / 2; gm.position.set(s * w / 2, wallH + 0.2, 0); g.add(gm); }
-    const winMat = new THREE.MeshStandardMaterial({ color: 0x223040, roughness: 0.1, metalness: 0.5, envMapIntensity: 1.5 });
+    const winMat = new THREE.MeshStandardMaterial({ color: 0x223040, roughness: 0.1, metalness: 0.5, envMapIntensity: 1.5, emissive: 0xffc070, emissiveIntensity: 0 });
+    glowMats.push(winMat);
     const frames = [], glass = [];
     for (let i = 0; i < Math.floor(w / 2.6); i++) {
       const wx = -w / 2 + 1.5 + i * 2.6;
@@ -234,6 +245,10 @@ export function buildWorld(scene, renderer, physics, M) {
   buildCones(scene, M);
   buildPallets(scene, M, addStatic);
   buildSign(scene, M, addStatic);
+  // mobile light towers for the night shift (aimed at the demolition plots and the crusher)
+  const towerLens = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, emissive: 0xfff6e4, emissiveIntensity: 0, roughness: 0.15 });
+  const towers = [[-36, -58, -62, -84], [26, -60, 50, -84], [-6, -58, -6, -82], [0, -10, 12, -6]]
+    .map(([x, z, tx, tz]) => buildLightTower(scene, M, addStatic, towerLens, x, z, tx, tz));
 
   // static physics
   const body = physics.world.createRigidBody(physics.R.RigidBodyDesc.fixed());
@@ -249,7 +264,7 @@ export function buildWorld(scene, renderer, physics, M) {
     physics.world.createCollider(physics.R.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z).setRotation(q), body);
   }
 
-  return { sun, hemi, sky, clouds, water, terrainCollider, updateShadow(focus) {
+  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, pmremEnv: scene.environment, updateShadow(focus) {
     sun.position.copy(focus).addScaledVector(sunDir, 80);
     sun.target.position.copy(focus);
     // snap to texel grid to avoid shimmering
@@ -406,6 +421,74 @@ function buildSiteOffice(scene, M, addStatic, x, z) {
   g.position.set(x, 0, z); g.rotation.y = Math.PI;
   scene.add(g);
   addStatic(x, 1.4, z, W, 2.8, D);
+}
+
+// Trailer-mounted light tower: generator canopy on a single-axle trailer, four stabiliser jacks,
+// a three-stage telescopic mast and a bar of four LED floodlights tilted towards the work area.
+function buildLightTower(scene, M, addStatic, lens, x, z, tx, tz) {
+  const g = new THREE.Group();
+  const Y = 0xe8b40c, W = 0xeceae4, D = 0x2a2c30, K = 0x141518, G = 0x8b9096;
+  const v = [];
+  // chassis rails, drawbar A-frame, jockey wheel, tow eye
+  for (const s of [-1, 1]) v.push(box(0.1, 0.14, 3.3, s * 0.62, 0.52, 0, D));
+  v.push(box(1.34, 0.1, 0.1, 0, 0.52, 1.6, D), box(1.34, 0.1, 0.1, 0, 0.52, -1.6, D));
+  for (const s of [-1, 1]) v.push(box(0.08, 0.08, 1.45, s * 0.33, 0.5, 2.2, D, 0, s * 0.42, 0));
+  v.push(cyl(0.07, 0.07, 0.16, 12, 0, 0.5, 2.9, D, Math.PI / 2), cyl(0.04, 0.04, 0.55, 8, 0, 0.32, 2.62, G), cyl(0.09, 0.09, 0.06, 12, 0, 0.07, 2.62, K, 0, 0, Math.PI / 2));
+  // generator canopy with louvres, doors, control panel and exhaust
+  v.push(box(1.36, 1.1, 2.3, 0, 1.15, -0.25, Y), box(1.4, 0.06, 2.36, 0, 1.72, -0.25, Y), box(1.28, 0.06, 2.22, 0, 0.62, -0.25, D));
+  for (const s of [-1, 1]) {
+    for (let i = 0; i < 7; i++) v.push(box(0.02, 0.035, 0.6, s * 0.69, 0.9 + i * 0.08, -0.95, K));
+    v.push(box(0.012, 0.95, 0.012, s * 0.685, 1.15, 0.2, K), box(0.03, 0.08, 0.03, s * 0.7, 1.2, 0.05, G));
+    v.push(box(0.02, 0.07, 0.4, s * 0.69, 1.55, 0.35, W)); // decal band
+  }
+  v.push(box(0.6, 0.45, 0.04, 0, 1.2, 0.92, D), box(0.46, 0.3, 0.02, 0, 1.24, 0.95, 0x3a4a3c));
+  for (let i = 0; i < 3; i++) v.push(cyl(0.025, 0.025, 0.03, 10, -0.15 + i * 0.15, 1.04, 0.95, i === 0 ? 0xc0261b : 0x2a8a3a, Math.PI / 2));
+  v.push(cyl(0.045, 0.045, 0.32, 10, 0.45, 1.88, -1.05, G), cyl(0.05, 0.05, 0.05, 10, 0.45, 2.06, -1.05, K));
+  // axle, mudguards
+  v.push(box(1.5, 0.08, 0.08, 0, 0.36, -0.3, D));
+  for (const s of [-1, 1]) v.push(box(0.26, 0.04, 0.85, s * 0.83, 0.75, -0.3, D), box(0.26, 0.3, 0.04, s * 0.83, 0.6, 0.12, D));
+  // stabiliser jacks at the four corners (outriggers swung out, feet on the ground)
+  const feet = [[-1, 1.4], [1, 1.4], [-1, -1.5], [1, -1.5]];
+  for (const [s, zz] of feet) {
+    v.push(box(0.75, 0.08, 0.08, s * 0.95, 0.5, zz, Y), box(0.09, 0.62, 0.09, s * 1.3, 0.34, zz, Y), box(0.06, 0.25, 0.06, s * 1.3, 0.82, zz, G));
+    v.push(box(0.26, 0.03, 0.26, s * 1.3, 0.015, zz, D));
+  }
+  const body = new THREE.Mesh(merge(v), M.vertex); shadowed(body); g.add(body);
+  // wheels
+  const tyre = cyl(0.33, 0.33, 0.2, 20, 0, 0, 0, null, 0, 0, Math.PI / 2);
+  const rim = cyl(0.18, 0.18, 0.21, 14, 0, 0, 0, null, 0, 0, Math.PI / 2);
+  for (const s of [-1, 1]) {
+    const t = new THREE.Mesh(tyre, M.rubber); t.position.set(s * 0.83, 0.33, -0.3); g.add(shadowed(t));
+    const r = new THREE.Mesh(rim, M.galvanized); r.position.copy(t.position); g.add(r);
+  }
+  // telescopic mast (three stages) rising from the back of the canopy, coiled cable, lamp bar
+  const H = 9.2, mz = -1.25;
+  const mast = merge([cyl(0.11, 0.11, 3.4, 12, 0, 1.75 + 1.7, mz), cyl(0.085, 0.085, 3.3, 12, 0, 1.75 + 3.4 + 1.5, mz), cyl(0.065, 0.065, 2.7, 12, 0, 1.75 + 6.4 + 1.05, mz),
+    cyl(0.135, 0.135, 0.12, 12, 0, 1.75 + 3.38, mz), cyl(0.105, 0.105, 0.12, 12, 0, 1.75 + 6.48, mz), box(0.3, 0.5, 0.3, 0, 1.95, mz),
+    box(0.16, 0.16, 0.42, 0, 2.2, mz + 0.28), cyl(0.06, 0.06, 0.18, 10, 0.18, 2.2, mz + 0.4, null, 0, 0, Math.PI / 2)]);
+  g.add(shadowed(new THREE.Mesh(mast, M.galvanized)));
+  const coil = []; for (let i = 0; i < 60; i++) { const a = i * 0.55; coil.push(new THREE.Vector3(Math.cos(a) * 0.15, 2.3 + i * 0.1, mz + Math.sin(a) * 0.15)); }
+  g.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(coil), 240, 0.014, 5), M.blackPlastic));
+  const bar = new THREE.Group(); bar.position.set(0, H + 0.1, mz); g.add(bar);
+  bar.add(shadowed(new THREE.Mesh(merge([box(1.9, 0.08, 0.08, 0, 0, 0), box(0.08, 0.5, 0.08, 0, -0.25, 0), box(0.06, 0.06, 0.5, 0, 0.0, 0.0)]), M.darkSteel)));
+  const heads = [];
+  const yaw = Math.atan2(tx - x, tz - z);
+  g.position.set(x, 0, z); g.rotation.y = yaw + Math.PI; // the canopy end faces away from the work, lamps lean over it
+  const tilt = 0.55;
+  for (const [hx, hy] of [[-0.6, 0.28], [0.6, 0.28], [-0.6, -0.28], [0.6, -0.28]]) {
+    const h = new THREE.Group(); h.position.set(hx, hy, 0); h.rotation.x = -tilt; bar.add(h);
+    // the head looks along -z of the group (towards the work area once the group is turned round)
+    h.add(shadowed(new THREE.Mesh(merge([box(0.56, 0.4, 0.12, 0, 0, 0.04), box(0.6, 0.03, 0.14, 0, 0.21, 0.02), box(0.04, 0.3, 0.06, -0.3, 0, 0.04), box(0.04, 0.3, 0.06, 0.3, 0, 0.04)]), M.blackPaint)));
+    for (let i = 0; i < 6; i++) h.add(new THREE.Mesh(box(0.012, 0.36, 0.1, -0.24 + i * 0.096, 0, 0.13), M.blackPaint));
+    const l = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.34), lens); l.position.z = -0.025; l.rotation.y = Math.PI; h.add(l);
+    heads.push(h);
+  }
+  scene.add(g); g.updateMatrixWorld(true);
+  addStatic(x, 1.0, z, 2.0, 2.0, 3.4, yaw);
+  const mw = new THREE.Vector3(0, 6, mz).applyMatrix4(g.matrixWorld);
+  addStatic(mw.x, 6, mw.z, 0.3, 8, 0.3, yaw);
+  const top = new THREE.Vector3(0, H + 0.1, mz).applyMatrix4(g.matrixWorld);
+  return { pos: top, target: new THREE.Vector3(tx, 0, tz), heads };
 }
 
 function buildPortaloo(scene, M, addStatic, x, z) {

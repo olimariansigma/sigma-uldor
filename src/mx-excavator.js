@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { buildTrackUnit } from './tracks.js';
 import { buildAttachment, sidePlate } from './attachments.js';
-import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, stripeDecal, add, V } from './detail.js';
+import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, stripeDecal, add, V, exteriorOnly } from './detail.js';
 import * as T from './textures.js';
 
 const BOOMS = { mono: { len: 5.6, ky: 1.0 }, long: { len: 9.6, ky: 1.15 }, straight: { len: 7.0, ky: 0.55 } };
@@ -349,7 +349,7 @@ function cab(m) {
     add(c, tubeAB(V(0, 0.1, 0.3), V(0, lift - 0.1, -0.5), 0.07), K.black);
     add(c, tubeAB(V(0, 0.6, 0.2), V(0, lift - 0.2, -0.45), 0.04), K.chrome);
     add(c, ladder(0.55, 0, lift, -0.1, 0.36, 0.3), m.ctx.M.paintYellow);
-    add(c, mergeG([bx(0.7, 0.04, 0.5, 0.15, lift - 0.02, 1.05), ...[[-0.2, 0.8], [0.5, 0.8], [0.5, 1.3]].map(([x, z]) => tubeAB(V(x, lift, z), V(x, lift + 1.0, z), 0.02, 8))]), m.ctx.M.paintYellow);
+    exteriorOnly(add(c, mergeG([bx(0.7, 0.04, 0.5, 0.15, lift - 0.02, 1.05), ...[[-0.2, 0.8], [0.5, 0.8], [0.5, 1.3]].map(([x, z]) => tubeAB(V(x, lift, z), V(x, lift + 1.0, z), 0.02, 8))]), m.ctx.M.paintYellow));
     shell = new THREE.Group(); shell.position.y = lift; c.add(shell);
   } else if (sp.cab === 'tilt') {
     shell = new THREE.Group(); shell.position.set(0, 0.05, zb); c.add(shell);
@@ -373,12 +373,12 @@ function cab(m) {
     const rg = new THREE.ExtrudeGeometry(roof, { depth: 0.07, bevelEnabled: true, bevelSize: 0.035, bevelThickness: 0.035, bevelSegments: 3 });
     rg.rotateX(Math.PI / 2); rg.translate(0, ch + 0.07, 0);
     add(shell, rg, K.paint);
-    add(shell, mergeG([rbox(0.5, 0.03, 0.5, 0.01, -0.1, ch + 0.11, 0.0)]), GL, false); // roof hatch
+    exteriorOnly(add(shell, mergeG([rbox(0.5, 0.03, 0.5, 0.01, -0.1, ch + 0.11, 0.0)]), GL, false)); // roof hatch
     // LED light bar on the roof edge, tinted sun visor over the windscreen, radio antenna and beacon base
     add(shell, mergeG([rbox(0.72, 0.075, 0.1, 0.025, 0, ch + 0.2, zf - 0.04), bx(0.05, 0.08, 0.05, -0.3, ch + 0.15, zf - 0.04), bx(0.05, 0.08, 0.05, 0.3, ch + 0.15, zf - 0.04),
       cy(0.006, 0.006, 0.62, 6, -cw2 / 2 + 0.08, ch + 0.42, zb + 0.12), cy(0.022, 0.026, 0.05, 10, -cw2 / 2 + 0.08, ch + 0.13, zb + 0.12)]), K.black);
     add(shell, mergeG([0, 1, 2, 3].map((i) => bx(0.13, 0.045, 0.012, -0.24 + i * 0.16, ch + 0.2, zf + 0.012))), K.lens, false);
-    { const v = bx(cw2 - 0.04, 0.012, 0.24, 0, 0, 0); v.rotateX(-0.18); v.translate(0, ch + 0.02, zf + 0.1); add(shell, v, GL, false); }
+    { const v = bx(cw2 - 0.04, 0.012, 0.24, 0, 0, 0); v.rotateX(-0.18); v.translate(0, ch + 0.02, zf + 0.1); exteriorOnly(add(shell, v, GL, false)); }
     // pillars (rounded tubes) + window frames / rubber seals
     const fr = [];
     for (const s of [-1, 1]) {
@@ -389,29 +389,29 @@ function cab(m) {
     }
     fr.push(bx(cw2, 0.06, 0.06, 0, 0.62, zf - 0.08), bx(cw2, 0.05, 0.05, 0, ch - 0.03, zf - 0.19));
     add(shell, mergeG(fr), K.black);
-    const g1 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, ch - 0.68), GL); g1.position.set(0, 0.62 + (ch - 0.62) / 2, zf - 0.13); g1.rotation.x = -0.09; shell.add(g1);
-    const g2 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, 0.55), GL); g2.position.set(0, 0.32, zf - 0.04); shell.add(g2);
-    for (const s of [-1, 1]) { const g3 = new THREE.Mesh(new THREE.PlaneGeometry(cd - 0.15, ch - 0.1), GL); g3.rotation.y = Math.PI / 2; g3.position.set(s * (cw2 / 2 - 0.01), ch / 2 + 0.02, (zf + zb) / 2 - 0.05); shell.add(g3); }
-    const g4 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.2, 0.55), GL); g4.position.set(0, ch - 0.45, zb + 0.035); g4.rotation.y = Math.PI; shell.add(g4);
+    const g1 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, ch - 0.68), GL); g1.position.set(0, 0.62 + (ch - 0.62) / 2, zf - 0.13); g1.rotation.x = -0.09; shell.add(exteriorOnly(g1));
+    const g2 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.08, 0.55), GL); g2.position.set(0, 0.32, zf - 0.04); shell.add(exteriorOnly(g2));
+    for (const s of [-1, 1]) { const g3 = new THREE.Mesh(new THREE.PlaneGeometry(cd - 0.15, ch - 0.1), GL); g3.rotation.y = Math.PI / 2; g3.position.set(s * (cw2 / 2 - 0.01), ch / 2 + 0.02, (zf + zb) / 2 - 0.05); shell.add(exteriorOnly(g3)); }
+    const g4 = new THREE.Mesh(new THREE.PlaneGeometry(cw2 - 0.2, 0.55), GL); g4.position.set(0, ch - 0.45, zb + 0.035); g4.rotation.y = Math.PI; shell.add(exteriorOnly(g4));
     // door: hinges, handle, step, grab handle
     add(shell, mergeG([bx(0.03, 0.03, 0.14, cw2 / 2 + 0.02, 0.95, 0.3), tubeAB(V(cw2 / 2 + 0.03, 0.45, 0.55), V(cw2 / 2 + 0.03, 1.25, 0.55), 0.016, 8), pinX(0.015, 0.05, cw2 / 2 + 0.02, 0.4, -0.05), pinX(0.015, 0.05, cw2 / 2 + 0.02, 1.3, -0.05)]), K.chrome);
     add(shell, bx(0.25, 0.03, 0.35, cw2 / 2 + 0.15, -0.25, 0.3), K.tread);
     // wiper
     const wp = mergeG([bx(0.012, 0.02, 0.7, 0, 0, 0), bx(0.02, 0.03, 0.62, 0.015, 0, 0.0), cy(0.03, 0.03, 0.05, 10, 0, 0, -0.38, Math.PI / 2)]);
     wp.rotateX(Math.PI / 2); wp.rotateZ(0.5); wp.translate(0.15, 1.15, zf - 0.11);
-    add(shell, wp, K.black, false);
+    exteriorOnly(add(shell, wp, K.black, false));
     // front guard grid for demolition attachments (FOGS)
     if (['grapple', 'breaker', 'pulverizer', 'shear', 'orangepeel', 'claw', 'crusher'].includes(sp.attach)) {
       const gg = [];
       for (let i = 0; i < 7; i++) gg.push(tubeAB(V(-0.42 + i * 0.14, 0.65, zf + 0.06), V(-0.42 + i * 0.14, ch - 0.05, zf - 0.08), 0.014, 6));
       for (const y of [0.66, ch - 0.06]) gg.push(bx(cw2 - 0.04, 0.04, 0.04, 0, y, y < 1 ? zf + 0.06 : zf - 0.08));
       gg.push(bx(0.04, 0.04, 0.2, -0.47, 0.66, zf - 0.03), bx(0.04, 0.04, 0.2, 0.47, 0.66, zf - 0.03));
-      add(shell, mergeG(gg), K.black);
+      exteriorOnly(add(shell, mergeG(gg), K.black));
       const roofG = [];
       for (let i = 0; i < 6; i++) roofG.push(bx(0.03, 0.03, cd - 0.1, -0.4 + i * 0.16, ch + 0.22, (zf + zb) / 2));
       roofG.push(bx(cw2, 0.04, 0.04, 0, ch + 0.22, zf - 0.05), bx(cw2, 0.04, 0.04, 0, ch + 0.22, zb + 0.05));
       for (const s of [-1, 1]) for (const z of [zb + 0.05, zf - 0.05]) roofG.push(bx(0.04, 0.14, 0.04, s * 0.45, ch + 0.15, z));
-      add(shell, mergeG(roofG), K.black);
+      exteriorOnly(add(shell, mergeG(roofG), K.black));
     }
     mirror(shell, K, V(cw2 / 2, 1.0, zf - 0.05), V(cw2 / 2 + 0.25, 1.35, zf + 0.05), -0.3);
     workLight(shell, K, 0.3, ch + 0.13, zf - 0.02, 0, 0.25, 0.9); workLight(shell, K, -0.3, ch + 0.13, zf - 0.02, 0, 0.25, 0.9);
@@ -432,7 +432,7 @@ function cab(m) {
   m.joyL = add(shell, joy, K.plastic, false); m.joyL.position.set(-0.33, 0.68, 0.02); m.joyL.userData.keep = true;
   m.joyR = add(shell, joy.clone(), K.plastic, false); m.joyR.position.set(0.33, 0.68, 0.02); m.joyR.userData.keep = true;
   for (const x of [-0.1, 0.1]) { const lv = add(shell, mergeG([cy(0.012, 0.012, 0.35, 6, x, 0.25, 0.48, -0.4), cy(0.025, 0.025, 0.08, 8, x, 0.42, 0.55, -0.4)]), K.plastic, false); lv.userData.keep = true; }
-  m.seat = m.anchor(shell, 0, 1.32, -0.15);
+  m.seat = m.anchor(shell, 0, 1.36, 0.22); // operator's eye, ~0.7 m behind the windscreen
   m.door = m.anchor(c, 0.75, 0, 0.25);
   const cb = [c.position.x, 1.1, 0.65, 1.0, 1.8, 1.9];
   if (sp.cab === 'elevated') cb[1] = 2.3 + 1.1;

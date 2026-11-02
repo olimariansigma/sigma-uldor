@@ -1,7 +1,7 @@
 // Site vehicles: tandem roller, asphalt paver, wheel loader, bulldozer, tracked dumper, wrecking-ball crawler crane.
 import * as THREE from 'three';
 import { buildTrackUnit } from './tracks.js';
-import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, add, V } from './detail.js';
+import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, add, V, exteriorOnly } from './detail.js';
 import { sidePlate, curvePts, shell } from './attachments.js';
 import { cylinder, lum } from './mx-excavator.js';
 
@@ -49,7 +49,7 @@ function canopyCab(m, parent, x, y, z, enclosed = true) {
   add(c, rbox(w + 0.16, 0.12, d + 0.16, 0.05, 0, h + 0.05, 0), K.paint);
   if (enclosed) {
     for (const [px, pz, ry, ww] of [[0, d / 2 - 0.03, 0, w - 0.1], [0, -d / 2 + 0.03, Math.PI, w - 0.1], [w / 2 - 0.03, 0, Math.PI / 2, d - 0.1], [-w / 2 + 0.03, 0, -Math.PI / 2, d - 0.1]]) {
-      const gl = new THREE.Mesh(new THREE.PlaneGeometry(ww, h - 0.2), K.glass); gl.position.set(px, h / 2 + 0.05, pz); gl.rotation.y = ry; c.add(gl);
+      const gl = new THREE.Mesh(new THREE.PlaneGeometry(ww, h - 0.2), K.glass); gl.position.set(px, h / 2 + 0.05, pz); gl.rotation.y = ry; c.add(exteriorOnly(gl));
     }
   }
   seat(K, c, 0, 0.45, -0.2);
@@ -343,8 +343,8 @@ export function buildCrane(m) {
   const cab = new THREE.Group(); cab.position.set(1.0, 0.25, 1.0); U.add(cab);
   m.cab = cab;
   add(cab, mergeG([rbox(1.0, 1.9, 1.7, 0.06, 0, 0.95, 0)]), K.black);
-  const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.2), K.glass); gl.position.set(0, 1.2, 0.86); cab.add(gl);
-  const gl2 = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.3), K.glass); gl2.position.set(0.51, 1.15, 0); gl2.rotation.y = Math.PI / 2; cab.add(gl2);
+  const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.2), K.glass); gl.position.set(0, 1.2, 0.86); cab.add(exteriorOnly(gl));
+  const gl2 = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.3), K.glass); gl2.position.set(0.51, 1.15, 0); gl2.rotation.y = Math.PI / 2; cab.add(exteriorOnly(gl2));
   seat(K, cab, 0, 0.5, -0.1);
   m.seat = anchor(cab, 0, 1.45, 0.0); m.door = anchor(cab, 0.8, -0.25, 0);
   add(cab, rbox(1.1, 0.08, 1.8, 0.03, 0, 1.94, 0), K.paint);

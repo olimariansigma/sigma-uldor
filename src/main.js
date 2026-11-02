@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { EXTERIOR } from './detail.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { setAnisotropy, setPack } from './textures.js';
 import { materials } from './materials.js';
 import { TypeRegistry } from './pieces.js';
 import { buildWorld } from './world.js';
+import { DayNight, CYCLES, MORNING } from './daynight.js';
 import { SITE, inWater, lakeDist, terrainHeight } from './site.js';
 import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE , RUBBLE } from './demolition.js';
 import { BUILDINGS } from './buildings.js';
@@ -36,7 +38,7 @@ const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
 function progress(p, text) { $('loadfill').style.width = (p * 100) + '%'; if (text) $('loadtext').textContent = text; }
 function loadPrefs() {
-  const def = { quality: null, volume: 0.8, sens: 1, invert: false, name: '', hammer: 1, carry: 8 };
+  const def = { quality: null, volume: 0.8, sens: 1, invert: false, name: '', hammer: 1, carry: 8, day: 'normal' };
   try { return { ...def, ...(JSON.parse(localStorage.getItem(PREFIX + 'prefs')) || {}) }; } catch (e) { return def; }
 }
 
@@ -64,6 +66,7 @@ class Game {
     setAnisotropy(Math.min(8, renderer.capabilities.getMaxAnisotropy()));
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(62, 1, 0.08, 3000);
+    this.camera.layers.enable(EXTERIOR); // guard grids, wipers, glass: hidden only in the cab view
     window.addEventListener('resize', () => this.resize());
 
     const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 });
@@ -84,6 +87,8 @@ class Game {
     await frame();
     this.types = new TypeRegistry(this.M);
     this.env = buildWorld(this.scene, renderer, this.physics, this.M);
+    this.dn = new DayNight(this.scene, this.env, this.M, renderer);
+    this.dn.onPhase = (night) => { if (this.running && this.dn.cycle > 0) this.ui.toast(night ? '🌙 Night shift: lamps and work lights are on' : '☀️ Good morning!', true, 3500); };
     this.applyQuality(q);
     this.resize();
     progress(0.5, 'Delivering machinery…');
@@ -190,12 +195,15 @@ class Game {
     const sh = this.env.sun.shadow;
     if (sh.mapSize.x !== s) { sh.mapSize.set(s, s); if (sh.map) { sh.map.dispose(); sh.map = null; } }
     if (this.fx) this.fx.quality = q === 'low' ? 0.5 : 1;
+    if (this.dn && this.dn.quality !== q) { this.dn.quality = q; this.dn.setQuality(q); }
   }
   resize() {
     const w = window.innerWidth, h = window.innerHeight;
     this.renderer.setSize(w, h);
-    this.camera.aspect = w / h; this.camera.fov = w / h < 1 ? 75 : 62; this.camera.updateProjectionMatrix();
+    this.baseFov = w / h < 1 ? 75 : 62; this.camera.aspect = w / h; this.camera.fov = this.baseFov; this.camera.updateProjectionMatrix();
   }
+  // seconds per day: the host's choice in multiplayer, your own otherwise (0 = always day)
+  dayCycle() { return this.net && this.net.isClient ? (this.hostCycle || 0) : CYCLES[this.prefs.day] || 0; }
   savePrefs() { try { localStorage.setItem(PREFIX + 'prefs', JSON.stringify(this.prefs)); } catch (e) { /* ignore */ } }
   setupSettings() {
     const s = this.prefs;
@@ -204,6 +212,14 @@ class Game {
     $('optVolume').addEventListener('input', (e) => { s.volume = +e.target.value; this.audio.setVolume(s.volume); this.savePrefs(); });
     $('optSens').addEventListener('input', (e) => { s.sens = +e.target.value; this.input.sensitivity = s.sens; this.savePrefs(); });
     $('optInvert').addEventListener('change', (e) => { s.invert = e.target.checked; this.input.invertY = s.invert; this.savePrefs(); });
+    if (!(s.day in CYCLES)) s.day = 'normal';
+    $('optDay').value = s.day;
+    $('optDay').addEventListener('change', (e) => { s.day = e.target.value; this.savePrefs(); this.todTimer = 0; });
+    $('optSkip').addEventListener('click', () => {
+      if (this.net.isClient) { this.ui.toast('Only the host can change the time'); return; }
+      if (!this.dayCycle()) { this.ui.toast('Turn on day & night first'); return; }
+      this.dn.skip(0.125); this.todTimer = 0;
+    });
     $('fullscreenBtn').addEventListener('click', () => { if (document.fullscreenElement) document.exitFullscreen(); else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); });
   }
   setName(n) {
@@ -354,6 +370,7 @@ class Game {
   // default sandbox world
   newWorld() {
     this.clearWorld();
+    this.dn.p = MORNING; this.dn.apply();
     this.buildBuilding('bungalow', 0);
     this.buildBuilding('wall', 1);
     this.buildBuilding('warehouse', 2);
@@ -398,6 +415,7 @@ class Game {
       settings: { crusher: this.settings.crusher, grapple: this.settings.grapple },
       players: forSave ? [] : [...this.players.values()].map((p) => ({ id: p.id, name: p.name, shirt: p.shirt, driving: p.driving, bucket: [p.bucket.kind, p.bucket.kg, p.bucket.color.r, p.bucket.color.g, p.bucket.color.b], cement: [p.cement.kg, p.cement.color.r, p.cement.color.g, p.cement.color.b] })),
       nextMachineId: this.nextMachineId,
+      time: Math.round(this.dn.p * 1e4) / 1e4, cycle: this.dayCycle(),
     };
   }
 
@@ -430,6 +448,9 @@ class Game {
     this.crusher.restore(w.crusher); this.intake.restore(w.intake); this.mixer.restore(w.mixer); this.road.restore(w.road); this.slabs.restore(w.slabs || []);
     if (w.settings) Object.assign(this.settings, w.settings);
     this.crusher.rate = this.settings.crusher;
+    if (typeof w.time === 'number') this.dn.p = w.time;
+    if (mirror) this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0;
+    this.dn.apply();
   }
 
   // ======================================================================= save slots
@@ -955,6 +976,7 @@ class Game {
       case 'bld+': this.buildBuilding(e[1], e[2]); break;
       case 'bld-': this.removeBuildingFull(e[1]); break;
       case 'mix': this.mixer.restore(e[1]); break;
+      case 'tod': this.dn.p = e[1]; this.hostCycle = e[2]; break;
       case 'road': this.road.restore(e[1]); break;
       case 'set': Object.assign(this.settings, e[1]); this.crusher.rate = this.settings.crusher; break;
       case 'dep': this.crusher.deposit(e[1], new THREE.Color(e[2], e[3], e[4])); break;
@@ -1009,7 +1031,11 @@ class Game {
   updateCamera(dt) {
     const look = this.input ? this.input.consumeLook() : { x: 0, y: 0 };
     const c = this.cam, cam = this.camera, W = this.physics.world;
+    // wider view from the operator's seat
+    const fov = (this.baseFov || 62) + (this.mode === 'machine' && c.cab ? 14 : 0);
+    if (Math.abs(cam.fov - fov) > 0.01) { cam.fov = fov; cam.updateProjectionMatrix(); }
     if (this.mode === 'foot') {
+      cam.layers.enable(EXTERIOR);
       c.yaw -= look.x; c.pitch = clamp(c.pitch - look.y, -1.25, 0.95);
       if (this.input) c.dist = clamp(c.dist + this.input.wheel * 0.4, 2.2, 9);
       const target = this.player.pos.clone().add(new THREE.Vector3(0, 1.62, 0));
@@ -1029,9 +1055,11 @@ class Game {
         c.cabYaw = clamp(c.cabYaw - look.x, -1.9, 1.9); c.cabPitch = clamp(c.cabPitch - look.y, -1.1, 0.9);
         const seat = m.seatWorld();
         cam.position.copy(seat);
+        cam.layers.disable(EXTERIOR);
         const yaw = m.yaw + m.swing + c.cabYaw;
         cam.lookAt(seat.clone().add(new THREE.Vector3(Math.sin(yaw) * Math.cos(c.cabPitch), Math.sin(c.cabPitch), Math.cos(yaw) * Math.cos(c.cabPitch))));
       } else {
+        cam.layers.enable(EXTERIOR);
         c.exYaw -= look.x; c.exPitch = clamp(c.exPitch - look.y, -1.3, 0.35);
         if (this.input) c.exDist = clamp(c.exDist + this.input.wheel * 0.8, 5, 34);
         const target = m.root.position.clone().add(new THREE.Vector3(0, 2.6 * Math.max(0.6, m.s), 0));
@@ -1190,7 +1218,7 @@ class Game {
         grabToggle: input.pressed('grab'),
       };
       m.drive(dt, ctl, machList);
-      if (input.pressed('cam')) { this.cam.cab = !this.cam.cab; this.cam.cabYaw = 0; }
+      if (input.pressed('cam')) { this.cam.cab = !this.cam.cab; this.cam.cabYaw = 0; this.cam.cabPitch = -0.12; }
       this.updateCamera(dt);
       if (input.pressed('use')) this.act('exit', { id: m.id });
       this.ui.setCrosshair(false, this.cam.cab);
@@ -1268,6 +1296,15 @@ class Game {
     const sampled = this.audio.updateMachines(voices);
     this.audio.updateLoops(this.crusher, sampled ? null : loud ? { pos: loud.pos, running: true, rpm: loud.rpm, hyd: loud.hyd } : { pos: this.camera.position, running: false, rpm: 0, hyd: 0 });
     const focus = this.mode === 'foot' ? this.player.pos : this.driving.root.position;
+    this.dn.cycle = this.dayCycle();
+    const view = (this._dnView = this._dnView || { focus: new THREE.Vector3(), head: new THREE.Vector3(), dir: new THREE.Vector3(), machine: null, machines: null });
+    view.focus.copy(focus); view.machine = this.driving; view.machines = machList;
+    view.head.copy(this.player.pos); view.head.y += 1.75; this.camera.getWorldDirection(view.dir);
+    this.dn.update(dt, view);
+    if (this.net.isHost) {
+      this.todTimer = (this.todTimer || 0) - dt;
+      if (this.todTimer <= 0) { this.todTimer = 10; this.events.push(['tod', Math.round(this.dn.p * 1e4) / 1e4, this.dayCycle()]); }
+    }
     this.env.updateShadow(new THREE.Vector3(Math.round(focus.x), 0, Math.round(focus.z)));
     this.env.water.material.normalMap.offset.x += dt * 0.01; this.env.water.material.normalMap.offset.y += dt * 0.006;
     this.ui.updatePopups(dt, this.camera);

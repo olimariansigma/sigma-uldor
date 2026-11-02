@@ -110,6 +110,11 @@ function norm(g) {
   return g;
 }
 // merge every static mesh directly under `group` by material (keeps transparent / flagged ones)
+// parts seen from outside only (front guard grids, wipers, glass...): the in-cab camera leaves this layer out so
+// the operator gets a clear view
+export const EXTERIOR = 2;
+export function exteriorOnly(o) { o.layers.set(EXTERIOR); o.userData.keep = true; o.castShadow = false; return o; }
+
 export function bake(group) {
   const buckets = new Map();
   for (const c of [...group.children]) {

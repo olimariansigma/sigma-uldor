@@ -16,6 +16,7 @@ export class Showroom {
     this.g = game;
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(32, 1, 0.1, 400);
+    this.camera.layers.enable(2); // EXTERIOR parts (guards, glass)
     this.envs = new Map();
     this.active = false;
     this.machine = null; this.spec = null;
@@ -165,7 +166,9 @@ export class Showroom {
     this.camera.updateProjectionMatrix();
     this.placeCamera(this.camera.aspect * (s.x > s.y * 1.3 ? 0.68 : 1));
     if (this.fog) { const d = this.camera.position.distanceTo(new THREE.Vector3(0, (this.y0 + this.y1) * 0.45, 0)); this.fog.near = d + this.R * 0.9; this.fog.far = d + this.R * 4.5; }
+    const ex = renderer.toneMappingExposure; renderer.toneMappingExposure = 1; // studio light, whatever the time of day
     renderer.render(this.scene, this.camera);
+    renderer.toneMappingExposure = ex;
   }
 
   // transparent product shot of one machine (build-time thumbnails)

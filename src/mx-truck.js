@@ -2,7 +2,7 @@
 // rear-tipping half-pipe or box body on a telescopic front cylinder. Blocks dropped in the body ride along physically;
 // tipping (Z / X) raises the body around its rear hinge and the tailgate swings open.
 import * as THREE from 'three';
-import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, workLight, mirror, grille, stick, label, add, V, weathered } from './detail.js';
+import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, workLight, mirror, grille, stick, label, add, V, weathered, exteriorOnly } from './detail.js';
 import { cylinder } from './mx-excavator.js';
 
 const anchor = (p, x, y, z) => { const o = new THREE.Object3D(); o.position.set(x, y, z); p.add(o); return o; };
@@ -135,11 +135,11 @@ export function buildTruck(m) {
   // windscreen, side windows, rear window; wipers; sun visor
   // dark interior behind the glass (planes, so the cab camera still sees out through them)
   const tint = new THREE.MeshStandardMaterial({ color: 0x0e1114, roughness: 0.85 });
-  const ws = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, ch - 1.15), K.glass); ws.position.set(0, 0.97 + (ch - 1.15) / 2, zf - 0.04); ws.rotation.x = -0.05; C.add(ws);
-  const wsb = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, ch - 1.15), tint); wsb.position.set(0, 0.97 + (ch - 1.15) / 2, zf - 0.09); wsb.rotation.x = -0.05; C.add(wsb);
+  const ws = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, ch - 1.15), K.glass); ws.position.set(0, 0.97 + (ch - 1.15) / 2, zf - 0.04); ws.rotation.x = -0.05; C.add(exteriorOnly(ws));
+  const wsb = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, ch - 1.15), tint); wsb.position.set(0, 0.97 + (ch - 1.15) / 2, zf - 0.09); wsb.rotation.x = -0.05; C.add(exteriorOnly(wsb));
   for (const s of [-1, 1]) {
-    const sw = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), K.glass); sw.position.set(s * (cw / 2 + 0.014), 1.42, 0.45); sw.rotation.y = s * Math.PI / 2; C.add(sw);
-    const sb = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), tint); sb.position.set(s * (cw / 2 + 0.005), 1.42, 0.45); sb.rotation.y = s * Math.PI / 2; C.add(sb);
+    const sw = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), K.glass); sw.position.set(s * (cw / 2 + 0.014), 1.42, 0.45); sw.rotation.y = s * Math.PI / 2; C.add(exteriorOnly(sw));
+    const sb = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), tint); sb.position.set(s * (cw / 2 + 0.005), 1.42, 0.45); sb.rotation.y = s * Math.PI / 2; C.add(exteriorOnly(sb));
     add(C, mergeG([bx(0.02, 0.02, 0.5, s * 0.25, 1.0, zf - 0.02), cy(0.02, 0.02, 0.05, 8, s * 0.25, 1.0, zf - 0.27, Math.PI / 2)]).rotateZ(s * 0.9).translate(0, 0, 0), K.black, false);
   }
   add(C, mergeG([rbox(cw - 0.1, 0.06, 0.32, 0.02, 0, ch - 0.12, zf + 0.1, 0.1)]), trim === 'chrome' ? K.paint : K.black);
@@ -170,7 +170,7 @@ export function buildTruck(m) {
   grille(C, 0.3, 0.12, cw / 2 - 0.3, 2.15, zb - 0.01, 0, 10);
   // interior: seats, dashboard, steering wheel
   add(C, mergeG([rbox(cw - 0.2, 0.35, 0.45, 0.06, 0, 1.02, zf - 0.38), rbox(0.5, 0.5, 0.5, 0.06, 0.55, 0.85, -0.25), rbox(0.5, 0.5, 0.5, 0.06, -0.55, 0.85, -0.25), rbox(0.48, 0.65, 0.12, 0.05, 0.55, 1.35, -0.48), rbox(0.48, 0.65, 0.12, 0.05, -0.55, 1.35, -0.48)]), K.plastic, false);
-  { const sw = new THREE.Group(); sw.position.set(0.55, 1.25, zf - 0.55); sw.rotation.x = -0.9; C.add(sw); add(sw, mergeG([new THREE.TorusGeometry(0.21, 0.02, 8, 26).rotateX(Math.PI / 2), bx(0.38, 0.02, 0.03, 0, 0, 0)]), K.plastic, false); }
+  { const sw = new THREE.Group(); sw.position.set(0.55, 1.25, zf - 0.55); sw.rotation.x = -0.9; C.add(exteriorOnly(sw)); add(sw, mergeG([new THREE.TorusGeometry(0.21, 0.02, 8, 26).rotateX(Math.PI / 2), bx(0.38, 0.02, 0.03, 0, 0, 0)]), K.plastic, false); }
   // reflective stripes + side lettering
   for (const s of [-1, 1]) { const l = label(sp.brand, 0.8, 0.18, trim === 'chrome' ? '#1b1d20' : '#ffffff'); l.position.set(s * (cw / 2 + 0.005), 0.42, 0.45); l.rotation.y = s * Math.PI / 2; C.add(l); stick(C, 'ce', 0.08, s * (cw / 2 + 0.005), 0.15, -0.6, s * Math.PI / 2); }
   m.seat = anchor(C, 0.55, 1.45, -0.2); m.door = anchor(U, 1.6, 0, 3.4);

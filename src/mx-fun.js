@@ -210,7 +210,8 @@ export function stepXBall(m, dt, groundAt) {
   const hook = m.att.hook.getWorldPosition(new THREE.Vector3());
   const L = (m.openTarget > 0.5 ? 3.0 : 1.4) * m.s;
   m.chainL = m.chainL == null ? L : m.chainL + Math.sign(L - m.chainL) * Math.min(Math.abs(L - m.chainL), dt * 1.5);
-  if (!m.ballState) m.ballState = { p: hook.clone().add(V(0, -m.chainL, 0)), v: V(0, 0, 0) };
+  // first frame, or the machine was moved / turned under the ball: hang it straight under the hook again
+  if (!m.ballState || m.ballState.p.distanceTo(hook) > m.chainL * 1.6 + 0.5) m.ballState = { p: hook.clone().add(V(0, -m.chainL, 0)), v: V(0, 0, 0) };
   const b = m.ballState, steps = 4, h = dt / steps, r = 0.55 * m.s;
   for (let i = 0; i < steps; i++) {
     b.v.y -= 9.81 * h; b.v.multiplyScalar(1 - 0.12 * h);

@@ -271,7 +271,7 @@ export class Demolition {
   hide(p) { for (const im of p.parts) { im.setMatrixAt(p.idx, ZERO); im.instanceMatrix.needsUpdate = true; } }
 
   setState(p, state, holder = -1) {
-    p.state = state; p.holder = holder;
+    p.state = state; p.holder = holder; this.stateVer = (this.stateVer || 0) + 1;
     if (this.authority && !this.silent) this.changes.push([p.id, state, holder]);
   }
 
@@ -607,7 +607,7 @@ export class Demolition {
     if (p.state === INTACT && state !== INTACT) this.detach(p);
     if (extra && extra.pos) { p.pos.fromArray(extra.pos); p.quat.fromArray(extra.quat); p.target = null; if (p.body) { p.body.setTranslation(p.pos, true); p.body.setRotation(p.quat, true); } this.writeMatrix(p); this.flagParts(p); }
     if (p.body) p.body.setEnabled(state === LOOSE);
-    p.state = state; p.holder = holder;
+    p.state = state; p.holder = holder; this.stateVer = (this.stateVer || 0) + 1;
     if (state === HELD) p.holdLocal = extra && extra.local ? new THREE.Matrix4().fromArray(extra.local) : new THREE.Matrix4();
     if (state === LOOSE) p.holdLocal = null;
   }
@@ -655,18 +655,18 @@ export class Demolition {
       if (p.pool) {
         const pd = (data.pool && data.pool[i]) || [0x999999, 100];
         this.revive(p, p.pos.clone(), p.quat.clone(), new THREE.Color(pd[0]), pd[1]);
-        p.state = LOOSE;
+        p.state = LOOSE; this.stateVer = (this.stateVer || 0) + 1;
       }
       if (p.state === INTACT) {
         this.byCollider.delete(p.collider.handle); this.world.removeCollider(p.collider, false);
         this.makeBody(p, !this.authority);
-        p.state = LOOSE;
+        p.state = LOOSE; this.stateVer = (this.stateVer || 0) + 1;
         if (p.type.tint) for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; }
       }
       this.writeMatrix(p); this.flagParts(p);
       const h = data.holders && data.holders[i];
       if (!forSave && h && (st === HELD || st === CARRIED)) {
-        p.state = st; p.holder = h[0];
+        p.state = st; p.holder = h[0]; this.stateVer = (this.stateVer || 0) + 1;
         p.holdLocal = h[1] ? new THREE.Matrix4().fromArray(h[1]) : null;
         if (p.body) p.body.setEnabled(false);
       }

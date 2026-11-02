@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { SITE, terrainHeight } from './site.js';
 import { box, merge } from './pieces.js';
-import { tyreLathe, wheelRim } from './detail.js';
+import { tyreLathe, wheelRim, bake } from './detail.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const COLORS = [0xc8102e, 0x1f4fa8, 0xe8e8e4, 0x1b1c1e, 0x8d9399, 0x2e6b3a, 0xe0a51a, 0x6a2a7a, 0x3a9ad0, 0xb4502a];
@@ -57,6 +57,7 @@ export class Traffic {
       car.dir = dir; car.x = -140 + i * 41; car.z = dir > 0 ? LANE.east : LANE.west; car.laneZ = car.z;
       car.speed = car.k.vmax * 0.8; car.blockedT = 0; car.overtake = 0; car.honkT = 0; car.bounce = 0; car.bv = 0; car.pitch = 0; car.pv = 0; car.hit = new Set();
       this.cars.push(car);
+      car.root.traverse((o) => { if (o.isGroup) bake(o); }); // merge static parts per moving group (fewer draw calls)
       game.scene.add(car.root);
     }
   }

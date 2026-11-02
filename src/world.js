@@ -4,6 +4,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import * as T from './textures.js';
 import { box, cyl, merge, mulberry } from './pieces.js';
 import { boxMapped } from './materials.js';
+import { bakeDeep } from './detail.js';
 import { SITE, terrainHeight, lakeDist } from './site.js';
 
 export { SITE };
@@ -234,7 +235,7 @@ export function buildWorld(scene, renderer, physics, M) {
     const lampB = new THREE.Mesh(merge([box(0.14, 0.24, 0.12, -0.9, 2.05, d / 2 + 0.07)]), M.blackPaint); g.add(lampB);
     const lampL = new THREE.Mesh(box(0.09, 0.14, 0.02, -0.9, 2.03, d / 2 + 0.135), M.lightLens); g.add(lampL);
     g.position.set(x, 0, z); g.rotation.y = rot;
-    scene.add(g);
+    scene.add(g); bakeDeep(g);
     addStatic(x, 1.6, z, w, 3.2, d, rot);
   };
   const brickA = boxMapped(new THREE.MeshStandardMaterial({ map: T.brickTextures('red').map, normalMap: T.brickTextures('red').normalMap, roughness: 0.95 }), 0.66, 0.3, 0);
@@ -604,7 +605,7 @@ function buildLightTower(scene, M, addStatic, lens, x, z, tx, tz) {
     const l = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.34), lens); l.position.z = -0.025; l.rotation.y = Math.PI; h.add(l);
     heads.push(h);
   }
-  scene.add(g); g.updateMatrixWorld(true);
+  scene.add(g); bakeDeep(g); g.updateMatrixWorld(true);
   addStatic(x, 1.0, z, 2.0, 2.0, 3.4, yaw);
   const mw = new THREE.Vector3(0, 6, mz).applyMatrix4(g.matrixWorld);
   addStatic(mw.x, 6, mw.z, 0.3, 8, 0.3, yaw);

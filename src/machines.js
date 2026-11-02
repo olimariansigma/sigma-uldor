@@ -199,8 +199,15 @@ export class Machine {
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   }
   syncBodies(teleport = false) {
-    for (const { obj, body } of this.bodies) {
+    for (const b of this.bodies) {
+      const { obj, body } = b;
       obj.getWorldPosition(_v); obj.getWorldQuaternion(_q);
+      // a part that has not moved since last frame is left alone: no new kinematic target, so the physics engine
+      // does not re-index its colliders or keep the blocks around a parked machine awake
+      const still = !teleport && b.lp && b.lp.distanceToSquared(_v) < 1e-10 && Math.abs(b.lq.dot(_q)) > 1 - 1e-10;
+      if (!b.lp) { b.lp = new THREE.Vector3(); b.lq = new THREE.Quaternion(); }
+      b.lp.copy(_v); b.lq.copy(_q);
+      if (still) { if (b.still) continue; b.still = true; } else b.still = false;
       if (teleport) { body.setTranslation(_v, true); body.setRotation(_q, true); }
       else {
         // Rapier 0.14 never moves a kinematic body's world centre of mass, and the solver uses it as the lever arm

@@ -134,6 +134,30 @@ export function bake(group) {
   }
 }
 
+// a group that never moves (and none of its parts do): fold every mesh in it, however deep, into one mesh per
+// material and shadow setting. Looks exactly the same, costs a fraction of the draw calls.
+export function bakeDeep(group) {
+  group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(group.matrixWorld).invert(), m = new THREE.Matrix4();
+  const buckets = new Map(), drop = [];
+  group.traverse((c) => {
+    if (c === group || !c.isMesh || c.isInstancedMesh || c.isSkinnedMesh || c.userData.keep || !c.visible) return;
+    if (Array.isArray(c.material) || c.material.transparent || c.material.vertexColors) return; // vertex-coloured parts are merged already
+    const g = norm(c.geometry).applyMatrix4(m.multiplyMatrices(inv, c.matrixWorld));
+    const key = c.material.uuid + (c.castShadow ? 's' : 'n') + (c.receiveShadow ? 'r' : 'n');
+    if (!buckets.has(key)) buckets.set(key, { mat: c.material, cast: c.castShadow, recv: c.receiveShadow, list: [] });
+    buckets.get(key).list.push(g); drop.push(c);
+  });
+  for (const c of drop) c.parent.remove(c);
+  // empty sub-groups are left behind: harmless, nothing to draw
+  for (const b of buckets.values()) {
+    const merged = b.list.length === 1 ? b.list[0] : mergeGeometries(b.list, false);
+    if (!merged) continue;
+    const mesh = new THREE.Mesh(merged, b.mat); mesh.castShadow = b.cast; mesh.receiveShadow = b.recv;
+    group.add(mesh);
+  }
+}
+
 // ------------------------------------------------------------------ geometry helpers
 export function rbox(w, h, d, r, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) {
   const g = new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2 - 0.001, h / 2 - 0.001, d / 2 - 0.001));

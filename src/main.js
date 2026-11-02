@@ -358,7 +358,17 @@ class Game {
   spawnPoint() { return SITE.playerSpawn.clone(); }
   playerName(id) { const p = this.players.get(id); return p ? p.name : '?'; }
   plotName(i) { const b = this.plots[i] != null ? this.demo.buildings[this.plots[i]] : null; return b && !b.removed ? (BUILDINGS.find((d) => d.id === b.def) || {}).name : 'empty'; }
-  carriedBy(pid) { const out = []; for (const p of this.demo.pieces) if (p.state === CARRIED && p.holder === pid) out.push(p); return out; }
+  // blocks a player carries. Asked many times a frame, so the scan over every block is redone only after some
+  // block changed state (demo.stateVer)
+  carriedBy(pid) {
+    const v = this.demo.stateVer || 0;
+    if (this._carV !== v || !this._car) {
+      this._carV = v; const map = this._car = new Map();
+      for (const p of this.demo.pieces) if (p.state === CARRIED) { let a = map.get(p.holder); if (!a) map.set(p.holder, a = []); a.push(p); }
+    }
+    const a = this._car.get(pid);
+    return a ? a.slice() : [];
+  }
 
   addPlayerEntry(id, name, shirt, local = false) {
     const e = { id, name, shirt, local, pos: new THREE.Vector3().copy(SITE.playerSpawn), yaw: 0, speed: 0, grounded: true, swingT: -1, driving: -1, bucket: { kind: null, kg: 0, color: new THREE.Color(0.5, 0.5, 0.5) }, cement: { kg: 0, color: new THREE.Color(0.6, 0.6, 0.6) }, target: null };
@@ -943,7 +953,8 @@ class Game {
     if (m && this.machines.has(m.id)) {
       const spot = this.findExitSpot(m);
       this.player.teleport(spot);
-      this.cam.yaw = Math.atan2(spot.x - m.pos.x, spot.z - m.pos.z);
+      // face away from the machine, so walking forward takes you clear of it
+      this.cam.yaw = Math.atan2(m.pos.x - spot.x, m.pos.z - spot.z);
     }
     this.player.setEnabled(true);
     if (!silent) this.ui.setMode('foot', this.input.touch);
@@ -955,13 +966,13 @@ class Game {
     const side = new THREE.Vector3(-out.z, 0, out.x);
     const W = this.physics.world, terrain = this.env.terrainCollider;
     const tryAt = [];
-    for (const d of [0.9, 1.6, 2.4, 3.4]) for (const s of [0, 1.2, -1.2, 2.4, -2.4]) tryAt.push(door.clone().addScaledVector(out, d * Math.max(1, m.s)).addScaledVector(side, s));
+    for (const d of [1.2, 1.9, 2.7, 3.6]) for (const s of [0, 1.2, -1.2, 2.4, -2.4]) tryAt.push(door.clone().addScaledVector(out, d * Math.max(1, m.s)).addScaledVector(side, s));
     for (let a = 0; a < 12; a++) tryAt.push(c.clone().add(new THREE.Vector3(Math.cos(a / 12 * Math.PI * 2), 0, Math.sin(a / 12 * Math.PI * 2)).multiplyScalar(m.radius * m.s + 1.5)));
     for (const p of tryAt) {
       if (lakeDist(p.x, p.z) < 1.15) continue;
       const y = terrainHeight(p.x, p.z);
       let hit = false;
-      W.intersectionsWithShape({ x: p.x, y: y + 0.95, z: p.z }, { x: 0, y: 0, z: 0, w: 1 }, new RAPIER.Capsule(0.55, 0.35), (col) => {
+      W.intersectionsWithShape({ x: p.x, y: y + 1.3, z: p.z }, { x: 0, y: 0, z: 0, w: 1 }, new RAPIER.Capsule(0.55, 0.7), (col) => { // a margin around the player: never right against wheels or tracks
         if (terrain && col.handle === terrain.handle) return true;
         if (col.handle === this.player.collider.handle) return true;
         hit = true; return false;

@@ -247,7 +247,7 @@ export function buildWorld(scene, renderer, physics, M) {
   buildSign(scene, M, addStatic);
   // mobile light towers for the night shift (aimed at the demolition plots and the crusher)
   const towerLens = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, emissive: 0xfff6e4, emissiveIntensity: 0, roughness: 0.15 });
-  const towers = [[-36, -58, -62, -84], [26, -60, 50, -84], [-6, -58, -6, -82], [0, -10, 12, -6]]
+  const towers = [[-36, -58, -62, -84], [26, -60, 50, -84], [-6, -58, -6, -82], [24, -24, 14, -10]]
     .map(([x, z, tx, tz]) => buildLightTower(scene, M, addStatic, towerLens, x, z, tx, tz));
 
   // static physics

@@ -111,7 +111,7 @@ export class DayNight {
 
   // a fixed set of real lights per quality level (changing quality is the only time the light count changes)
   setQuality(q) {
-    const n = q === 'low' ? 0 : q === 'medium' ? 2 : 3;
+    const n = q === 'low' ? 0 : q === 'medium' ? 1 : 3;
     for (const s of this.slots) { this.scene.remove(s.light, s.light.target); s.light.dispose(); }
     if (this.work) { this.scene.remove(this.work, this.work.target); this.work.dispose(); this.work = null; }
     this.slots = [];
@@ -124,6 +124,25 @@ export class DayNight {
       this.work = new THREE.SpotLight(0xeef3ff, 0, 48, 0.72, 0.5, 2);
       this.scene.add(this.work, this.work.target);
     }
+    this.lightsOn = null; this.warmed = {};
+  }
+  // The night lights only exist after dusk: every light in the scene costs shader work on every pixel, even at
+  // zero brightness, so in daylight they are switched off entirely. Switching changes the shaders, so the
+  // variant that is about to be needed is compiled in the background a little before sunset / sunrise.
+  setLightsVisible(on) {
+    for (const s of this.slots) s.light.visible = on;
+    if (this.work) this.work.visible = on;
+    this.lightsOn = on; this.warmed[on] = true;
+  }
+  prewarm(on) {
+    this.warmed[on] = true;
+    if ((!this.slots.length && !this.work) || !this.camera || !this.renderer.compileAsync) return;
+    const prev = this.lightsOn;
+    for (const s of this.slots) s.light.visible = on;
+    if (this.work) this.work.visible = on;
+    try { const pr = this.renderer.compileAsync(this.scene, this.camera); if (pr && pr.catch) pr.catch(() => {}); } catch (e) { /* compiled on first use instead */ }
+    for (const s of this.slots) s.light.visible = prev;
+    if (this.work) this.work.visible = prev;
   }
 
   get isNight() { return this.night > 0.5; }
@@ -147,6 +166,9 @@ export class DayNight {
     const dusk = Math.exp(-(((y - 0.04) / 0.14) ** 2)); // golden hour around sunrise / sunset
     const lit = 1 - SS(y, -0.08, 0.06);       // lamps switch on around sunset
     this.day = day; this.night = night; this.lit = lit;
+    const want = lit > 0.002;
+    if (want !== this.lightsOn) this.setLightsVisible(want);
+    if (y > -0.25 && y < 0.3 && !this.warmed[!want]) this.prewarm(!want);
 
     // sky
     const su = e.sky.material.uniforms;

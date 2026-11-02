@@ -308,15 +308,23 @@ body.touch #vhImg { width: 70px; height: 44px; }
 #carry { bottom: 96px; }
 #bucketHud { bottom: 92px; left: calc(50% + 120px); }
 #prompt { bottom: 150px; }
-body.touch #hotbar { bottom: auto; top: 12px; left: calc(50% + 40px); }
+/* touch: tools sit bottom-centre between the move stick and the action buttons (the top row belongs to the menu buttons) */
+body.touch #hotbar { top: auto; bottom: calc(12px + env(safe-area-inset-bottom)); left: 50%; }
 body.touch .hb { width: 60px; height: 54px; }
 body.touch .hb .ic { width: 22px; height: 22px; }
-body.touch #bucketHud { left: 50%; bottom: 60px; }
-body.touch #carry { bottom: 20px; }
-body.touch #prompt { bottom: 90px; }
+body.touch #bucketHud { left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); }
+body.touch #carry { bottom: calc(80px + env(safe-area-inset-bottom)); }
+body.touch #prompt { bottom: calc(122px + env(safe-area-inset-bottom)); }
 body.panel-open #hotbar { visibility: hidden; }
 
 /* machine horn (touch) and photo mode */
-.tb-horn { position: absolute; right: calc(16px + env(safe-area-inset-right)); top: 132px; width: 52px; height: 52px; }
+.tb-horn { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); width: 50px; height: 50px; }
+@media (max-height: 420px) {
+  body.touch #vehicleHud { top: 118px; }
+  body.touch #vhImg { display: none; }
+  #tbtns-exc { grid-template-columns: repeat(2, 60px); gap: 8px; }
+  #tbtns-exc .tb { width: 60px; height: 60px; }
+  #tbtns-exc .tb-big { width: 128px; }
+}
 .tb-horn .ic { width: 24px; height: 24px; }
 body.photo #hud { visibility: hidden; }

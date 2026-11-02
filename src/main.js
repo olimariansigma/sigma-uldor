@@ -90,6 +90,7 @@ class Game {
     this.types = new TypeRegistry(this.M);
     this.env = buildWorld(this.scene, renderer, this.physics, this.M);
     this.dn = new DayNight(this.scene, this.env, this.M, renderer);
+    this.dn.camera = this.camera;
     this.dn.onPhase = (night) => { if (this.running && this.dn.cycle > 0) this.ui.toast(night ? '🌙 Night shift: lamps and work lights are on' : '☀️ Good morning!', true, 3500); };
     this.applyQuality(q);
     this.resize();
@@ -817,7 +818,7 @@ class Game {
   }
   exitLocal(silent = false) {
     const m = this.driving;
-    this.mode = 'foot'; this.driving = null;
+    this.mode = 'foot'; this.driving = null; this.honking = false;
     const me = this.players.get(this.myId); if (me) me.driving = -1;
     if (m && this.machines.has(m.id)) {
       const spot = this.findExitSpot(m);
@@ -859,7 +860,9 @@ class Game {
     net.on('leave', (peer) => {
       for (const p of this.players.values()) if (p.peer === peer) {
         this.dropCarried(p.id); this.demo.forgetClient(p.id);
-        for (const m of this.machines.values()) if (m.driver === p.id) { m.driver = -1; this.events.push(['drv', m.id, -1]); }
+        // their charges can never be set off now, and a horn they were holding must stop
+        if (this.charges.mine(p.id).length) { this.charges.list = this.charges.list.filter((c) => c.owner !== p.id); this.charges.changed(); }
+        for (const m of this.machines.values()) if (m.driver === p.id) { m.driver = -1; this.events.push(['drv', m.id, -1]); if (this.horns.has(m.id)) { this.setHorn(m.id, 0); this.events.push(['horn', m.id, 0]); } }
         this.events.push(['pl-', p.id]);
         this.ui.toast(`👋 ${p.name} left`);
         this.removePlayerEntry(p.id);

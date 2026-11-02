@@ -9,6 +9,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 
 export const INTACT = 0, LOOSE = 1, HELD = 2, CARRIED = 3, GONE = 4;
 export const RUBBLE = '__rubble', RUBBLE_N = 320;
+export const BRICKS = '__bricks', BRICKS_N = 300; // bricks made by the brick press (full-size blocks)
 // collision groups: every machine's parts get one of 15 group bits; a piece a machine just let go of ignores that
 // machine for a moment so it drops out of the claw / bucket instead of wedging between the tines (it still lands
 // in a truck bed or on another machine)
@@ -115,6 +116,67 @@ export class Demolition {
     this.poolOrder = [];
     return b;
   }
+  // ---------------------------------------------------------------- brick pool
+  // Bricks pressed from dust. Like the rubble pool they exist from the start (stable ids), hidden until made.
+  // Laid on mortar they become fixed wall blocks of this pool's own "building": linked into its support graph
+  // as they are laid, so a home-built house can be smashed, blasted and collapse like any other.
+  addBrickPool(n = BRICKS_N) {
+    const t = this.types.get('cmu'), k = 3;
+    const b = { id: this.buildings.length, def: BRICKS, plot: -1, start: this.pieces.length, count: n, meshes: [], groundY: 0.3, removed: false, scale: k, pool: true, built: true };
+    this.buildings.push(b);
+    const parts = t.parts.map((pt) => {
+      const im = new THREE.InstancedMesh(pt.geo, pt.mat, n);
+      im.castShadow = true; im.receiveShadow = true; im.frustumCulled = true; im.userData.pcs = [];
+      im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(n * 3).fill(1), 3);
+      this.group.add(im); b.meshes.push(im);
+      return im;
+    });
+    const kg = Math.round(t.kg * k * k * k);
+    for (let i = 0; i < n; i++) {
+      const p = { id: this.pieces.length, b: b.id, type: t, size: t.size.clone().multiplyScalar(k), k, pos: new THREE.Vector3(0, -50, 0), quat: new THREE.Quaternion(),
+        color: new THREE.Color(0.6, 0.6, 0.6), kg, state: GONE, hp: t.hp * 2, maxHp: t.hp * 2, idx: i, parts, collider: null, body: null,
+        up: [], down: [], side: [], holder: -1, holdLocal: null, target: null, sent: null, pool: true, brick: true };
+      for (const im of parts) { im.userData.pcs.push(p); im.setMatrixAt(i, ZERO); }
+      this.pieces.push(p);
+    }
+    for (const im of parts) im.instanceMatrix.needsUpdate = true;
+    this.updateBounds(b);
+    this.brickPool = b;
+    return b;
+  }
+  freeBrick() { const b = this.brickPool; if (!b) return null; for (let i = b.start; i < b.start + b.count; i++) if (this.pieces[i].state === GONE) return this.pieces[i]; return null; }
+  // fix a brick in place as part of a wall (both sides: the host decides, clients mirror it)
+  setIntact(p, pos, quat) {
+    if (p.body) { this.byCollider.delete(p.collider.handle); this.world.removeRigidBody(p.body); p.body = null; p.collider = null; }
+    else if (p.collider) { this.byCollider.delete(p.collider.handle); this.world.removeCollider(p.collider, false); p.collider = null; }
+    if (pos) p.pos.copy(pos); if (quat) p.quat.copy(quat);
+    p.target = null; p.holdLocal = null; p.hp = p.maxHp; p.crack = 0;
+    p.collider = this.world.createCollider(RAPIER.ColliderDesc.cuboid(p.size.x / 2 - 0.004, p.size.y / 2 - 0.004, p.size.z / 2 - 0.004)
+      .setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat).setFriction(0.9), this.staticBody);
+    this.byCollider.set(p.collider.handle, p);
+    for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; }
+    this.writeMatrix(p); this.flagParts(p);
+    this.setState(p, INTACT);
+    this.link(p);
+    if (this.authority) this.dirty.add(p.b);
+  }
+  // (re)connect one piece to the wall blocks it touches: resting on, carrying, or bonded beside
+  link(p) {
+    for (const q of [...p.up, ...p.down, ...p.side]) { q.up = q.up.filter((x) => x !== p); q.down = q.down.filter((x) => x !== p); q.side = q.side.filter((x) => x !== p); }
+    p.up = []; p.down = []; p.side = [];
+    const b = this.buildings[p.b], A = this.aabb(p), eps = 0.02;
+    p.minY = A.min.y; p.cx = (A.min.x + A.max.x) / 2; p.cz = (A.min.z + A.max.z) / 2;
+    for (let i = b.start; i < b.start + b.count; i++) {
+      const q = this.pieces[i];
+      if (q === p || q.state !== INTACT) continue;
+      const B = this.aabb(q);
+      if (A.min.x > B.max.x + eps || B.min.x > A.max.x + eps || A.min.y > B.max.y + eps || B.min.y > A.max.y + eps || A.min.z > B.max.z + eps || B.min.z > A.max.z + eps) continue;
+      if (B.min.y >= A.max.y - 0.05) { p.up.push(q); q.down.push(p); }
+      else if (A.min.y >= B.max.y - 0.05) { q.up.push(p); p.down.push(q); }
+      else { p.side.push(q); q.side.push(p); }
+    }
+  }
   isBig(p) { return !p.pool && Math.max(p.size.x, p.size.y, p.size.z) > 1.9; }
   // bring a pool chunk to life (authority creates it; clients mirror it from the change message)
   revive(p, pos, quat, color, kg) {
@@ -123,14 +185,14 @@ export class Demolition {
     this.makeBody(p, !this.authority);
     for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; }
     this.writeMatrix(p); this.flagParts(p);
-    (this.poolOrder || (this.poolOrder = [])).push(p.id);
+    if (!p.brick) (this.poolOrder || (this.poolOrder = [])).push(p.id); // bricks are never recycled as rubble
   }
   // break a big loose piece into rubble chunks (authority). Returns the chunks.
   shatter(p, push = 1.5, spread = 0.8) {
     if (!this.authority || p.pool || p.state === GONE || p.state === INTACT) return [];
     const at = p.pos.clone(), col = this.dustColor(p).clone(), chip = this.chipColor(p);
     if (p.type.sound === 'glass') { this.sfx.glass(at); this.vanish(p, false); return []; }
-    const pool = this.buildings.find((b) => b.pool && !b.removed);
+    const pool = this.buildings.find((b) => b.def === RUBBLE && !b.removed);
     if (!pool) return [];
     const vol = p.size.x * p.size.y * p.size.z;
     const n = THREE.MathUtils.clamp(Math.round(vol / 1.1), 3, 8);
@@ -255,7 +317,7 @@ export class Demolition {
   // Dijkstra over the support graph. Resting on a supported piece costs nothing; spanning sideways or
   // hanging costs metres / (how far that piece type can cantilever). Anything whose total exceeds 1 falls.
   recompute(b) {
-    if (!b || b.pool) return 0;
+    if (!b || (b.pool && !b.built)) return 0;
     const n = b.count, s0 = b.start;
     // big buildings: spans scale with the building, and bricks bond harder (STICK) so walls hold bigger holes
     // A block needs something under it, or a short bonded chain sideways to a supported block. A block
@@ -539,6 +601,8 @@ export class Demolition {
     if (!p || p.state === state && p.holder === holder) return;
     if (state === GONE) { this.vanish(p); return; }
     if (p.pool && p.state === GONE && extra && extra.pos) this.revive(p, new THREE.Vector3().fromArray(extra.pos), new THREE.Quaternion().fromArray(extra.quat), new THREE.Color(extra.col ?? 0x999999), extra.kg || 100);
+    // a brick laid in a wall
+    if (state === INTACT && p.pool) { this.setIntact(p, extra && extra.pos ? new THREE.Vector3().fromArray(extra.pos) : null, extra && extra.quat ? new THREE.Quaternion().fromArray(extra.quat) : null); p.holder = -1; return; }
     if (p.state === INTACT && state !== INTACT) this.detach(p);
     if (extra && extra.pos) { p.pos.fromArray(extra.pos); p.quat.fromArray(extra.quat); p.target = null; if (p.body) { p.body.setTranslation(p.pos, true); p.body.setRotation(p.quat, true); } this.writeMatrix(p); this.flagParts(p); }
     if (p.body) p.body.setEnabled(state === LOOSE);
@@ -562,7 +626,7 @@ export class Demolition {
     for (const p of this.pieces) {
       states.push(p.state);
       hp.push(p.hp === p.maxHp ? 0 : Math.round(p.hp * 10) / 10);
-      if (p.state === LOOSE || p.state === HELD || p.state === CARRIED) xf[p.id] = [...p.pos.toArray(), ...p.quat.toArray()].map((v) => Math.round(v * 1e4) / 1e4);
+      if (p.state === LOOSE || p.state === HELD || p.state === CARRIED || (p.pool && p.state === INTACT)) xf[p.id] = [...p.pos.toArray(), ...p.quat.toArray()].map((v) => Math.round(v * 1e4) / 1e4);
       if (p.state === HELD || p.state === CARRIED) holders[p.id] = [p.holder, p.holdLocal ? p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) : null];
       if (p.pool && p.state !== GONE) pool[p.id] = [p.color.getHex(), Math.round(p.kg)];
     }
@@ -575,6 +639,14 @@ export class Demolition {
       const p = this.pieces[i];
       if (!p) return;
       if (data.hp[i]) p.hp = data.hp[i];
+      if (st === INTACT && p.pool) {
+        // a laid brick: bring it back and fix it in its wall
+        const x = data.xf[i], pd = (data.pool && data.pool[i]) || [0x999999, p.kg];
+        if (!x) return;
+        this.revive(p, new THREE.Vector3().fromArray(x, 0), new THREE.Quaternion().fromArray(x, 3), new THREE.Color(pd[0]), pd[1]);
+        this.setIntact(p, null, null);
+        return;
+      }
       if (st === INTACT) return;
       if (st === GONE) { this.vanish(p); return; }
       const x = data.xf[i];

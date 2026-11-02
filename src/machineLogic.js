@@ -1,6 +1,7 @@
 // Authority-side machine interactions: anything a moving arm / blade / ball touches breaks loose, grabbing,
 // scooping, bulk material (dust, water, cement), breaker, crusher bucket, roller compaction, paving, wrecking ball.
 import * as THREE from 'three';
+import { paintOf } from './mx-vehicles.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { INTACT, LOOSE, HELD, machineBit } from './demolition.js';
 import { inWater, terrainHeight } from './site.js';
@@ -119,6 +120,7 @@ export function machineInteract(m, dt, W) {
     if (m.breakerActive) breaker(m, dt, W);
   } else if (beh === 'roller') roller(m, dt, W);
   else if (beh === 'paver') paver(m, dt, W);
+  else if (beh === 'paint') painter(m, dt, W);
   else if (beh === 'ball') wreckingBall(m, dt, W);
   else if (beh === 'bed' && (Math.abs(m.curl - prevCurl) > 1e-5 || m.curl > 0.3)) {
     // tipping a body is slow (below Rapier's sleep threshold), so blocks resting in it would stay asleep and
@@ -320,7 +322,10 @@ function pourBulk(m, dt, from, n, W) {
   const t = W.mixer.tubCenter;
   const paver = W.machines.find((o) => o.family === 'paver' && o !== m && Math.hypot(from.x - o.att.mouth.getWorldPosition(_p).x, from.z - _p.z) < 1.8 && from.y > _p.y - 0.6);
   const pc = W.crusher.pileWorld();
-  if (Math.hypot(from.x - t.x, from.z - t.z) < 1.7 && from.y > t.y - 0.6 && from.y < t.y + 5) {
+  const ph = W.press && W.press.hopperWorld;
+  if (kind === 'dust' && ph && Math.hypot(from.x - ph.x, from.z - ph.z) < 1.6 && from.y > ph.y - 0.8 && from.y < ph.y + 5) {
+    used = W.press.addDust(amt, col); if (used > 0) W.onPress();
+  } else if (Math.hypot(from.x - t.x, from.z - t.z) < 1.7 && from.y > t.y - 0.6 && from.y < t.y + 5) {
     used = kind === 'water' ? W.mixer.addWater(amt) : kind === 'dust' ? W.mixer.addDust(amt, col) : W.mixer.addCement(amt, col);
     if (used > 0) W.onMixer();
   } else if (paver && kind === 'cement') {
@@ -403,6 +408,19 @@ function roller(m, dt, W) {
         if (h.comp >= 1) W.tellDriver(m, '⭐ Pothole compacted to a perfect finish!');
       }
     }
+  }
+}
+
+// road painter: the spray bar paints repaired pothole patches it passes over
+function painter(m, dt, W) {
+  if (!(m.openTarget > 0.5) || Math.abs(m.speed) < 0.1) return;
+  const n = m.att.nozzle.getWorldPosition(new THREE.Vector3());
+  const col = new THREE.Color(paintOf(m)[1]);
+  for (const h of W.road.holes) {
+    if (Math.hypot(n.x - h.x, n.z - h.z) > h.r + 1.2) continue;
+    if (h.filled < h.need) { if (!m.paintWarned) { m.paintWarned = true; W.tellDriver(m, '🎨 Repair that pothole first, then paint the patch'); } continue; }
+    if (W.road.paint(h, col, dt * 1.6)) W.onRoad();
+    if (h.paintAmt >= 1 && !h.paintTold) { h.paintTold = true; W.tellDriver(m, '🎨 Patch painted!'); }
   }
 }
 

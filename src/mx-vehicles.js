@@ -520,3 +520,64 @@ export function stepCrane(m, dt, groundAt) {
   for (const p of m.pendants) setRope(p.r, m.upper.localToWorld(V(p.s * 0.3, 4.2, -1.2)), m.boomG.localToWorld(V(p.s * 0.2, 0.3, 16)));
   return b;
 }
+
+// --------------------------------------------------------------------------- road painting truck
+// Cab-over truck with two paint tanks and a compressor on the deck, an arrow board, and a spray bar behind the rear
+// axle. Click / Space switches the sprayer, T / Y pick the colour (the machine's rot channel, so it is synced and
+// saved like any other control). Driving over a repaired pothole with the sprayer on paints the patch.
+export const PAINTS = [['WHITE', 0xf2f2ee], ['YELLOW', 0xffcf1f], ['RED', 0xe0301e], ['BLUE', 0x1f63d8], ['GREEN', 0x2fb24a], ['ORANGE', 0xff7d1a], ['PINK', 0xe04ac0], ['BLACK', 0x1c1d20]];
+export const paintOf = (m) => PAINTS[THREE.MathUtils.clamp(Math.round(m.rot || 0), 0, PAINTS.length - 1)];
+export function buildPainter(m) {
+  const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
+  const R = 0.5, RR = 0.3, ZF = 1.9, ZR = -1.3;
+  // wheels: steered front, singles at the back
+  const tg = tyreLathe(R, 0.32, RR, { lugs: 24, style: 'block' }), rw = wheelRim(RR, 0.3, { dish: 0.05, vents: 8 });
+  for (const z of [ZF, ZR]) for (const s of [-1, 1]) {
+    const hub = new THREE.Group(); hub.position.set(s * 1.0, R, z); U.add(hub);
+    const spin = new THREE.Group(); hub.add(spin);
+    add(spin, tg, K.rubber);
+    const rm = add(spin, rw.rim, K.grey, false), rv = add(spin, rw.vents, K.black, false);
+    if (s < 0) { rm.rotation.y = Math.PI; rv.rotation.y = Math.PI; }
+    m.wheels.push(spin); if (z > 0) m.steerWheels.push(hub);
+    add(U, fender(z, R, R + 0.1, 0.15, Math.PI - 0.15, 0.42, s * 1.0), K.black);
+  }
+  // chassis rails, axles, fuel tank, battery box, rear lights
+  add(U, mergeG([rbox(0.95, 0.24, 5.6, 0.03, 0, 0.78, 0.15), pinX(0.07, 1.8, 0, R, ZF), pinX(0.09, 1.8, 0, R, ZR), cy(0.24, 0.24, 0.3, 14, 0, R, ZR, Math.PI / 2)]), K.under);
+  add(U, mergeG([cy(0.26, 0.26, 0.9, 20, 0.78, 0.7, 0.3, Math.PI / 2), rbox(0.42, 0.42, 0.5, 0.03, -0.78, 0.7, 0.2)]), K.grey);
+  add(U, mergeG([-1, 1].map((s) => rbox(0.22, 0.14, 0.05, 0.02, s * 0.9, 0.95, -2.62))), K.red, false);
+  // cab-over cab: the shared operator cab sitting on the chassis, with a nose panel, grille, headlights and bumper
+  modernCab(m, U, 0, 0.92, 2.25, { w: 2.1, d: 1.65, h: 1.95, door: 1 });
+  add(U, mergeG([rbox(2.14, 0.72, 0.1, 0.03, 0, 1.62, 3.08), rbox(2.3, 0.3, 0.3, 0.05, 0, 0.82, 3.12)]), K.paint);
+  grille(U, 1.3, 0.38, 0, 1.62, 3.135, 0, 18);
+  for (const s of [-1, 1]) { add(U, rbox(0.3, 0.16, 0.06, 0.03, s * 0.82, 1.36, 3.14), K.black); add(U, bx(0.24, 0.11, 0.01, s * 0.82, 1.36, 3.175), K.lens, false).userData.keep = true; }
+  add(U, mergeG([bx(2.0, 0.04, 0.06, 0, 1.95, 3.12), bx(0.4, 0.05, 0.02, 0, 1.47, 3.14)]), K.accent);
+  // deck with the paint tanks (bands show the loaded colour), compressor, hose reel, arrow board
+  add(U, mergeG([rbox(2.3, 0.12, 3.7, 0.03, 0, 1.0, -0.75), ...[-1, 1].map((s) => bx(0.06, 0.3, 3.7, s * 1.14, 1.2, -0.75))]), K.paint);
+  m.paintMat = new THREE.MeshStandardMaterial({ color: PAINTS[0][1], roughness: 0.35, metalness: 0.1 });
+  for (const x of [-0.55, 0.55]) {
+    add(U, mergeG([cy(0.42, 0.42, 1.7, 22, x, 1.5, 0.15, Math.PI / 2), cy(0.3, 0.3, 0.1, 16, x, 1.95, 0.15)]), K.galv);
+    add(U, mergeG([cy(0.43, 0.43, 0.14, 22, x, 1.5, 0.75, Math.PI / 2), cy(0.43, 0.43, 0.14, 22, x, 1.5, -0.45, Math.PI / 2), cy(0.31, 0.31, 0.05, 16, x, 2.02, 0.15)]), m.paintMat, false);
+  }
+  add(U, mergeG([rbox(1.6, 0.85, 0.9, 0.05, 0, 1.5, -1.6)]), K.accent);
+  grille(U, 0.8, 0.4, 0.801, 1.5, -1.6, Math.PI / 2); grille(U, 0.8, 0.4, -0.801, 1.5, -1.6, -Math.PI / 2);
+  add(U, mergeG([new THREE.TorusGeometry(0.28, 0.07, 8, 20).rotateY(Math.PI / 2).translate(1.12, 1.45, -0.95), cy(0.06, 0.06, 0.2, 10, 1.05, 1.45, -0.95, 0, 0, Math.PI / 2)]), K.black);
+  const ab = new THREE.Group(); ab.position.set(0, 2.55, -2.45); U.add(ab);
+  add(ab, mergeG([bx(0.1, 1.5, 0.1, 0, -0.75, 0.1), rbox(1.7, 0.85, 0.08, 0.03, 0, 0.35, 0)]), K.black);
+  const dots = []; for (const [x, y] of [[-0.55, 0.35], [-0.25, 0.35], [0.05, 0.35], [0.35, 0.35], [0.12, 0.6], [0.12, 0.1], [0.55, 0.35]]) dots.push(cy(0.06, 0.06, 0.03, 10, x, y, -0.05, Math.PI / 2));
+  add(ab, mergeG(dots), K.amber, false);
+  // spray bar behind the rear axle: beam, nozzles, support arms, feed hoses
+  const bar = new THREE.Group(); bar.position.set(0, 0.32, -2.95); U.add(bar);
+  add(bar, mergeG([bx(2.5, 0.08, 0.1, 0, 0, 0), ...[-1, 1].map((s) => tubeAB(V(s * 0.6, 0.04, 0), V(s * 0.45, 0.6, 0.35), 0.035, 8))]), K.dark);
+  const noz = []; for (let i = 0; i < 7; i++) noz.push(cy(0.03, 0.02, 0.12, 8, -1.05 + i * 0.35, -0.09, 0));
+  add(bar, mergeG(noz), K.chrome);
+  add(U, mergeG([hose([[0.55, 1.2, -0.6], [0.6, 0.9, -2.2], [0.45, 0.5, -2.85]], 0.022, 16), hose([[-0.55, 1.2, -0.6], [-0.6, 0.9, -2.2], [-0.45, 0.5, -2.85]], 0.022, 16)]), K.black);
+  for (const s of [-1, 1]) { const l = label(m.spec.brand, 1.0, 0.24, '#15171a'); l.position.set(s * 1.175, 1.22, -0.9); l.rotation.y = s * Math.PI / 2; U.add(l); stick(U, 'warn', 0.16, s * 1.175, 1.22, -2.3, s * Math.PI / 2); }
+  m.door = anchor(U, 1.35, 0, 2.2);
+  m.attach = U; m.att = attStub('paint', { nozzle: anchor(bar, 0, -0.2, 0) }); m.grabPoint = m.att.nozzle;
+  m.colliderSets.push({ obj: U, boxes: [[0, 1.3, 0.2, 2.3, 2.2, 6.2]], chassis: true });
+  m.radius = 3.2;
+  m.bakeList.push(U, bar, ab);
+  m.rig = { family: 'painter', drive: 'car', wheelbase: 3.2, accel: 3.2, brake: 5, maxLat: 4, swing: false, limits: { rot: [0, PAINTS.length - 1] }, rates: { rot: 2.2 },
+    apply(mm) { for (const h of mm.steerWheels) h.rotation.y = mm.steerVis; mm.paintMat.color.setHex(paintOf(mm)[1]); } };
+  m.defaults = { boom: 0, stick: 0, curl: 0 };
+}

@@ -6,6 +6,7 @@ import * as T from './textures.js';
 import { SITE } from './site.js';
 
 const ROAD_Y = 0.021;
+const _pc = new THREE.Color();
 
 export class Road {
   constructor(scene) {
@@ -35,7 +36,7 @@ export class Road {
     patch.visible = false;
     this.group.add(hole, patch);
     const need = Math.round(r * r * Math.PI * 60 / 5) * 5; // a thin patch of concrete
-    const h = { x, z, r, need, filled: 0, comp, col: new THREE.Color(0.7, 0.7, 0.7), dry: 1, hole, patch };
+    const h = { x, z, r, need, filled: 0, comp, col: new THREE.Color(0.7, 0.7, 0.7), dry: 1, hole, patch, paint: new THREE.Color(1, 1, 1), paintAmt: 0 };
     this.holes.push(h);
     if (filled) this.fill(this.holes.length - 1, filled, color || new THREE.Color(0.7, 0.7, 0.7), dry);
     return this.holes.length - 1;
@@ -115,6 +116,8 @@ export class Road {
     // hot mix is dark and glossy; rolled mix closes up (smoother, slightly darker), cured mix is matt
     h.patch.material.color.copy(h.col).multiplyScalar(1.6 * (1 - hot * 0.5) * (1 - h.comp * 0.15));
     h.patch.material.roughness = Math.min(0.95, 0.9 - hot * 0.55 - h.comp * 0.12);
+    // road paint from the painting truck: a satin coat over the patch
+    if (h.paintAmt > 0) { h.patch.material.color.lerp(_pc.copy(h.paint).multiplyScalar(1.8), h.paintAmt); h.patch.material.roughness += (0.45 - h.patch.material.roughness) * h.paintAmt; }
     const ns = 1.8 - h.comp * 1.5;
     h.patch.material.normalScale.set(ns, ns);
   }
@@ -142,10 +145,22 @@ export class Road {
   get repaired() { return this.holes.filter((h) => h.filled >= h.need).length; }
   get compacted() { return this.holes.filter((h) => h.filled >= h.need && h.comp >= 1).length; }
 
-  serialize() { return this.holes.map((h) => [h.x, h.z, h.r, h.filled, h.col.r, h.col.g, h.col.b, h.dry, h.comp].map((v) => Math.round(v * 1000) / 1000)); }
+  // spray paint onto a repaired patch (amount 0..1 builds up); returns true when it changed
+  paint(h, color, amt) {
+    if (h.filled < h.need) return false;
+    if (h.paintAmt > 0.02 && h.paint.getHex() !== color.getHex()) { h.paint.lerp(color, Math.min(1, amt * 2)); if (Math.abs(h.paint.r - color.r) + Math.abs(h.paint.g - color.g) + Math.abs(h.paint.b - color.b) < 0.03) h.paint.copy(color); }
+    else h.paint.copy(color);
+    const before = h.paintAmt; h.paintAmt = Math.min(1, h.paintAmt + amt);
+    this.tint(h);
+    return h.paintAmt !== before || amt > 0;
+  }
+  serialize() { return this.holes.map((h) => [h.x, h.z, h.r, h.filled, h.col.r, h.col.g, h.col.b, h.dry, h.comp, h.paint.r, h.paint.g, h.paint.b, h.paintAmt].map((v) => Math.round(v * 1000) / 1000)); }
   restore(list) {
     for (const h of this.holes) { this.group.remove(h.hole, h.patch); h.hole.material.dispose(); h.patch.material.dispose(); h.patch.geometry.dispose(); }
     this.holes = [];
-    for (const [x, z, r, filled, cr, cg, cb, dry, comp = 0] of list) this.addHole(x, z, r, filled, new THREE.Color(cr, cg, cb), dry, comp);
+    for (const [x, z, r, filled, cr, cg, cb, dry, comp = 0, pr = 1, pg = 1, pb = 1, pa = 0] of list) {
+      this.addHole(x, z, r, filled, new THREE.Color(cr, cg, cb), dry, comp);
+      const h = this.holes[this.holes.length - 1]; h.paint.setRGB(pr, pg, pb); h.paintAmt = pa; this.tint(h);
+    }
   }
 }

@@ -7,9 +7,12 @@ import { TypeRegistry } from './pieces.js';
 import { buildWorld } from './world.js';
 import { DayNight, CYCLES, MORNING } from './daynight.js';
 import { Charges, celebrate, MAX_CHARGES } from './fun.js';
+import { BrickPress, BRICK_KG } from './brickpress.js';
+import { Builder, MORTAR_KG } from './build.js';
+import { paintOf } from './mx-vehicles.js';
 import { encodeFloats, decodeFloats, encodeSnapshot, decodeSnapshot, kindOf, PLAYER_F, MACHINE_F } from './netcodec.js';
 import { SITE, inWater, lakeDist, terrainHeight } from './site.js';
-import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE , RUBBLE } from './demolition.js';
+import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE, RUBBLE, BRICKS } from './demolition.js';
 import { BUILDINGS } from './buildings.js';
 import { FX } from './fx.js';
 import { Audio } from './audio.js';
@@ -103,6 +106,7 @@ class Game {
     this.crusher = new Crusher(this.scene, this.physics, this.M, SITE.crusherPos, SITE.crusherRot);
     this.intake = new IntakeLine(this.scene, this.physics, this.M, this.crusher);
     this.mixer = new Mixer(this.scene, this.physics, this.M, SITE.mixerPos);
+    this.press = new BrickPress(this.scene, this.physics, this.M, SITE.pressPos, 0);
     this.road = new Road(this.scene);
     this.slabs = new Slabs(this.scene);
     this.slabGhost = new THREE.Mesh(new THREE.BoxGeometry(SLAB, 0.04, SLAB), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false }));
@@ -119,6 +123,7 @@ class Game {
     this.events = [];
     this.player = new Player(this, SITE.playerSpawn, SHIRTS[0]);
     this.charges = new Charges(this);
+    this.builder = new Builder(this);
     this.player.avatar.setHammer(this.settings.hammer);
     this.addPlayerEntry(0, this.myName, SHIRTS[0], true);
     progress(0.7, 'Building the houses…');
@@ -171,6 +176,12 @@ class Game {
       this.audio.init();
       this.ui.setMode('foot', this.input.touch);
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
+      // once per version: point at what is new
+      if (this.prefs.seenTips && this.prefs.news !== '4.2') {
+        this.ui.toast('🧱 New: the <b>brick press</b> next to the dust pile makes blocks. Build your own house on the slab across the road (tool <b>4</b>, mortar with the trowel first)', true, 8000);
+        setTimeout(() => this.ui.toast('🎨 New: the <b>LP20 road painter</b> paints repaired potholes. It is parked by the gate', true, 6000), 8200);
+      }
+      this.prefs.news = '4.2'; this.savePrefs();
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
         setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 22 machines or new buildings', false, 6000), 6200);
@@ -265,6 +276,34 @@ class Game {
     }
   }
 
+  // blocks set down by a machine (or dropped) that come to rest upright on mortar stick there
+  glueSettled() {
+    let any = false;
+    const up = new THREE.Vector3();
+    for (const p of this.demo.pieces) {
+      if (!p.brick || p.state !== LOOSE || !p.body || !p.body.isSleeping()) continue;
+      up.set(0, 1, 0).applyQuaternion(p.quat);
+      if (Math.abs(up.y) < 0.97) continue;
+      const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(p.quat), rot = Math.abs(fwd.x) > Math.abs(fwd.z) ? 0 : 1;
+      const glue = this.builder.splashesFor(p.pos, rot);
+      if (!glue.length) continue;
+      this.demo.setIntact(p, p.pos.clone(), p.quat.clone()); this.builder.take(glue); any = true;
+    }
+    return any;
+  }
+
+  // ======================================================================= brick press
+  pressCb() {
+    return this._pressCb || (this._pressCb = {
+      take: (kg) => { const got = this.crusher.take(kg); if (got.kg > 0) this.events.push(['take', got.kg]); return got; },
+      spawn: (pos, quat, color) => {
+        const p = this.demo.freeBrick(); if (!p) return false;
+        this.demo.revive(p, pos, quat, color, BRICK_KG); this.demo.setState(p, LOOSE);
+        return true;
+      },
+    });
+  }
+
   // ======================================================================= fun: blasts, horns, celebrations
   boomFx(ctr) {
     const near = this.demo.piecesInSphere(ctr, 3, [0, 1]);
@@ -324,6 +363,7 @@ class Game {
   // ======================================================================= world construction
   buildBuilding(defId, plot) {
     if (defId === RUBBLE) return this.demo.addRubblePool();
+    if (defId === BRICKS) return this.demo.addBrickPool();
     const def = BUILDINGS.find((b) => b.id === defId);
     const at = SITE.plots[plot], S = SITE.buildScale || 1;
     // authored at 1:1 around the origin, then built S times bigger on the plot
@@ -415,6 +455,7 @@ class Game {
     this.buildBuilding('wall', 1);
     this.buildBuilding('warehouse', 2);
     this.buildBuilding(RUBBLE, -1);
+    this.buildBuilding(BRICKS, -1);
     this.road.defaultHoles();
     const add = (spec, x, z, yaw) => { const m = this.createMachine(spec, this.nextMachineId, new THREE.Vector3(x, 0, z), yaw); return m; };
     add('tx330', -62, -52, Math.PI);
@@ -425,6 +466,7 @@ class Game {
     add('lc200', 18, 14, -Math.PI / 2);
     add('cr64', 4, 21, Math.PI / 2);
     add('tk410', -10, -8, Math.PI / 2);
+    add('lp20', 15, 19.5, Math.PI / 2);
     this.player.teleport(this.spawnPoint());
   }
 
@@ -434,6 +476,7 @@ class Game {
     this.buildingStatics.clear(); this.groundHandles.clear();
     this.demo.clearAll();
     if (this.charges) this.charges.clear();
+    if (this.builder) this.builder.restore([]);
     this.plots = SITE.plots.map(() => null);
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
     this.intake.restore(null);
@@ -458,6 +501,8 @@ class Game {
       nextMachineId: this.nextMachineId,
       time: Math.round(this.dn.p * 1e4) / 1e4, cycle: this.dayCycle(),
       charges: forSave ? [] : this.charges.pack(),
+      press: this.press.serialize(),
+      splashes: this.builder.pack(),
     };
   }
 
@@ -477,7 +522,9 @@ class Game {
       this.demo.restorePieces(w.pieces, forSave);
     }
     // saves from before v3.7 have no rubble pool: add it after everything else so piece ids stay put
-    if (!this.demo.buildings.some((b) => b.pool)) this.buildBuilding(RUBBLE, -1);
+    if (!this.demo.buildings.some((b) => b.def === RUBBLE)) this.buildBuilding(RUBBLE, -1);
+    // saves from before v4.2 have no brick pool either (added last, so every other id stays put)
+    if (!this.demo.buildings.some((b) => b.def === BRICKS)) this.buildBuilding(BRICKS, -1);
     for (const s of w.machines) {
       const m = this.createMachine(s.spec, s.id, new THREE.Vector3(s.pose[0], 0, s.pose[1]), s.pose[2]);
       m.restorePose(s.pose);
@@ -490,6 +537,8 @@ class Game {
     this.crusher.restore(w.crusher); this.intake.restore(w.intake); this.mixer.restore(w.mixer); this.road.restore(w.road); this.slabs.restore(w.slabs || []);
     if (w.settings) Object.assign(this.settings, w.settings);
     this.crusher.rate = this.settings.crusher;
+    this.press.restore(w.press);
+    this.builder.restore(w.splashes);
     if (typeof w.time === 'number') this.dn.p = w.time;
     if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); }
     this.dn.apply();
@@ -579,6 +628,46 @@ class Game {
           const left = MAX_CHARGES - this.charges.mine(pid).length;
           this.tell(pid, left ? `🧨 Charge set (${left} left). Press <b>E</b> to detonate.` : '🧨 All charges set. Press <b>E</b> to detonate!', true);
         }
+        break;
+      }
+      case 'mortar': {
+        // one splash of mortar where the trowel was clicked
+        if (!pl || !Array.isArray(d.point) || !Array.isArray(d.normal)) return;
+        const pt = v3(d.point), n = v3(d.normal);
+        const seen = pid === this.myId ? this.player.pos : (pl.target || pl.pos);
+        if (pt.distanceTo(seen) > 8 || n.lengthSq() < 0.5) return;
+        if (!(pl.cement.kg > 1)) { this.tell(pid, '🪣 No cement on the trowel. Take some from the mixer first.'); return; }
+        this.builder.addSplash(pt, n, pl.cement.color, typeof d.piece === 'number' ? d.piece : -1);
+        this.setCement(pid, Math.max(0, pl.cement.kg - MORTAR_KG), pl.cement.color);
+        this.events.push(['mortar', this.builder.pack()]);
+        break;
+      }
+      case 'placeBrick': {
+        // lay a carried block: it sticks if it touches mortar, otherwise it is only stacked
+        const p = demo.pieces[d.id];
+        if (!p || !p.brick || p.state !== CARRIED || p.holder !== pid || !Array.isArray(d.pos)) return;
+        const c = v3(d.pos), rot = d.rot ? 1 : 0;
+        const seen = pid === this.myId ? this.player.pos : pl && (pl.target || pl.pos);
+        if (!seen || c.distanceTo(seen) > 9) return;
+        if (!this.builder.valid(c, rot)) { this.tell(pid, '🧱 Something is in the way there'); return; }
+        const q = this.builder.quatFor(rot);
+        p.quat.copy(q); p.body.setRotation(q, true);
+        demo.throwPiece(p, c, { x: 0, y: 0, z: 0 });
+        demo.writeMatrix(p); demo.flagParts(p);
+        const glue = this.builder.splashesFor(c, rot);
+        if (glue.length) { demo.setIntact(p, c, q); this.builder.take(glue); this.events.push(['mortar', this.builder.pack()]); this.events.push(['fx', 'k', c.toArray(), 0.4]); this.audio.clank(c, 0.4); }
+        else this.tell(pid, '🧱 Stacked dry: it will not stick. Click a splash of mortar down with the trowel first.');
+        break;
+      }
+      case 'pressFeed': {
+        this.press.feeding = !this.press.feeding; this.pressDirty = true;
+        this.tell(pid, this.press.feeding ? '🧱 Feeder belt on: dust goes from the stockpile into the brick press' : 'Feeder belt off', true);
+        break;
+      }
+      case 'pressPour': {
+        const b = pl && pl.bucket; if (!b || b.kind !== 'dust') return;
+        const used = this.press.addDust(b.kg, b.color);
+        if (used > 0) { this.setBucket(pid, b.kg - used > 0.5 ? 'dust' : null, b.kg - used, b.color); this.pressDirty = true; }
         break;
       }
       case 'detonate': {
@@ -742,6 +831,8 @@ class Game {
     this.ui.setHotbar();
   }
   selectTool(t) {
+    if (t === 'build' && this.tool === 'build') { this.builder.rot ^= 1; return; } // tap again to turn the block
+    if (t === 'build' && this.tool !== 'build' && !this.carriedBy(this.myId).some((p) => p.brick)) this.ui.toast('🧱 Build: carry pressed blocks (<b>Q</b> at the brick press pallet), trowel a splash of mortar on the slab across the road, then click to lay a block on it. <b>R</b> turns it.', true, 7000);
     if (t === 'trowel' && !(this.players.get(this.myId).cement.kg > 0)) { this.ui.toast('🪣 No cement on the trowel. Take some from the mixer first.'); return; }
     this.tool = t;
     this.player.avatar.setTool(t);
@@ -970,7 +1061,7 @@ class Game {
       const p = this.demo.pieces[id];
       const e = ['ps', id, st, holder];
       if (st === HELD && p.holdLocal) e.push({ local: p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) });
-      else if (st === LOOSE && p.pos) {
+      else if ((st === LOOSE || (st === INTACT && p.pool)) && p.pos) {
         const pos = p.pos.toArray().map((v) => Math.round(v * 1000) / 1000), quat = p.quat.toArray().map((v) => Math.round(v * 1e4) / 1e4);
         e.push(p.pool ? { pos, quat, col: p.color.getHex(), kg: Math.round(p.kg) } : { pos, quat });
       }
@@ -1058,6 +1149,8 @@ class Game {
       case 'mix': this.mixer.restore(e[1]); break;
       case 'tod': this.dn.p = e[1]; this.hostCycle = e[2]; break;
       case 'chg': this.charges.restore(e[1]); break;
+      case 'press': this.press.restore(e[1]); break;
+      case 'mortar': this.builder.restore(e[1]); break;
       case 'boom': this.boomFx(new THREE.Vector3(e[1], e[2], e[3])); break;
       case 'horn': this.setHorn(e[1], e[2]); break;
       case 'party': this.party(e[1]); break;
@@ -1182,6 +1275,13 @@ class Game {
       if (best.driver >= 0) return { text: `${best.spec.icon} ${best.spec.name} · driven by ${this.playerName(best.driver)}` };
       return { text: `${key('E')}Drive the ${best.spec.icon} ${best.spec.name}`, label: 'DRIVE', run: () => this.act('enter', { id: best.id }) };
     }
+    // brick press: pour your bucket of dust in, or switch the feeder belt
+    const pp = this.press.panelWorld;
+    if (Math.hypot(p.x - pp.x, p.z - pp.z) < 2.4) {
+      const pr = this.press, blocks = Math.floor(pr.dust / BRICK_KG);
+      if (b.kind === 'dust') return { text: `${key('E')}Pour ${fmtKg(b.kg)} of dust into the brick press`, label: 'POUR', run: () => this.act('pressPour', {}) };
+      return { text: `${key('E')}Feeder belt ${pr.feeding ? 'OFF' : 'ON'} · ${fmtKg(pr.dust)} dust (${blocks} block${blocks === 1 ? '' : 's'}) · ${pr.status}`, label: pr.feeding ? 'FEED OFF' : 'FEED ON', run: () => this.act('pressFeed', {}) };
+    }
     // mixer
     const mp = this.mixer.panelPoint, tc = this.mixer.tubCenter;
     if (Math.hypot(p.x - mp.x, p.z - mp.z) < 2.6 || (Math.hypot(p.x - tc.x, p.z - tc.z) < 2.3 && p.y > 1.0)) {
@@ -1276,6 +1376,7 @@ class Game {
       if (input.pressed('tool1')) this.selectTool('hammer');
       if (input.pressed('tool2')) this.selectTool('trowel');
       if (input.pressed('tool3')) this.selectTool('charges');
+      if (input.pressed('tool4')) this.selectTool('build');
       // charge tool: click a block to stick a charge on it (E sets them all off)
       const fire = input.held('hammer') && !uiOpen;
       if (this.tool === 'charges' && fire && !this.chargeDown) {
@@ -1288,7 +1389,15 @@ class Game {
       // trowel: hold click / the action button to lay cement tiles where you aim
       this.trowelT = (this.trowelT || 0) - dt;
       const me = this.players.get(this.myId);
-      if (this.tool === 'trowel' && me.cement.kg > 0) {
+      // trowel on a block or the build slab: one splash of mortar per click
+      const bhit = (this.tool === 'trowel' && me.cement.kg > 0) || this.tool === 'build' ? this.builder.aim() : null;
+      const mhit = this.tool === 'trowel' && me.cement.kg > 0 ? this.builder.mortarTarget(bhit) : null;
+      this.builder.showSplashGhost(mhit, me.cement.color);
+      const click = input.held('hammer') && !uiOpen, clicked = click && !this.clickDown; this.clickDown = click;
+      if (mhit) {
+        this.slabGhost.visible = false;
+        if (clicked) { this.player.swingT = -1; this.act('mortar', { point: mhit.point.toArray().map((v) => Math.round(v * 1000) / 1000), normal: mhit.normal.toArray(), piece: mhit.piece ? mhit.piece.id : -1 }); this.audio.click(); }
+      } else if (this.tool === 'trowel' && me.cement.kg > 0) {
         const t = this.trowelTarget(), [ix, iz] = Slabs.cellOf(t.x, t.z);
         const gx = ix * SLAB, gz = iz * SLAB, hole = this.road.nearest({ x: t.x, y: 0, z: t.z }, 1.4);
         this.slabGhost.visible = true;
@@ -1297,13 +1406,28 @@ class Game {
         this.slabGhost.material.color.copy(me.cement.color);
         if (input.held('hammer') && this.trowelT <= 0 && !uiOpen) { this.trowelT = 0.22; this.player.swingT = -1; this.act('layCement', t); this.audio.click(); }
       } else this.slabGhost.visible = false;
+      // build tool: lay the blocks you carry where the ghost shows (R turns it)
+      if (this.tool === 'build') {
+        const bricks = this.carriedBy(this.myId).filter((p) => p.brick);
+        if (input.pressed('stickOut')) this.builder.rot ^= 1;
+        const pose = bricks.length ? this.builder.ghostPose(bhit, this.builder.rot) : null, ok = pose && this.builder.valid(pose, this.builder.rot);
+        this.builder.showGhost(pose, this.builder.rot, ok);
+        if (clicked) {
+          if (!bricks.length) this.ui.toast('🧱 Pick up pressed blocks first (<b>Q</b> at the brick press pallet)');
+          else if (!pose) this.ui.toast('🧱 Aim at the slab, the ground or the top of a block');
+          else if (!ok) this.ui.toast('🧱 Something is in the way there');
+          else { this.act('placeBrick', { id: bricks[bricks.length - 1].id, pos: pose.toArray().map((v) => Math.round(v * 1000) / 1000), rot: this.builder.rot }); this.audio.click(); }
+        }
+      } else this.builder.ghost.visible = false;
+      const nb = this.carriedBy(this.myId).filter((p) => p.brick).length;
+      if (nb !== this.lastBricks) { this.lastBricks = nb; this.ui.setHotbar(); }
       const c = this.contextAction();
       ctxPrompt = c;
       if (c && c.run && input.pressed('use')) c.run();
       this.ui.setCrosshair(!!this.player.target, true);
       this.ui.setCarry(this.carriedBy(this.myId).length, this.settings.carry);
     } else {
-      this.slabGhost.visible = false;
+      this.slabGhost.visible = false; this.builder.hideGhosts();
       const m = this.driving;
       const ctl = {
         drive: clamp(input.moveY, -1, 1), steer: clamp(input.moveX, -1, 1),
@@ -1332,6 +1456,8 @@ class Game {
       if (m !== this.driving && (m.driver >= 0 || !auth)) m.followNet(dt);
       m.idle(dt, m.driver >= 0);
       m.syncBodies();
+      // road painter: a fine mist of paint under the spray bar while it sprays and moves
+      if (m.family === 'painter' && m.openTarget > 0.5 && Math.abs(m.speed) > 0.1 && Math.random() < dt * 30) this.fx.dust(m.att.nozzle.getWorldPosition(new THREE.Vector3()), paintOf(m)[1], 1, 1.8, { alpha: 0.35, size: 0.45, life: 0.9, speed: 0.3 });
     }
 
     // ---- physics
@@ -1363,6 +1489,11 @@ class Game {
       }
     }
     this.mixer.update(dt);
+    this.press.update(dt, this.demo, this.fx, this.audio, auth ? this.pressCb() : null);
+    if (auth) {
+      this.pressTimer = (this.pressTimer || 0) - dt;
+      if (this.press.changed || this.pressDirty || (this.press.feeding && this.pressTimer <= 0)) { this.press.changed = false; this.pressDirty = false; this.pressTimer = 1; this.events.push(['press', this.press.serialize()]); }
+    }
     this.road.update(dt, this.fx);
     this.slabs.update(dt);
     this.updatePlayers(dt);
@@ -1389,7 +1520,7 @@ class Game {
       const sp = m.spec, f = m.family;
       voices.push({ pos: m.pos, running: m.driver >= 0, rpm: m.rpm, hyd: m.hyd, speed: m.speed, turn: m.turn, vmax: sp.speed, tons: sp.tons || 20,
         tracked: ['steel', 'rubber', 'pontoon'].includes(sp.under) || ['dozer', 'crane', 'paver', 'dumper'].includes(f),
-        breaker: !!m.breakerActive, vibrating: !!m.vibrating, beep: ['truck', 'loader', 'dumper', 'roller'].includes(f) && m.speed < -0.3 });
+        breaker: !!m.breakerActive, vibrating: !!m.vibrating, beep: ['truck', 'loader', 'dumper', 'roller', 'painter'].includes(f) && m.speed < -0.3 });
     }
     const sampled = this.audio.updateMachines(voices);
     this.audio.updateLoops(this.crusher, sampled ? null : loud ? { pos: loud.pos, running: true, rpm: loud.rpm, hyd: loud.hyd } : { pos: this.camera.position, running: false, rpm: 0, hyd: 0 });
@@ -1408,6 +1539,11 @@ class Game {
     this.ui.updatePopups(dt, this.camera);
     if (input.pressed('photo') && !this.input.touch) document.body.classList.toggle('photo');
     this.charges.update(dt, auth);
+    this.builder.update(dt);
+    if (auth) {
+      this.glueT = (this.glueT || 0) - dt;
+      if (this.glueT <= 0) { this.glueT = 0.5; if (this.glueSettled() | this.builder.tidy()) this.events.push(['mortar', this.builder.pack()]); }
+    }
     for (const id of this.horns) { const m = this.machines.get(id); if (!m) { this.horns.delete(id); this.audio.horn(id, null, false); } else this.audio.horn(id, m.pos, true, this.hornPitch(m)); }
     if (auth) {
       this.partyTimer = (this.partyTimer || 0) - dt;
@@ -1431,7 +1567,8 @@ class Game {
     if (this._mw) return this._mw;
     const g = this;
     this._mw = {
-      demo: this.demo, sfx: this.sfx, crusher: this.crusher, mixer: this.mixer, road: this.road,
+      demo: this.demo, sfx: this.sfx, crusher: this.crusher, mixer: this.mixer, road: this.road, press: this.press,
+      onPress() { g.pressDirty = true; },
       get capacityScale() { return g.settings.grapple; },
       onPayload(m) { m.payDirty = true; },
       onPile(delta) { g.events.push(['take', -delta]); },

@@ -278,6 +278,7 @@ export function buildWorld(scene, renderer, physics, M) {
   buildCones(scene, M);
   buildPallets(scene, M, addStatic);
   buildSign(scene, M, addStatic);
+  const buildSlab = buildPlotArea(scene, M, addStatic);
   // mobile light towers for the night shift (aimed at the demolition plots and the crusher)
   const towerLens = new THREE.MeshStandardMaterial({ color: 0xf4f6f8, emissive: 0xfff6e4, emissiveIntensity: 0, roughness: 0.15 });
   const towers = [[-36, -58, -62, -84], [26, -60, 50, -84], [-6, -58, -6, -82], [24, -24, 14, -10]]
@@ -297,7 +298,7 @@ export function buildWorld(scene, renderer, physics, M) {
     physics.world.createCollider(physics.R.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z).setRotation(q), body);
   }
 
-  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, pmremEnv: scene.environment, updateShadow(focus) {
+  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, buildSlab, pmremEnv: scene.environment, updateShadow(focus) {
     sun.position.copy(focus).addScaledVector(sunDir, 80);
     sun.target.position.copy(focus);
     // snap to texel grid to avoid shimmering
@@ -431,6 +432,7 @@ function buildTrees(scene, M) {
     else { x = -110 + r() * 220; z = SITE.streetZ + 12.5 + (r() < 0.5 ? 0 : 14) + r() * 2; if (Math.abs(((x + 46) % 20)) < 6) continue; }
     if (Math.abs(x + 128) < 9 && (Math.abs(z + 20) < 8 || Math.abs(z + 70) < 8)) continue;
     if (Math.abs(x - 116) < 9 && (Math.abs(z + 30) < 8 || Math.abs(z + 90) < 8)) continue;
+    const bp = SITE.buildPlot; if (Math.abs(x - bp.x) < bp.w / 2 + 5 && Math.abs(z - bp.z) < bp.d / 2 + 5) continue; // keep the build plot clear
     spots.push([x, z, 0.8 + r() * 0.6, r() * Math.PI * 2, Math.floor(r() * 4)]);
   }
   variants.forEach((v, vi) => {
@@ -606,6 +608,33 @@ function buildLightTower(scene, M, addStatic, lens, x, z, tx, tz) {
   addStatic(mw.x, 6, mw.z, 0.3, 8, 0.3, yaw);
   const top = new THREE.Vector3(0, H + 0.1, mz).applyMatrix4(g.matrixWorld);
   return { pos: top, target: new THREE.Vector3(tx, 0, tz), heads };
+}
+
+// The plot across the road where you build your own house: a concrete foundation slab on a gravel apron, a path
+// from the pavement and a board. Its top is the base of the first course of bricks.
+function buildPlotArea(scene, M, addStatic) {
+  const P = SITE.buildPlot, g = new THREE.Group(); g.position.set(P.x, 0, P.z); scene.add(g);
+  const gravel = new THREE.MeshStandardMaterial({ map: T.gravelTextures().map, roughness: 1 });
+  gravel.map = gravel.map.clone(); gravel.map.repeat.set(5, 4); gravel.map.needsUpdate = true;
+  const apron = new THREE.Mesh(new THREE.BoxGeometry(P.w + 4, 0.06, P.d + 4), gravel); apron.position.y = 0.03; g.add(shadowed(apron, false, true));
+  const slab = new THREE.Mesh(new THREE.BoxGeometry(P.w, P.top, P.d), boxMapped(M.concretePlain.clone(), 0.25, 0.25));
+  slab.position.y = P.top / 2; g.add(shadowed(slab, false, true));
+  // setting-out lines scribed in the slab every 1.2 m (one block length) so walls are easy to line up
+  const lines = [];
+  for (let x = -P.w / 2 + 1.2; x < P.w / 2 - 0.1; x += 1.2) lines.push(box(0.02, 0.005, P.d - 0.2, x, P.top + 0.002, 0));
+  for (let z = -P.d / 2 + 1.2; z < P.d / 2 - 0.1; z += 1.2) lines.push(box(P.w - 0.2, 0.005, 0.02, 0, P.top + 0.002, z));
+  g.add(new THREE.Mesh(merge(lines), new THREE.MeshBasicMaterial({ color: 0x8a8a84 })));
+  // path from the pavement to the slab
+  const path = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.08, P.z - P.d / 2 - (SITE.streetZ + 9.0)), M.concretePlain);
+  path.position.set(0, 0.04, -(P.d / 2) - path.geometry.parameters.depth / 2); g.add(shadowed(path, false, true));
+  // board on two posts at the street corner
+  const board = new THREE.Group(); board.position.set(-P.w / 2 - 1.2, 0, -P.d / 2 - 1.2); board.rotation.y = Math.PI; g.add(board);
+  board.add(shadowed(new THREE.Mesh(merge([box(0.1, 2.6, 0.1, -1.0, 1.3, 0), box(0.1, 2.6, 0.1, 1.0, 1.3, 0)]), M.wood)));
+  const face = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 0.05), [M.paintWhite, M.paintWhite, M.paintWhite, M.paintWhite,
+    new THREE.MeshStandardMaterial({ map: T.labelTexture('BUILD YOUR HOUSE', { w: 1024, h: 512, bg: '#1f5fa8', color: '#ffffff', font: '900 104px Arial', italic: false, sub: 'MORTAR FIRST, THEN LAY THE BLOCK' }) }), M.paintWhite]);
+  face.position.y = 2.0; board.add(shadowed(face));
+  addStatic(P.x, P.top / 2, P.z, P.w, P.top, P.d);
+  return { x: P.x, z: P.z, w: P.w, d: P.d, top: P.top };
 }
 
 function buildPortaloo(scene, M, addStatic, x, z) {

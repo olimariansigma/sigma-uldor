@@ -5,6 +5,7 @@ import { BUILDINGS } from './buildings.js';
 import { fmtKg, fmtL, KG } from './crusher.js';
 import { ic, iconize, fillIcons } from './icons.js';
 import { MAX_CHARGES } from './fun.js';
+import { paintOf } from './mx-vehicles.js';
 
 const $ = (id) => document.getElementById(id);
 const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings'];
@@ -13,9 +14,9 @@ const THUMB = (id) => `thumbs/m_${id}.webp`;
 const TOOL = { brickclamp: 'Rotating brick clamp', grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
   breaker: 'Hydraulic breaker', orangepeel: 'Orange-peel grab', pulverizer: 'Pulverizer', tank: 'Water tank', skip: 'Concrete skip' };
 const FAMILY = { roller: ['Tandem roller', 'Twin vibrating drums', 'Articulated drums'], paver: ['Paver', 'Hopper + screed', 'Rubber tracks'], loader: ['Wheel loader', '3 m bucket', 'Articulated wheels'],
-  dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'], truck: ['Tipper truck', 'Tipping body', '8x4 · 2 steered axles'] };
+  dozer: ['Bulldozer', 'Blade + ripper', 'Steel tracks'], dumper: ['Tracked dumper', 'Slewing tipping skip', 'Rubber tracks'], crane: ['Crawler crane', 'Wrecking ball', 'Crawler tracks'], painter: ['Road painter', 'Spray bar · 8 colours', '4x2 truck'], truck: ['Tipper truck', 'Tipping body', '8x4 · 2 steered axles'] };
 const UNDER = { steel: 'Steel tracks', rubber: 'Rubber tracks', wheels: 'Wheels + outriggers', pontoon: 'Floating pontoons', spider: 'Walking legs', robot: 'Remote tracks' };
-const TONS = { wh200: 38, bg90: 24, tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80 };
+const TONS = { wh200: 38, bg90: 24, tx330: 30, k35: 3.5, hr450: 46, mw180: 18, tx700: 70, bx220: 22, mh24: 24, wh75: 7.5, amx: 25, gp300: 32, gx250: 26, lc200: 20, sx5: 9, dr160: 1.6, cr64: 9, ap600: 18, wl950: 24, dz80: 22, td6: 6, cc250: 80, lp20: 9 };
 export function machineInfo(sp) {
   if (sp.family === 'excavator') {
     const type = sp.under === 'robot' ? 'Demolition robot' : sp.under === 'spider' ? 'Walking excavator' : sp.under === 'wheels' ? (sp.cab === 'elevated' ? 'Wheeled material handler' : 'Wheeled excavator') : sp.under === 'pontoon' ? 'Amphibious excavator' : sp.boom === 'long' ? 'High-reach demolition' : sp.scale < 0.6 ? 'Mini excavator' : 'Crawler excavator';
@@ -249,8 +250,9 @@ export class UI {
     $('trowelAmt').textContent = kg > 0 ? fmtKg(kg) : 'empty';
     $('trowelSw').style.background = kg > 0 ? hex(me.cement.color) : 'transparent';
     if (g.charges) { const left = MAX_CHARGES - g.charges.mine(g.myId).length; $('chargeAmt').textContent = `${left} left`; }
+    if (g.demo) $('buildAmt').textContent = String(g.carriedBy(g.myId).filter((p) => p.brick).length);
     const big = document.querySelector('#tbtns-foot [data-act="hammer"]');
-    if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH' }[want]}</small>`; } }
+    if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : g.tool === 'build' ? 'brick' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH', brick: 'BUILD' }[want]}</small>`; } }
     if (g.player && g.player.avatar) g.player.avatar.setTool(g.tool, me && me.cement.kg > 0 ? me.cement.color : null);
   }
 
@@ -326,7 +328,7 @@ export class UI {
       $('vhName').textContent = machine.spec.brand + ' ' + machine.spec.model;
       $('vhImg').src = THUMB(machine.spec.id);
       $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher', brickclamp: 'Clamp' }[machine.spec.attach]
-        || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball', truck: 'Body' }[machine.family] || 'Tool';
+        || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball', truck: 'Body', painter: 'Paint' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
       ? '<kbd>W</kbd><kbd>S</kbd> drive · <kbd>A</kbd><kbd>D</kbd> steer<br>' + (this.machineHint || '') + '<br><kbd>C</kbd> camera · <kbd>E</kbd> exit'
@@ -345,7 +347,7 @@ export class UI {
   setVehicle(m) {
     const a = m.att, b = a.behaviour, on = m.openTarget > 0.5;
     const st = { breaker: on ? 'ON' : 'OFF', crusher: on ? 'CRUSHING' : 'OFF', roller: on ? 'VIBRATING' : 'OFF', paver: on ? 'PAVING' : 'OFF', skip: m.open > 0.5 ? 'OPEN' : 'CLOSED',
-      scoop: m.payload.kg ? m.payload.kind : m.held.length ? 'loaded' : 'empty', blade: 'ready', bed: 'ready', ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
+      scoop: m.payload.kg ? m.payload.kind : m.held.length ? 'loaded' : 'empty', blade: 'ready', bed: 'ready', paint: (on ? 'SPRAYING ' : '') + paintOf(m)[0], ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
     $('vhGrab').textContent = st ?? (m.open > 0.5 ? 'OPEN' : 'CLOSED');
     const cap = a.bulk ? m.capacity() : Math.max(1, a.pieces);
     $('vhLoad').textContent = a.bulk ? (m.payload.kg ? `${m.payload.kind === 'water' ? fmtL(m.payload.kg) + ' water' : fmtKg(m.payload.kg) + ' ' + m.payload.kind}` : (m.held.length ? `${m.held.length} pcs` : 'empty')) : a.pieces ? `${m.held.length} pcs` : '—';

@@ -13,6 +13,8 @@ export const SITE = {
   buildScale: 3,
   crusherPos: V(14, 0, -2), crusherRot: 0,
   mixerPos: V(25, 0, 13),
+  pressPos: V(3.6, 0, 7.35),   // brick press west of the dust stockpile (its feeder belt reaches the pile)
+  buildPlot: { x: 64.2, z: 52.2, w: 14.4, d: 10.2, top: 0.3 }, // foundation slab for building across the road
   lake: { cx: 33.5, cz: -4, rx: 5.6, rz: 8.2, water: -0.45, depth: 2.6 },
   playerSpawn: V(-2, 0.2, -30),
   machineYard: V(-26, 0, 6),

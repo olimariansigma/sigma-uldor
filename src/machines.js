@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { machineMaterials, weathered, bake, restPositions } from './detail.js';
 import { buildExcavator } from './mx-excavator.js';
-import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, stepCrane } from './mx-vehicles.js';
+import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, buildPainter, stepCrane } from './mx-vehicles.js';
 import { buildTruck, TRUCK_SIZES } from './mx-truck.js';
 import { terrainHeight, SITE } from './site.js';
 import { machineGroups } from './demolition.js';
@@ -37,6 +37,7 @@ export const MACHINES = [
   { id: 'wl950', tons: 24, family: 'loader', name: 'TORVA WL950 Wheel Loader', brand: 'TORVA', model: 'WL950', icon: '🚜', desc: 'Articulated loader with Z-bar arms and a 3 m bucket. Scoops a mountain of blocks or dust.', scale: 1.0, paint: 0xf2b200, speed: 6.0 },
   { id: 'dz80', tons: 22, family: 'dozer', name: 'TORVA DZ80 Bulldozer', brand: 'TORVA', model: 'DZ80', icon: '🐂', desc: 'Pushes walls flat and shoves rubble to the crusher. Rear ripper included.', scale: 1.0, paint: 0xf2b200, speed: 2.8 },
   { id: 'td6', tons: 6, family: 'dumper', name: 'KESTREL TD6 Tracked Dumper', brand: 'KESTREL', model: 'TD6', icon: '🛻', desc: 'Rubber-tracked dumper with a slewing, tipping skip. Load it with blocks and drive them anywhere.', scale: 1.0, paint: 0xff7300, speed: 3.5 },
+  { id: 'lp20', tons: 9, family: 'painter', name: 'LINEA LP20 Road Painter', brand: 'LINEA', model: 'LP20', icon: '🎨', desc: 'Road painting truck with a spray bar behind the rear axle. Pick a colour, switch the sprayer on and drive over a repaired pothole to paint the patch.', scale: 1, paint: 0xf2f2ee, accent: 0xe8501c, speed: 7.5 },
   { id: 'cc250', tons: 80, family: 'crane', name: 'VANTOR CC250 Wrecking Ball', brand: 'VANTOR', model: 'CC250', icon: '⚫', desc: 'Crawler crane with a 16 m lattice boom and a swinging wrecking ball. Classic.', scale: 1.0, paint: 0xd11f1f, accent: 0x222222, speed: 1.4 },
   // ---- tipper trucks (rear-tipping body; every truck comes in three sizes, see TRUCK_VARIANTS below)
   { id: 'tk370', tons: 16, family: 'truck', size: 's', name: 'VELKA G370 Box Tipper', brand: 'VELKA', model: 'G370', icon: '🚚', desc: 'Workhorse tipper in yard yellow with a square steel box body and a top-hinged tailgate that swings up when you tip. Wide flat floor for whole wall sections of blocks.', scale: 1, paint: 0xf2b705, accent: 0x1b1d20, bodyPaint: 0xf0b000, chassisPaint: 0x1d1e20, trim: 'work', body: 'box', bodyLabel: 'VELKA BAU', toolName: 'Steel box tipping body', speed: 10 },
@@ -56,7 +57,7 @@ export const truckVariants = (id) => { const base = MACHINES.find((x) => x.id ==
 export const BASE_MACHINES = MACHINES.filter((x) => !x.variantOf);
 export { TRUCK_SIZES };
 
-const BUILDERS = { excavator: buildExcavator, roller: buildRoller, paver: buildPaver, loader: buildLoader, dozer: buildDozer, dumper: buildDumper, crane: buildCrane, truck: buildTruck };
+const BUILDERS = { excavator: buildExcavator, roller: buildRoller, paver: buildPaver, loader: buildLoader, dozer: buildDozer, dumper: buildDumper, crane: buildCrane, truck: buildTruck, painter: buildPainter };
 
 export class Machine {
   constructor(ctx, spec, id, pos, yaw) {
@@ -404,6 +405,7 @@ export function controlsFor(m) {
   if (f === 'dozer') return { right: 'BLADE', stickOut: 'RIP ↓', stickIn: 'RIP ↑', curlIn: 'TILT ↑', curlOut: 'TILT ↓', grab: null, hint: '<kbd>↑</kbd><kbd>↓</kbd> blade · <kbd>Z</kbd><kbd>X</kbd> pitch · <kbd>R</kbd><kbd>F</kbd> ripper' };
   if (f === 'dumper') return { right: 'SLEW', stickOut: null, stickIn: null, curlIn: 'TIP', curlOut: 'LOWER', grab: null, hint: '<kbd>←</kbd><kbd>→</kbd> slew skip · <kbd>Z</kbd><kbd>X</kbd> tip / lower' };
   if (f === 'truck') return { right: null, stickOut: null, stickIn: null, curlIn: 'TIP', curlOut: 'LOWER', grab: null, hint: '<kbd>Z</kbd><kbd>X</kbd> tip / lower the body · back up to where you want the load, then tip' };
+  if (f === 'painter') return { right: null, stickOut: null, stickIn: null, curlIn: null, curlOut: null, rot: true, grab: '🎨<small>SPRAY</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> sprayer on / off · <kbd>T</kbd><kbd>Y</kbd> paint colour · drive over a repaired pothole to paint it' };
   if (f === 'roller') return { right: null, stickOut: null, stickIn: null, curlIn: null, curlOut: null, grab: '〰️<small>VIBRATE</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> drum vibration on / off' };
   if (f === 'paver') return { right: 'SCREED', stickOut: null, stickIn: null, curlIn: 'WINGS ↑', curlOut: 'WINGS ↓', grab: '🛣️<small>PAVE</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> paving flow · <kbd>Z</kbd><kbd>X</kbd> hopper wings' };
   if (f === 'crane') return { right: 'SWING · BOOM', stickOut: 'LOWER', stickIn: 'HOIST', curlIn: null, curlOut: null, grab: null, hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> winch' };

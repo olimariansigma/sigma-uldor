@@ -155,55 +155,46 @@ export function machineInteract(m, dt, W) {
   m.lastGp = gp;
 }
 
-// ---- BG90 brick clamp: only blocks lined up between the jaws can be gripped; tilt or jerk and they slip out
-const _ax = new THREE.Vector3();
-function longAxis(p, out) {
-  const s = p.size; const k = s.x >= s.y && s.x >= s.z ? 0 : s.z >= s.y ? 2 : 1;
-  return out.set(k === 0 ? 1 : 0, k === 1 ? 1 : 0, k === 2 ? 1 : 0).applyQuaternion(p.quat);
-}
+// ---- BG90 brick clamp: magnetic. Closing it pulls the blocks near the jaws into place (whatever way they lie) and
+// they stay put, tilted or jerked, until you open it again.
 function clampLogic(m, dt, W, gp) {
   const att = m.att, demo = W.demo, R = att.rotor;
   const prevOpen = m.cPrevOpen ?? m.open; m.cPrevOpen = m.open;
-  const rq = R.getWorldQuaternion(new THREE.Quaternion());
-  const down = new THREE.Vector3(0, 0, 1).applyQuaternion(rq), jaw = new THREE.Vector3(1, 0, 0).applyQuaternion(rq);
   const tell = (msg) => { if ((m.tellT || 0) < performance.now()) { m.tellT = performance.now() + 2500; W.tellDriver(m, msg); } };
-  // closing on an empty clamp: pick up the aligned blocks between the jaws
   if (m.openTarget < 0.5 && prevOpen > 0.35 && m.open <= 0.35 && !m.held.length) {
     const inv = new THREE.Matrix4().copy(R.matrixWorld).invert();
-    const near = [...demo.piecesInSphere(gp, 2.6 * m.s, [LOOSE]), ...demo.intactNear(gp, 2.2 * m.s, 24).filter((p) => !p.up.some((q) => q.state === INTACT))];
-    const ok = [], bad = [];
+    const near = [...demo.piecesInSphere(gp, 3.0 * m.s, [LOOSE]), ...demo.intactNear(gp, 2.6 * m.s, 24).filter((p) => !p.up.some((q) => q.state === INTACT))];
+    const cand = [];
     for (const p of near) {
+      if (demo.isBig(p)) continue;
       const lp = p.pos.clone().applyMatrix4(inv);
-      if (Math.abs(lp.y) > 0.5 || Math.abs(lp.x) > 1.45 || lp.z < 0.35 || lp.z > 1.95) continue;
-      if (Math.abs(longAxis(p, _ax).dot(jaw)) > 0.92) ok.push({ p, lp }); else bad.push(p);
+      if (Math.abs(lp.y) > 1.1 || Math.abs(lp.x) > 1.9 || lp.z < 0.1 || lp.z > 2.6) continue;
+      cand.push({ p, lp });
     }
-    if (down.y > -0.85) { if (ok.length || bad.length) tell('Keep the clamp level to grip (Z / X)'); }
-    else if (!ok.length) { if (bad.length) tell('Line the clamp up with the blocks first (rotate with T / Y)'); }
-    else {
-      ok.sort((a, b) => a.lp.lengthSq() - b.lp.lengthSq());
-      const s = 1 / m.s, q0 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
-      for (const { p, lp } of ok.slice(0, att.pieces)) {
-        lp.y = 0; lp.z = THREE.MathUtils.clamp(lp.z, 0.75, 1.5);
-        const local = new THREE.Matrix4().compose(lp, q0, new THREE.Vector3(s, s, s));
-        if (demo.hold(p, m.id, local)) m.held.push({ p, local });
+    if (!cand.length) return finishClamp(m, demo, gp, dt);
+    // four slots between the jaws: two blocks end to end, two courses high
+    cand.sort((x, y) => x.lp.lengthSq() - y.lp.lengthSq());
+    const s = 1 / m.s, q0 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), -Math.PI / 2);
+    const used = [];
+    for (const { p, lp } of cand) {
+      if (m.held.length >= att.pieces) break;
+      const half = (p.size.x / 2 + 0.03) * s, h = p.size.y * s;
+      let best = null, bd = 1e9;
+      for (const [sx, row] of [[-1, 0], [1, 0], [-1, 1], [1, 1]]) {
+        if (used.some((u) => u[0] === sx && u[1] === row)) continue;
+        const x = sx * half, z = 0.78 + row * h, d = (lp.x - x) ** 2 + (lp.z - z) ** 2;
+        if (d < bd) { bd = d; best = [sx, row, x, z]; }
       }
-      W.sfx.impact('metal', 0.7, gp);
+      if (!best) break;
+      const local = new THREE.Matrix4().compose(new THREE.Vector3(best[2], 0, best[3]), q0, new THREE.Vector3(s, s, s));
+      if (demo.hold(p, m.id, local)) { m.held.push({ p, local }); used.push(best); }
     }
+    if (m.held.length) { W.sfx.impact('metal', 0.8, gp); tell(`🧲 ${m.held.length} block${m.held.length > 1 ? 's' : ''} locked in the clamp`); }
   }
-  if (m.held.length) {
-    // grip check: tilted clamp or jerky moves make blocks slide out
-    const v = m.lastGpC ? gp.clone().sub(m.lastGpC).divideScalar(Math.max(dt, 1e-3)) : new THREE.Vector3();
-    const acc = m.lastVC ? v.clone().sub(m.lastVC).length() / Math.max(dt, 1e-3) : 0;
-    m.accSm = (m.accSm || 0) + (acc - (m.accSm || 0)) * Math.min(1, dt * 8);
-    if (down.y > -0.72) { releaseAll(m, demo, dt); tell('The clamp tipped over and the blocks slid out!'); }
-    else if ((m.accSm > 13 || v.length() > 7.5) && (m.slipT || 0) < performance.now()) {
-      m.slipT = performance.now() + 450;
-      const h = m.held.pop(); demo.release(h.p, v.clone().clampLength(0, 4), machineBit(m.id));
-      tell('Too jerky! A block slipped out of the clamp');
-    }
-    m.lastVC = v;
-  } else { m.lastVC = null; m.accSm = 0; }
-  m.lastGpC = gp.clone();
+  finishClamp(m, demo, gp, dt);
+}
+function finishClamp(m, demo, gp, dt) {
+  m.lastGpC = gp.clone(); m.lastVC = null; m.accSm = 0;
   if (m.openTarget > 0.5 && m.held.length && m.open > 0.45) releaseAll(m, demo, dt);
 }
 

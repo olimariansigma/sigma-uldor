@@ -48,7 +48,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * HALDEN MH24 material handler (raised cab, orange-peel grab)
     * HALDEN WH75 wheeled log-claw excavator (black boom, blade, outriggers)
     * HALDEN WH200 Big Claw: huge wheeled material handler with a raised cab and a giant claw that grabs a whole wall section at once
-    * TORVA BG90 brick grabber: a rotating parallel clamp that lifts two rows of blocks. It is deliberately hard to drive: line the clamp up with the blocks (T / Y), keep it level, and move smoothly or the blocks slip out. Its hydraulics are heavy and keep moving after you let go.
+    * TORVA BG90 brick grabber: a magnetic rotating clamp. Close it near some blocks and it pulls up to four of them neatly into place between the jaws, however they lie, and they stay put however you swing or tilt it until you open the clamp. Its hydraulics are heavy and keep moving after you let go.
     * AQUAMOLE AMX amphibious with a water tank (it floats in the lake)
     * GRANITE GP300 (pulverizer)
     * GRANITE GX250 crusher bucket (turns blocks into dust inside the bucket)

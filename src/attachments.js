@@ -254,8 +254,8 @@ export function buildAttachment(kind, K) {
   }
   if (kind === 'brickclamp') {
     // dedicated block grab: hydraulic rotator + parallel clamp. Two long padded jaws slide together on a
-    // guided cross-beam and squeeze a row of blocks (two long, two high). Blocks must be lined up with the
-    // jaws, and they slip out if the clamp is tilted or jerked (machineLogic: clamp()).
+    // guided cross-beam and squeeze a row of blocks (two long, two high). The clamp is magnetic: closing it
+    // snaps the nearby blocks into place and holds them until it opens (machineLogic: clampLogic()).
     coupler(K, A, 0.44); rotator(K, A, 0.3, 0.62);
     const R = new THREE.Group(); R.position.z = 0.74; A.add(R);
     // slewing ring + motor housing

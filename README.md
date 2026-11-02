@@ -1,6 +1,6 @@
 # Wrecking Yard
 
-A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. There are 25 machines to spawn (16 excavators, 6 road and site machines and 3 tipper trucks in three sizes), a truck intake line that compacts blocks into cubes for the crusher, and cross-play multiplayer between PC and phones.
+A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. Press the dust into new blocks and build your own house on the plot across the road. There are 26 machines to spawn (16 excavators, 7 road and site machines and 3 tipper trucks in three sizes), a truck intake line that compacts blocks into cubes for the crusher, and cross-play multiplayer between PC and phones.
 
 ## Download: the launcher
 
@@ -19,6 +19,9 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 
 ## What's in it
 
+* **Brick press.** Next to the dust stockpile. Switch on its feeder belt at the control panel and it pulls dust off the pile, or tip a loader or excavator bucket of dust into its hopper, or pour your bucket in. Every couple of seconds the ram presses a full-size block in the dust's colour and stacks it on the pallet. One block costs exactly the dust a crushed block gives back.
+* **Build your own house.** Across the road there is a foundation slab with setting-out lines. Carry pressed blocks over (Q), take cement on the trowel and click to put a splash of mortar on the slab (one splash per click), then pick tool 4 (BUILD): a ghost block snaps to the grid on the surface you aim at, R turns it, click lays it. A block laid over mortar sticks and becomes part of the wall (it can be smashed, blasted and collapse like the houses you demolish); without mortar it is only stacked. Blocks set down on mortar by a machine stick too.
+* **Road painting truck.** The LINEA LP20 has a spray bar behind the rear axle and eight colours (T / Y). Switch the sprayer on (Click / Space) and drive over a repaired pothole to paint the patch.
 * **Day and night.** The sun and moon cross the sky and the light, sky, fog and clouds follow them through golden hour into a starry night. After dusk the street lamps, house windows and four trailer light towers in the yard switch on, and the machine you drive gets real work lights (a head lamp when you walk). Settings → Day & night: off, 10, 20 or 40 minute days, plus a button to skip three hours. In multiplayer everyone shares the host's time, and the time of day is saved with the world.
 * **Demolition charges.** Hotbar slot 3: stick up to 8 charges on wall blocks, then press E (BOOM on touch) and get clear. After a beeping three-second countdown they blow: blocks fly, big panels shatter, there's a fireball, sparks and a dust cloud in the blocks' own colours, and the shock wave shakes you. Works in multiplayer.
 * **Horns, photo mode, fireworks.** Every machine has an air horn (N, or the horn button on touch) that everyone hears. P hides the HUD for screenshots. Flatten a building and fireworks go up over its plot.
@@ -32,7 +35,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 * **Breakable big pieces.** Roof, floor and door panels break into rubble chunks: hit them three times with the hammer, close a claw on them, push them with an arm or bucket, or drop them on the crusher hopper or in the truck intake. The chunks keep the panel's colour and weight.
 * **Pothole repair like the real thing.** The hot mix goes in as a loose, steaming heap standing proud of the road. Each pass of the roller (or tamping with the hammer) presses it down until it is flush and smooth; the paver lays a pre-compacted mat.
 * **Truck intake line.** Behind the crusher there's a ground-level tip funnel with a wheel-stop: back a truck up to it and tip. A walled belt carries the blocks into the BP-40 compactor, which presses every 5 blocks into a strapped cube (you can see the fragments of each block in it), and a cleated incline belt lifts the cubes into the crusher hopper, where they become dust in the blocks' own colours.
-* **25 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders. The loader, dozer, roller, paver, dumper and crane have shaped bodies (sloping hoods, curved mudguards, counterweights with tail lights, bucket teeth) and a glazed cab with a framed door. From the operator's seat, guard grids, wipers and window tint are left out so you can see what you're doing.
+* **26 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders. The loader, dozer, roller, paver, dumper and crane have shaped bodies (sloping hoods, curved mudguards, counterweights with tail lights, bucket teeth) and a glazed cab with a framed door. From the operator's seat, guard grids, wipers and window tint are left out so you can see what you're doing.
   * Excavators:
     * TORVA TX330 (rotating sorting grapple)
     * KESTREL K35 mini on rubber tracks (zero tail, canopy, swing-post boom)
@@ -57,12 +60,13 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * TORVA DZ80 bulldozer with ripper
     * KESTREL TD6 tracked dumper with a slewing, tipping skip
     * VANTOR CC250 crawler crane with a wrecking ball
+    * LINEA LP20 road painting truck
   * Tipper trucks, each in three sizes (pick the size in the showroom): Small 4x2, Medium 6x4, Big 8x4:
     * VELKA R410 XT (medium by default): white cab, heavy XT bumper with a skid plate, off-road tyres, half-pipe body
     * VELKA S650 V8 (big by default): metallic silver high-roof cab, chrome grille and roof light bar, polished rims, brushed aluminium half-pipe body
     * VELKA G370 (small by default): yellow cab with a square steel box body
     * Load them with any excavator or loader. Blocks ride along in the body (steering gets gentler at speed so the load doesn't slide out), then Z tips the body up on its front cylinder, the high-lift tailgate swings up and the load slides out the back. One R410 is parked in the yard by default.
-* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 25 with the arrows, then press **Spawn**.
+* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 26 with the arrows, then press **Spawn**.
 * **Solid machines.** Machines stop at walls instead of passing through them. Keep driving or pressing the arm, blade or bucket against a wall and the blocks it touches crack (they darken) and break loose; heavy machines and fast hits break them sooner. Arms and buckets can't sink into the ground.
 * **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device. Snapshots are compact binary (a falling block costs 15 bytes), each player gets the blocks around them first, and a host with a slow link sends less instead of building up lag.
 * **Save slots.** There are five save slots plus an autosave. A save contains every block, machine, the dust pile, the mixer and the road.
@@ -72,10 +76,10 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 | | Keyboard / mouse | Touch |
 |---|---|---|
 | Move / look | WASD + mouse, Shift run, Space jump | left stick, drag to look |
-| Tools | 1 hammer, 2 cement trowel, 3 demolition charges (E detonates), Left click to use | hotbar at the top, big button to use |
+| Tools | 1 hammer, 2 cement trowel (mortar: one splash per click on the slab or a block), 3 demolition charges (E detonates), 4 build (R turns the block), Left click to use | hotbar at the bottom, big button to use (tap BUILD again to turn) |
 | Pick up / throw | Q or right click / G | ✋ / 🧱 |
 | Use (drive, bucket, mixer, pothole) | E | context button |
-| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump (tip / lower on trucks), T Y rotate clamp (BG90), Click/Space tool, C cab camera, N horn (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
+| Machine | W S drive, A D steer, ← → swing, ↑ ↓ boom, R F arm, Z X curl / dump (tip / lower on trucks), T Y rotate clamp (BG90) / paint colour (LP20), Click/Space tool, C cab camera, N horn (the on-screen hint shows each machine's own controls) | drive stick, swing/boom stick, buttons |
 | Menus | B spawn, M online, H help, P photo mode | top-right buttons |
 
 ## Building from source

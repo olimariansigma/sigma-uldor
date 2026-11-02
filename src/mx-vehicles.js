@@ -61,6 +61,82 @@ function canopyCab(m, parent, x, y, z, enclosed = true) {
   m.cabShell = c;
   return c;
 }
+// ---- shaped bodies
+// a body shell from a side profile drawn in (z, y), extruded across x and centred on x (soft bevelled edges)
+function prism(pts, w, x = 0, bevel = 0.035) { return sidePlate(pts, Math.max(0.01, w - bevel * 2), x - w / 2 + bevel, bevel); }
+// polygon with rounded corners: corners = [[z, y, r], ...]
+function roundPoly(corners, n = 5) {
+  const out = [], N = corners.length;
+  for (let i = 0; i < N; i++) {
+    const [z, y, r] = corners[i];
+    if (!r) { out.push([z, y]); continue; }
+    const p = corners[(i - 1 + N) % N], q = corners[(i + 1) % N];
+    const la = Math.hypot(p[0] - z, p[1] - y) || 1, lb = Math.hypot(q[0] - z, q[1] - y) || 1;
+    const rr = Math.min(r, la * 0.45, lb * 0.45);
+    const a = [z + (p[0] - z) / la * rr, y + (p[1] - y) / la * rr], b = [z + (q[0] - z) / lb * rr, y + (q[1] - y) / lb * rr];
+    for (let k = 0; k <= n; k++) { const t = k / n, u = 1 - t; out.push([u * u * a[0] + 2 * u * t * z + t * t * b[0], u * u * a[1] + 2 * u * t * y + t * t * b[1]]); }
+  }
+  return out;
+}
+// flat quad through four corners (glass panes)
+function pane(a, b, c, d) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([a, b, c, a, c, d].flatMap((v) => [v.x, v.y, v.z]), 3));
+  g.computeVertexNormals(); return g;
+}
+// curved mudguard over a wheel: arc around (cz, cy) in the side view, w wide, centred on x
+function fender(cz, cyy, r, a0, a1, w, x, thick = 0.035) {
+  const pts = []; for (let i = 0; i <= 18; i++) { const a = a0 + (a1 - a0) * (i / 18); pts.push([cz + Math.cos(a) * r, cyy + Math.sin(a) * r]); }
+  return shell(pts, thick, w).translate(x, 0, 0);
+}
+// pointed bucket tooth on an adapter, pointing +z
+function tooth(x, y, z, s = 1) { return [rbox(0.11 * s, 0.09 * s, 0.24 * s, 0.02, x, y, z), cy(0.005, 0.055 * s, 0.2 * s, 4, x, y, z + 0.21 * s, Math.PI / 2, Math.PI / 4)]; }
+
+// enclosed operator cab with a leaning glasshouse, framed door, roof with visor and AC unit, full interior
+function modernCab(m, parent, x, y, z, { w = 1.5, d = 1.65, h = 1.95, door = 1, roofMat = null, wheel = true } = {}) {
+  const K = m.mats, c = new THREE.Group(); c.position.set(x, y, z); parent.add(c);
+  const hw = w / 2, hd = d / 2, base = 0.34, top = h - 0.15, bz = -0.12;
+  const B = (sx, sz) => V(sx * hw, base, sz * hd);
+  const T = (sx, sz) => V(sx * (hw - 0.07), top, sz > 0 ? hd - 0.17 : -hd + 0.06);
+  const Bm = (sx) => V(sx * hw, base, bz), Tm = (sx) => V(sx * (hw - 0.07), top, bz - 0.03);
+  // floor pan, lower rear panel, step plate
+  add(c, mergeG([rbox(w + 0.04, base, d + 0.04, 0.05, 0, base / 2, 0), rbox(w - 0.02, 0.5, 0.1, 0.03, 0, base + 0.25, -hd + 0.07)]), K.paint);
+  // frame: corner posts, door pillars, roof ring, waist rail, door outline
+  const f = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) f.push(tubeAB(B(sx, sz), T(sx, sz), 0.042, 8));
+  for (const sx of [-1, 1]) { f.push(tubeAB(Bm(sx), Tm(sx), 0.034, 8), tubeAB(T(sx, 1), Tm(sx), 0.036, 8), tubeAB(Tm(sx), T(sx, -1), 0.036, 8)); f.push(tubeAB(B(sx, 1), B(sx, -1), 0.03, 6)); }
+  f.push(tubeAB(T(-1, 1), T(1, 1), 0.036, 8), tubeAB(T(-1, -1), T(1, -1), 0.036, 8), tubeAB(B(-1, 1), B(1, 1), 0.03, 6));
+  const dx = door * (hw + 0.005), mid = V(dx, base + 0.62, bz + 0.22);
+  f.push(tubeAB(V(dx, base + 0.05, bz + 0.03), V(dx, base + 0.05, hd - 0.05), 0.02, 6), tubeAB(V(dx, base + 0.62, bz + 0.03), V(dx, base + 0.62, hd - 0.06), 0.016, 6));
+  add(c, mergeG(f), K.black);
+  add(c, mergeG([bx(0.03, 0.03, 0.16, dx + door * 0.03, base + 0.75, bz + 0.18), bx(0.025, 0.12, 0.05, dx + door * 0.01, base + 0.32, bz + 0.05), bx(0.025, 0.12, 0.05, dx + door * 0.01, base + 1.1, bz + 0.05)]), K.chrome, false);
+  // grab handle beside the door
+  add(c, mergeG([tubeAB(V(door * (hw + 0.07), base + 0.2, hd - 0.02), V(door * (hw + 0.07), top - 0.2, hd - 0.15), 0.018, 8), tubeAB(V(door * hw, base + 0.2, hd - 0.02), V(door * (hw + 0.07), base + 0.2, hd - 0.02), 0.015, 6), tubeAB(V(door * (hw - 0.05), top - 0.2, hd - 0.15), V(door * (hw + 0.07), top - 0.2, hd - 0.15), 0.015, 6)]), m.ctx.M.paintYellow);
+  // roof with overhang and sun visor, AC / filter unit, antenna
+  add(c, mergeG([rbox(w + 0.18, 0.12, d + 0.14, 0.055, 0, h - 0.08, -0.03), rbox(w - 0.1, 0.05, 0.28, 0.02, 0, h - 0.17, hd - 0.04, 0.25)]), roofMat || K.paint);
+  add(c, mergeG([rbox(0.86, 0.15, 0.48, 0.05, 0, h + 0.05, -hd + 0.34)]), K.grey);
+  grille(c, 0.7, 0.09, 0, h + 0.05, -hd + 0.095, Math.PI, 30);
+  add(c, mergeG([cy(0.006, 0.01, 0.55, 6, -hw + 0.12, h + 0.28, -hd + 0.15)]), K.black);
+  // glass all round (hidden from the operator's own seat)
+  const gl = [pane(B(-1, 1), B(1, 1), T(1, 1), T(-1, 1)), pane(V(hw, base + 0.5, -hd), V(-hw, base + 0.5, -hd), T(-1, -1), T(1, -1))];
+  for (const sx of [-1, 1]) gl.push(pane(B(sx, 1), Bm(sx), Tm(sx), T(sx, 1)), pane(Bm(sx), V(sx * hw, base + 0.5, -hd), T(sx, -1), Tm(sx)));
+  c.add(exteriorOnly(new THREE.Mesh(mergeG(gl), K.glass)));
+  // wipers
+  c.add(exteriorOnly(new THREE.Mesh(mergeG([bx(0.02, 0.6, 0.015, -0.15, base + 0.45, hd + 0.02, -0.12, 0, 0.5), bx(0.02, 0.5, 0.015, 0.35, base + 0.38, hd + 0.02, -0.12, 0, -0.3)]), K.black)));
+  // interior: seat, steering column and dash with display, side console with joystick, floor mat
+  seat(K, c, 0, base + 0.15, -0.28);
+  if (wheel) steeringWheel(K, c, 0, base + 0.75, 0.42, 0.75);
+  add(c, mergeG([rbox(0.55, 0.32, 0.22, 0.05, 0, base + 0.42, 0.58), rbox(0.2, 0.42, 0.55, 0.04, door * 0.42, base + 0.24, -0.15), cy(0.018, 0.02, 0.16, 8, door * 0.42, base + 0.52, -0.02), new THREE.SphereGeometry(0.035, 10, 8).translate(door * 0.42, base + 0.62, -0.02)]), K.plastic, false);
+  add(c, bx(w - 0.12, 0.015, d - 0.12, 0, base + 0.01, 0), K.tread, false);
+  add(c, mergeG([rbox(0.21, 0.15, 0.04, 0.015, -door * 0.36, base + 0.7, 0.58, -0.35), bx(0.03, 0.14, 0.03, -door * 0.36, base + 0.6, 0.6)]), K.plastic, false);
+  const scr = add(c, bx(0.17, 0.11, 0.01, -door * 0.36, base + 0.705, 0.555, -0.35), new THREE.MeshBasicMaterial({ color: 0x3aa0e0 }), false); scr.userData.keep = true;
+  mirror(c, K, V(hw, top - 0.4, hd - 0.2), V(hw + 0.32, top - 0.15, hd - 0.1), -0.3); mirror(c, K, V(-hw, top - 0.4, hd - 0.2), V(-hw - 0.32, top - 0.15, hd - 0.1), 0.3);
+  for (const sx of [-1, 1]) { workLight(c, K, sx * (hw - 0.05), h + 0.02, hd + 0.08, 0, 0.3, 0.85); workLight(c, K, sx * (hw - 0.05), h + 0.02, -hd - 0.08, Math.PI, 0.35, 0.85); }
+  m.beacon = add(c, cy(0.055, 0.055, 0.13, 14, -hw + 0.3, h + 0.08, -hd + 0.2), K.amber, false); m.beacon.userData.keep = true;
+  m.seat = anchor(c, 0, base + 1.08, -0.18);
+  m.cabShell = c;
+  return c;
+}
 function attStub(behaviour, extra = {}) { return { group: new THREE.Group(), jaws: [], probes: [], colliders: [], behaviour, bulk: null, pieces: 0, ...extra }; }
 
 // --------------------------------------------------------------------------- tandem vibratory roller
@@ -75,33 +151,38 @@ export function buildRoller(m) {
     add(spin, mergeG([cy(0.68, 0.68, 1.72, 48, 0, 0, 0, 0, 0, Math.PI / 2), cy(0.6, 0.6, 1.74, 36, 0, 0, 0, 0, 0, Math.PI / 2)]), K.steel);
     add(spin, mergeG([boltCircle(V(0.88, 0, 0), 0.3, 10, V(1, 0, 0), 0.02), boltCircle(V(-0.88, 0, 0), 0.3, 10, V(-1, 0, 0), 0.02)]), K.dark);
     // drum frame: side plates with round covers, scraper bar, spray bar
-    add(g, mergeG([...[-1, 1].map((s) => rbox(0.12, 1.25, 1.9, 0.05, s * 0.96, 0.32, 0)), ...[-1, 1].map((s) => cy(0.38, 0.38, 0.06, 28, s * 1.03, 0, 0, 0, 0, Math.PI / 2)), rbox(2.05, 0.32, 0.4, 0.05, 0, 0.82, 0)]), K.paint);
+    add(g, mergeG([...[-1, 1].map((s) => prism(roundPoly([[-0.95, -0.3, 0.3], [-0.95, 0.95, 0.12], [0.95, 0.95, 0.12], [0.95, -0.3, 0.3]]), 0.12, s * 0.96, 0.02)), ...[-1, 1].map((s) => cy(0.38, 0.38, 0.06, 28, s * 1.03, 0, 0, 0, 0, Math.PI / 2)), rbox(2.05, 0.32, 0.4, 0.05, 0, 0.82, 0)]), K.paint);
+    add(g, mergeG([-1, 1].map((s) => cy(0.2, 0.24, 0.16, 20, s * 1.1, 0, 0, 0, 0, Math.PI / 2))), K.dark);
     add(g, mergeG([bx(1.8, 0.05, 0.08, 0, -0.1, (z > 0 ? 1 : -1) * 0.72, 0.6), cy(0.025, 0.025, 1.8, 8, 0, 0.55, (z > 0 ? 1 : -1) * 0.6, 0, 0, Math.PI / 2), ...[-1, 1].map((s) => boltCircle(V(s * 1.065, 0, 0), 0.3, 8, V(s, 0, 0), 0.016))]), K.dark);
     m.wheels.push(spin);
     return g;
   };
   const fd = drum(m.front, 1.35), rd = drum(m.under, -1.75);
   // front frame: water tank, hitch, headlights
-  add(m.front, mergeG([rbox(1.6, 0.85, 0.9, 0.12, 0, 1.68, 1.25), rbox(0.6, 0.5, 0.9, 0.06, 0, 1.05, 0.3), rbox(1.4, 0.12, 0.5, 0.04, 0, 1.12, 0.45)]), K.paint);
-  add(m.front, mergeG([cy(0.12, 0.12, 0.06, 16, 0, 2.13, 1.25), pinX(0.07, 0.75, 0, 1.0, 0.0)]), K.dark);
-  workLight(m.front, K, 0.55, 2.05, 1.72, 0, 0.05); workLight(m.front, K, -0.55, 2.05, 1.72, 0, 0.05);
+  add(m.front, mergeG([prism(roundPoly([[0.5, 1.55, 0], [0.5, 2.18, 0.1], [1.6, 2.15, 0.35], [2.18, 1.8, 0.14], [2.22, 1.55, 0]]), 1.76), rbox(0.6, 0.5, 0.9, 0.06, 0, 1.05, 0.3), rbox(1.4, 0.12, 0.5, 0.04, 0, 1.12, 0.45)]), K.paint);
+  add(m.front, mergeG([cy(0.12, 0.12, 0.06, 16, -0.4, 2.2, 1.1), pinX(0.07, 0.75, 0, 1.0, 0.0), cy(0.06, 0.06, 0.55, 12, 0, 1.0, 0.0), bx(1.5, 0.006, 0.012, 0, 2.0, 1.95, -0.6)]), K.dark);
+  for (const s of [-1, 1]) { add(m.front, rbox(0.3, 0.2, 0.1, 0.04, s * 0.62, 1.82, 2.17, -0.5), K.black); add(m.front, bx(0.24, 0.13, 0.01, s * 0.62, 1.84, 2.225, -0.5), K.lens, false).userData.keep = true; }
   stick(m.front, 'warn', 0.18, 0.4, 1.6, 1.706, 0); stick(m.front, 'crush', 0.24, 0.81, 1.6, 1.2, Math.PI / 2);
   // rear frame: engine bay with grilles, operator platform, rear tank, exhaust
-  add(m.under, mergeG([rbox(1.65, 0.95, 1.6, 0.14, 0, 1.55, -1.55), rbox(0.6, 0.5, 0.9, 0.06, 0, 1.05, 0.1), rbox(2.0, 0.14, 1.6, 0.04, 0, 1.06, -0.25)]), K.paint);
-  grille(m.under, 1.2, 0.5, 0, 1.55, -2.36, Math.PI); grille(m.under, 1.0, 0.45, 0.83, 1.55, -1.6, Math.PI / 2); grille(m.under, 1.0, 0.45, -0.83, 1.55, -1.6, -Math.PI / 2);
-  add(m.under, mergeG([cy(0.06, 0.06, 0.6, 12, 0.55, 2.25, -1.2), cy(0.075, 0.07, 0.06, 12, 0.55, 2.56, -1.2)]), K.black);
+  add(m.under, mergeG([prism(roundPoly([[-0.85, 1.55, 0], [-0.85, 2.3, 0.1], [-2.3, 2.26, 0.4], [-2.72, 1.9, 0.16], [-2.72, 1.55, 0]]), 1.76), rbox(0.6, 0.5, 0.9, 0.06, 0, 1.05, 0.1), rbox(2.0, 0.14, 1.6, 0.04, 0, 1.06, -0.25)]), K.paint);
+  grille(m.under, 1.2, 0.32, 0, 1.75, -2.725, Math.PI, 18); grille(m.under, 1.0, 0.38, 0.881, 1.9, -1.75, Math.PI / 2); grille(m.under, 1.0, 0.38, -0.881, 1.9, -1.75, -Math.PI / 2);
+  add(m.under, mergeG([cy(0.06, 0.06, 0.6, 12, 0.55, 2.5, -1.3), cy(0.075, 0.07, 0.06, 12, 0.55, 2.81, -1.3), bx(0.006, 0.6, 0.012, 0.878, 1.9, -1.1), bx(0.006, 0.6, 0.012, -0.878, 1.9, -1.1)]), K.black);
+  add(m.under, mergeG([-1, 1].map((s) => rbox(0.2, 0.12, 0.05, 0.02, s * 0.62, 1.95, -2.715))), K.red, false);
   add(m.under, mergeG([bx(1.5, 0.04, 0.9, 0, 1.15, -0.3)]), K.tread);
   add(m.under, mergeG([rail([[0.85, 1.15, 0.3], [0.85, 2.05, 0.3]], 0.025), rail([[-0.85, 1.15, 0.3], [-0.85, 2.05, 0.3]], 0.025), ladder(0.95, 0.25, 1.1, 0.0, 0.32, 0.28), ladder(-0.95, 0.25, 1.1, 0.0, 0.32, 0.28)]), m.ctx.M.paintYellow);
   // ROPS canopy and operator station
   const st = new THREE.Group(); st.position.y = 1.12; m.under.add(st);
-  rops(K, st, 1.5, 2.0, 1.3, -1.0, K.black);
+  // two-post ROPS with a canopy roof reaching forward over the seat
+  add(st, mergeG([tubeAB(V(-0.78, 0, -1.0), V(-0.78, 1.95, -1.0), 0.06, 12), tubeAB(V(0.78, 0, -1.0), V(0.78, 1.95, -1.0), 0.06, 12), tubeAB(V(-0.78, 1.95, -1.0), V(0.78, 1.95, -1.0), 0.06, 12), tubeAB(V(-0.78, 1.0, -1.0), V(0.78, 1.0, -1.0), 0.04, 10)]), K.black);
+  add(st, rbox(1.85, 0.11, 1.75, 0.05, 0, 2.03, -0.3), K.paint);
+  for (const sx of [-1, 1]) { workLight(st, K, sx * 0.75, 2.14, 0.5, 0, 0.35, 0.85); workLight(st, K, sx * 0.75, 2.14, -1.1, Math.PI, 0.35, 0.85); }
   seat(K, st, 0, 0.42, -0.45);
   steeringWheel(K, st, 0, 0.9, 0.05);
-  add(st, mergeG([rbox(0.5, 0.75, 0.25, 0.05, 0, 0.38, 0.22), rbox(0.15, 0.14, 0.4, 0.03, 0.35, 0.65, -0.3)]), K.plastic, false);
+  add(st, mergeG([rbox(0.5, 0.75, 0.25, 0.05, 0, 0.38, 0.22), rbox(0.15, 0.14, 0.4, 0.03, 0.35, 0.65, -0.3), rbox(0.6, 0.12, 0.3, 0.04, 0, 0.82, 0.3, -0.4)]), K.plastic, false);
   const scr = add(st, bx(0.26, 0.15, 0.01, 0, 0.72, 0.1, -0.5), new THREE.MeshBasicMaterial({ color: 0x40c070 }), false); scr.userData.keep = true;
-  for (const s of [-1, 1]) { const brand = label(m.spec.brand, 0.9, 0.24, '#15171a'); brand.position.set(s * 0.832, 1.7, -1.4); brand.rotation.y = s * Math.PI / 2; m.under.add(brand); }
-  const model = label(m.spec.model, 0.6, 0.18, '#15171a'); model.position.set(0.81, 1.75, 1.0); model.rotation.y = Math.PI / 2; m.front.add(model);
-  m.beacon = add(m.under, cy(0.05, 0.05, 0.12, 14, 0.6, 2.18, -1.55), K.amber, false); m.beacon.userData.keep = true;
+  for (const s of [-1, 1]) { const brand = label(m.spec.brand, 0.85, 0.22, '#15171a'); brand.position.set(s * 0.882, 1.72, -2.25); brand.rotation.y = s * Math.PI / 2; m.under.add(brand); }
+  const model = label(m.spec.model, 0.6, 0.18, '#15171a'); model.position.set(0.882, 1.85, 1.2); model.rotation.y = Math.PI / 2; m.front.add(model);
+  m.beacon = add(st, cy(0.05, 0.05, 0.12, 14, 0.5, 2.15, -0.9), K.amber, false); m.beacon.userData.keep = true;
   m.seat = anchor(st, 0, 1.35, -0.4);
   m.door = anchor(m.under, 1.1, 0, 0.0);
   m.attach = m.front; m.grabPoint = anchor(m.front, 0, 0.1, 1.35);
@@ -119,22 +200,27 @@ export function buildRoller(m) {
 export function buildPaver(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
   for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 3.0, radius: 0.32, width: 0.4, rollers: 5, rubber: true, frameColor: K.dark, mats: K, side: s }); tu.group.position.set(s * 0.95, 0, 0.2); U.add(tu.group); m.tracks.push(tu); }
-  add(U, mergeG([rbox(2.2, 0.55, 3.6, 0.06, 0, 0.95, 0.2), rbox(2.3, 0.1, 3.6, 0.03, 0, 1.25, 0.2)]), K.paint);
-  // engine hood with grilles and exhaust
-  add(U, mergeG([rbox(2.0, 0.8, 1.2, 0.12, 0, 1.7, -0.2)]), K.paint);
-  grille(U, 1.4, 0.4, 0, 2.11, -0.2, 0).rotation.x = -Math.PI / 2;
-  grille(U, 0.9, 0.5, 1.001, 1.7, -0.2, Math.PI / 2);
-  add(U, mergeG([cy(0.07, 0.07, 0.7, 12, -0.7, 2.4, -0.4), cy(0.08, 0.075, 0.06, 12, -0.7, 2.76, -0.4)]), K.black);
+  // tractor body between sloped track shields, deck, engine hood with grilles and exhaust
+  add(U, mergeG([rbox(2.0, 0.5, 3.4, 0.05, 0, 0.98, 0.15), rbox(2.34, 0.08, 3.4, 0.03, 0, 1.27, 0.1), ...[-1, 1].map((s) => prism(roundPoly([[-1.55, 0.42, 0], [-1.55, 1.28, 0.05], [1.85, 1.28, 0.1], [2.05, 0.78, 0.12], [1.75, 0.42, 0]]), 0.08, s * 1.17, 0.015))]), K.paint);
+  add(U, prism(roundPoly([[-0.8, 1.3, 0], [-0.8, 2.1, 0.1], [0.1, 2.1, 0.32], [0.45, 1.78, 0.15], [0.45, 1.3, 0]]), 2.0), K.paint);
+  grille(U, 1.2, 0.5, 0, 2.106, -0.4, 0).rotation.x = -Math.PI / 2;
+  grille(U, 0.8, 0.45, 1.001, 1.7, -0.3, Math.PI / 2); grille(U, 0.8, 0.45, -1.001, 1.7, -0.3, -Math.PI / 2);
+  add(U, mergeG([cy(0.07, 0.07, 0.7, 12, -0.7, 2.4, -0.45), cy(0.08, 0.075, 0.06, 12, -0.7, 2.76, -0.45), bx(0.006, 0.7, 0.012, 0.998, 1.7, 0.1), bx(0.006, 0.7, 0.012, -0.998, 1.7, 0.1)]), K.black);
+  for (const s of [-1, 1]) { workLight(U, K, s * 1.05, 1.45, 2.0, 0, 0.1, 0.9); add(U, rbox(0.16, 0.1, 0.04, 0.02, s * 1.0, 1.0, -1.58), K.red, false); }
   // operator platform with two seats, consoles and a sun roof
   add(U, mergeG([bx(2.4, 0.05, 1.1, 0, 1.3, -1.25)]), K.tread);
   seat(K, U, 0.6, 1.62, -1.25, Math.PI); seat(K, U, -0.6, 1.62, -1.25, Math.PI);
   add(U, mergeG([rbox(0.5, 0.35, 0.3, 0.05, 0.6, 1.95, -0.85), rbox(0.5, 0.35, 0.3, 0.05, -0.6, 1.95, -0.85)]), K.plastic, false);
-  add(U, mergeG([tubeAB(V(-1.05, 1.3, -1.7), V(-1.05, 3.1, -1.7), 0.04), tubeAB(V(1.05, 1.3, -1.7), V(1.05, 3.1, -1.7), 0.04), tubeAB(V(-1.05, 1.3, -0.8), V(-1.05, 3.1, -0.8), 0.04), tubeAB(V(1.05, 1.3, -0.8), V(1.05, 3.1, -0.8), 0.04)]), K.black);
-  add(U, rbox(2.5, 0.08, 1.4, 0.03, 0, 3.12, -1.25), K.grey);
+  add(U, mergeG([tubeAB(V(-1.05, 1.3, -1.7), V(-1.05, 3.1, -1.7), 0.045), tubeAB(V(1.05, 1.3, -1.7), V(1.05, 3.1, -1.7), 0.045), tubeAB(V(-1.05, 1.3, -0.8), V(-1.05, 3.1, -0.8), 0.045), tubeAB(V(1.05, 1.3, -0.8), V(1.05, 3.1, -0.8), 0.045)]), K.black);
+  add(U, mergeG([rbox(2.6, 0.12, 1.7, 0.06, 0, 3.14, -1.25), rbox(2.4, 0.05, 0.25, 0.02, 0, 3.06, -0.35, 0.3)]), K.paint);
+  add(U, mergeG([rbox(1.3, 0.14, 0.42, 0.04, 0, 1.92, -0.72, -0.25), rbox(0.3, 0.32, 0.3, 0.04, 0, 1.65, -0.75)]), K.plastic, false);
+  const pdsp = add(U, bx(0.22, 0.13, 0.01, 0.3, 2.0, -0.7, -0.6), new THREE.MeshBasicMaterial({ color: 0x3aa0e0 }), false); pdsp.userData.keep = true;
   add(U, rail([[1.2, 2.25, -1.8], [1.2, 2.25, -0.75]], 0.025, 1.3), m.ctx.M.paintYellow); add(U, rail([[-1.2, 2.25, -1.8], [-1.2, 2.25, -0.75]], 0.025, 1.3), m.ctx.M.paintYellow);
   // hopper with folding wings, push rollers, conveyor slats
   const hopper = new THREE.Group(); hopper.position.set(0, 1.0, 1.4); U.add(hopper);
-  add(hopper, mergeG([bx(1.6, 0.06, 1.6, 0, 0, 0.6), bx(1.6, 0.8, 0.06, 0, 0.4, 1.4)]), K.dark);
+  add(hopper, mergeG([bx(1.6, 0.06, 1.6, 0, 0, 0.6)]), K.dark);
+  add(hopper, mergeG([rbox(1.7, 0.5, 0.08, 0.02, 0, 0.25, 1.42), bx(1.7, 0.08, 0.14, 0, 0.5, 1.42)]), K.paint);
+  add(hopper, mergeG([bx(1.5, 0.3, 0.02, 0, 0.32, 1.37)]), K.dark);
   const slats = []; for (let i = 0; i < 8; i++) slats.push(bx(0.5, 0.03, 0.06, 0, 0.04, -0.2 + i * 0.2));
   add(hopper, mergeG(slats), K.steel);
   m.wings = [];
@@ -150,6 +236,9 @@ export function buildPaver(m) {
   add(screed, mergeG([rbox(3.2, 0.5, 0.7, 0.05, 0, 0.0, 0), rbox(3.4, 0.08, 0.4, 0.02, 0, 0.3, -0.45), bx(3.2, 0.06, 0.6, 0, -0.27, 0.0)]), K.paint);
   add(screed, mergeG([bx(3.0, 0.04, 0.4, 0, 0.32, -0.45), ...[-1, 1].map((s) => rbox(0.3, 0.3, 0.2, 0.03, s * 1.3, 0.45, -0.55))]), K.dark);
   add(screed, rail([[-1.6, 1.0, -0.65], [1.6, 1.0, -0.65]], 0.022, 0.32), m.ctx.M.paintYellow);
+  // tow arms reaching forward to the tow points on the tractor, end gates, heating boxes
+  add(screed, mergeG([...[-1, 1].map((s) => tubeAB(V(s * 1.27, 0.15, 0.2), V(s * 1.27, 0.4, 3.0), 0.07, 10)), ...[-1, 1].map((s) => cy(0.08, 0.08, 0.35, 12, s * 1.27, 0.55, 3.0)), ...[-1, 1].map((s) => rbox(0.06, 0.55, 0.95, 0.02, s * 1.63, -0.05, 0.05))]), K.dark);
+  add(screed, mergeG([0, 1, 2, 3].map((i) => rbox(0.6, 0.18, 0.3, 0.03, -1.2 + i * 0.8, 0.33, 0.15))), K.paint);
   const auger = []; for (let i = 0; i < 26; i++) { const t = bx(0.2, 0.03, 0.05, -1.25 + i * 0.1, 0, 0.55); t.rotateX(i * 0.6); auger.push(t.translate(0, 0.0, 0)); }
   add(screed, mergeG([pinX(0.04, 2.8, 0, 0, 0.55), ...auger]), K.steel);
   m.screed = screed;
@@ -182,22 +271,37 @@ export function buildLoader(m) {
     const spin = new THREE.Group(); hub.add(spin);
     add(spin, tg, K.rubber); add(spin, rg, K.grey, false);
     m.wheels.push(spin);
-    add(hub, mergeG([rbox(0.75, 0.08, 1.9, 0.03, 0, 0.95, 0), bx(0.06, 0.4, 1.7, s * 0.36, 0.78, 0)]), K.paint);
   }
   // rear frame: long rounded engine hood, grille, counterweight bumper, exhaust + intake, cab, ladder
   const U = m.under;
-  add(U, mergeG([rbox(1.6, 0.6, 3.4, 0.08, 0, 1.0, -1.6), rbox(1.7, 1.1, 2.3, 0.22, 0, 1.85, -2.05), rbox(2.3, 0.75, 0.55, 0.12, 0, 1.15, -3.5), rbox(1.2, 0.5, 0.9, 0.06, 0, 1.05, -0.2)]), K.paint);
-  grille(U, 1.3, 0.75, 0, 1.85, -3.21, Math.PI);
-  grille(U, 1.4, 0.55, 0.851, 2.0, -2.1, Math.PI / 2); grille(U, 1.4, 0.55, -0.851, 2.0, -2.1, -Math.PI / 2);
-  add(U, mergeG([cy(0.08, 0.08, 0.6, 14, 0.35, 2.65, -1.6), cy(0.095, 0.085, 0.06, 14, 0.35, 2.97, -1.6), cy(0.12, 0.13, 0.35, 16, -0.4, 2.55, -1.3)]), K.black);
-  add(U, mergeG([...[-1, 1].map((s) => rbox(0.18, 0.12, 0.05, 0.02, s * 0.8, 1.3, -3.78)), ...[-1, 1].map((s) => bx(0.14, 0.08, 0.02, s * 0.8, 1.3, -3.8))]), K.red, false);
-  canopyCab(m, U, 0, 1.35, -0.6);
+  // chassis, rear axle with differential, articulation hitch plates and pin
+  add(U, mergeG([rbox(1.25, 0.55, 3.3, 0.05, 0, 0.98, -1.75), rbox(0.95, 0.12, 0.55, 0.03, 0, 0.72, 0.02), rbox(0.95, 0.12, 0.55, 0.03, 0, 1.28, 0.02), pinX(0.17, 1.55, 0, 0.88, -1.85, 18), cy(0.3, 0.3, 0.42, 18, 0, 0.88, -1.85, Math.PI / 2), cy(0.07, 0.07, 0.75, 12, 0, 1.0, 0.1)]), K.dark);
+  // sloping engine hood (rounded rear), counterweight with tail lights, mudguards over the rear tyres
+  add(U, prism(roundPoly([[-1.36, 1.22, 0], [-1.36, 2.32, 0.08], [-2.95, 2.24, 0.4], [-3.36, 1.9, 0.18], [-3.36, 1.22, 0]]), 1.42), K.paint);
+  add(U, prism(roundPoly([[-3.28, 0.68, 0], [-3.28, 1.42, 0], [-3.75, 1.4, 0.12], [-4.0, 1.1, 0.2], [-3.9, 0.78, 0.14], [-3.6, 0.66, 0]]), 2.3, 0, 0.05), K.paint);
+  for (const s of [-1, 1]) add(U, fender(-1.85, 0.88, 1.03, 0.32, 2.85, 0.76, s * 1.05), K.paint);
+  add(U, mergeG([...[-1, 1].map((s) => tubeAB(V(s * 0.62, 1.15, -1.3), V(s * 0.95, 1.5, -1.1), 0.035, 8)), ...[-1, 1].map((s) => tubeAB(V(s * 0.62, 1.15, -2.45), V(s * 0.95, 1.6, -2.7), 0.035, 8)), bx(0.006, 0.8, 0.012, 0.713, 1.75, -1.8), bx(0.006, 0.8, 0.012, -0.713, 1.75, -1.8), bx(0.006, 0.6, 0.012, 0.713, 1.65, -3.1), bx(0.006, 0.6, 0.012, -0.713, 1.65, -3.1)]), K.black);
+  grille(U, 1.05, 0.3, 0, 1.63, -3.375, Math.PI, 18);
+  grille(U, 1.0, 0.42, 0.716, 1.9, -2.6, Math.PI / 2); grille(U, 1.0, 0.42, -0.716, 1.9, -2.6, -Math.PI / 2);
+  add(U, mergeG([...[-1, 1].map((s) => rbox(0.22, 0.13, 0.06, 0.02, s * 0.82, 1.18, -3.97, 0.35)), ...[-1, 1].map((s) => rbox(0.2, 0.06, 0.05, 0.02, s * 0.32, 1.32, -3.82, 0.4))]), K.red, false);
+  add(U, mergeG([...[-1, 1].map((s) => rbox(0.1, 0.13, 0.06, 0.02, s * 1.0, 1.18, -3.94, 0.35))]), K.amber, false);
+  add(U, mergeG([cy(0.04, 0.04, 0.3, 10, 0, 0.82, -4.02, Math.PI / 2), rbox(0.3, 0.16, 0.12, 0.03, 0, 0.82, -3.98)]), K.dark);
+  // exhaust stack with rain cap, air pre-cleaner, hood handrails
+  add(U, mergeG([cy(0.075, 0.075, 0.62, 14, 0.32, 2.55, -2.25), cy(0.09, 0.085, 0.05, 14, 0.32, 2.86, -2.25), cy(0.13, 0.13, 0.26, 16, -0.32, 2.42, -1.75), new THREE.SphereGeometry(0.135, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).translate(-0.32, 2.55, -1.75)]), K.black);
+  add(U, mergeG([rail([[0.6, 2.62, -1.5], [0.6, 2.6, -2.85]], 0.02, 2.26), rail([[-0.6, 2.62, -1.5], [-0.6, 2.6, -2.85]], 0.02, 2.26)]), m.ctx.M.paintYellow);
+  modernCab(m, U, 0, 1.3, -0.55, { w: 1.5, d: 1.62, h: 1.96, door: 1 });
   add(U, ladder(0.95, 0.3, 1.35, -0.35, 0.36, 0.27, -0.25), m.ctx.M.paintYellow);
-  add(U, rail([[0.95, 2.2, -0.2], [0.95, 2.2, -1.3]], 0.022, 1.4), m.ctx.M.paintYellow);
-  for (const s of [-1, 1]) { const b = label(m.spec.brand, 1.2, 0.32, '#15171a'); b.position.set(s * 0.852, 1.6, -2.6); b.rotation.y = s * Math.PI / 2; U.add(b); stick(U, 'crush', 0.22, s * 0.81, 1.1, -1.0, s * Math.PI / 2); }
+  for (const s of [-1, 1]) { const b = label(m.spec.brand, 1.15, 0.3, '#15171a'); b.position.set(s * 0.716, 1.46, -2.45); b.rotation.y = s * Math.PI / 2; U.add(b); stick(U, 'crush', 0.2, s * 0.632, 0.98, -0.75, s * Math.PI / 2); }
   // front frame + lift arms (Z-bar linkage) + bucket
   const F = m.front;
-  add(F, mergeG([rbox(1.2, 0.7, 2.2, 0.06, 0, 1.0, 1.4), rbox(1.6, 0.25, 0.6, 0.05, 0, 0.75, 1.35), pinX(0.12, 1.5, 0, 1.75, 0.65, 18)]), K.paint);
+  // front frame: loader tower carrying the arm pivots, front axle, hitch plates, mudguards with lamps
+  add(F, mergeG([prism(roundPoly([[-0.1, 0.62, 0], [-0.1, 1.3, 0], [0.32, 2.0, 0.12], [0.98, 2.0, 0.12], [1.35, 1.25, 0.1], [2.45, 1.12, 0.06], [2.45, 0.62, 0]]), 1.05), pinX(0.12, 1.5, 0, 1.75, 0.65, 18)]), K.paint);
+  add(F, mergeG([rbox(1.5, 0.22, 0.55, 0.04, 0, 0.72, 1.35), pinX(0.17, 1.55, 0, 0.88, 1.35, 18), cy(0.3, 0.3, 0.42, 18, 0, 0.88, 1.35, Math.PI / 2), rbox(0.95, 0.12, 0.5, 0.03, 0, 1.0, -0.12)]), K.dark);
+  for (const s of [-1, 1]) {
+    add(F, fender(1.35, 0.88, 1.0, 0.75, 2.45, 0.72, s * 1.05), K.paint);
+    add(F, tubeAB(V(s * 0.52, 1.15, 1.2), V(s * 0.85, 1.7, 1.25), 0.035, 8), K.black);
+    workLight(F, K, s * 1.05, 1.98, 1.62, 0, 0.12, 0.9);
+  }
   m.armG = new THREE.Group(); m.armG.position.set(0, 1.75, 0.65); F.add(m.armG);
   const armL = 3.0;
   for (const s of [-1, 1]) add(m.armG, mergeG([sidePlate([[0, -0.15], [1.2, -0.25], [armL, -0.12], [armL, 0.12], [1.2, 0.18], [0, 0.18]], 0.12, s * 0.62 - 0.06, 0.01), pinX(0.1, 0.18, s * 0.62, 0, armL)]), K.paint);
@@ -212,7 +316,8 @@ export function buildLoader(m) {
   const g = [shell(back, 0.04, W)];
   for (const s of [-1, 1]) g.push(sidePlate([...back, [1.15, -0.45], [0.2, 0.95]], 0.035, s * W / 2 - (s > 0 ? 0.035 : 0)));
   add(bucket, mergeG(g), K.paint);
-  add(bucket, mergeG([bx(W + 0.04, 0.05, 0.25, 0, -0.47, 1.12, 0.05), bx(W, 0.06, 0.08, 0, 0.88, -0.22), bx(0.12, 0.6, 0.22, 0.42, 0.42, -0.5), bx(0.12, 0.6, 0.22, -0.42, 0.42, -0.5), boltRow(V(-W / 2 + 0.1, -0.44, 1.05), V(W / 2 - 0.1, -0.44, 1.05), 14, V(0, 1, 0), 0.013, 0.01)]), K.dark);
+  add(bucket, mergeG([bx(W + 0.04, 0.05, 0.25, 0, -0.47, 1.12, 0.05), bx(W, 0.06, 0.08, 0, 0.88, -0.22), bx(0.12, 0.6, 0.22, 0.42, 0.42, -0.5), bx(0.12, 0.6, 0.22, -0.42, 0.42, -0.5), boltRow(V(-W / 2 + 0.1, -0.44, 1.05), V(W / 2 - 0.1, -0.44, 1.05), 14, V(0, 1, 0), 0.013, 0.01),
+    ...Array.from({ length: 9 }, (_, i) => tooth(-W / 2 + 0.22 + i * (W - 0.44) / 8, -0.46, 1.22)).flat()]), K.dark);
   bucket.position.set(0, 0.3, -0.05);
   m.att = { group: bucket, kind: 'loader', jaws: [], probes: [{ obj: anchor(bucket, 0, -0.45, 1.1), r: 0.45 }, { obj: anchor(bucket, 1.2, -0.4, 1.0), r: 0.35 }, { obj: anchor(bucket, -1.2, -0.4, 1.0), r: 0.35 }],
     colliders: [{ obj: m.attach, boxes: [[0, -0.22, 0.45, W, 0.1, 1.3], [0, 0.25, -0.3, W, 1.2, 0.12], [-W / 2, 0.15, 0.3, 0.08, 1.0, 1.3], [W / 2, 0.15, 0.3, 0.08, 1.0, 1.3]] }],
@@ -246,16 +351,27 @@ export function buildLoader(m) {
 export function buildDozer(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
   for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 4.0, radius: 0.48, width: 0.62, rollers: 7, frameColor: K.under, mats: K, side: s }); tu.group.position.x = s * 1.25; U.add(tu.group); m.tracks.push(tu); }
-  add(U, mergeG([rbox(1.9, 0.6, 3.6, 0.08, 0, 1.15, -0.1), rbox(1.7, 0.95, 1.9, 0.16, 0, 1.9, 0.75), rbox(2.0, 0.1, 3.4, 0.03, 0, 1.47, -0.2), rbox(1.6, 0.7, 0.9, 0.08, 0, 1.75, -1.55)]), K.paint);
-  grille(U, 1.3, 0.75, 0, 1.95, 1.71, 0);
-  grille(U, 1.3, 0.45, 0.851, 2.05, 0.75, Math.PI / 2); grille(U, 1.3, 0.45, -0.851, 2.05, 0.75, -Math.PI / 2);
-  add(U, mergeG([cy(0.08, 0.08, 0.75, 14, 0.4, 2.7, 0.9), cy(0.095, 0.085, 0.06, 14, 0.4, 3.08, 0.9), cy(0.13, 0.14, 0.35, 16, -0.4, 2.55, 1.0)]), K.black);
-  canopyCab(m, U, 0, 1.5, -0.5);
-  add(U, rail([[1.0, 2.6, 0.0], [1.0, 2.6, 1.6]], 0.022, 1.52), m.ctx.M.paintYellow); add(U, rail([[-1.0, 2.6, 0.0], [-1.0, 2.6, 1.6]], 0.022, 1.52), m.ctx.M.paintYellow);
-  for (const s of [-1, 1]) { const b = label(m.spec.brand, 1.1, 0.3, '#15171a'); b.position.set(s * 0.852, 2.0, 1.1); b.rotation.y = s * Math.PI / 2; U.add(b); stick(U, 'warn', 0.18, s * 0.952, 1.2, -1.2, s * Math.PI / 2); }
+  // main frame, track fenders with lamps, sloping engine hood, radiator guard, front pull hook
+  add(U, mergeG([rbox(1.6, 0.5, 3.9, 0.05, 0, 0.98, -0.05), rbox(1.75, 0.3, 0.3, 0.04, 0, 0.95, 1.98), cy(0.05, 0.05, 0.3, 10, 0, 0.95, 2.16, 0, 0, Math.PI / 2)]), K.dark);
+  for (const s of [-1, 1]) { add(U, rbox(0.76, 0.07, 3.35, 0.02, s * 1.25, 1.24, -0.15), K.paint); workLight(U, K, s * 1.12, 1.42, 1.5, 0, 0.1, 0.9); }
+  add(U, prism(roundPoly([[0.24, 1.24, 0], [0.24, 2.3, 0.06], [1.3, 2.2, 0.3], [1.8, 1.9, 0.14], [1.84, 1.24, 0]]), 1.5), K.paint);
+  grille(U, 1.18, 0.56, 0, 1.58, 1.855, 0, 16);
+  add(U, mergeG([bx(1.45, 0.07, 0.08, 0, 1.92, 1.9), bx(1.45, 0.07, 0.08, 0, 1.27, 1.9), bx(0.07, 0.7, 0.08, 0.66, 1.6, 1.9), bx(0.07, 0.7, 0.08, -0.66, 1.6, 1.9), bx(0.05, 0.6, 0.05, 0.22, 1.6, 1.92), bx(0.05, 0.6, 0.05, -0.22, 1.6, 1.92),
+    ...[-1, 1].map((s) => rbox(0.2, 0.34, 0.38, 0.03, s * 0.84, 1.9, 1.6))]), K.dark);
+  grille(U, 0.95, 0.45, 0.756, 1.72, 0.95, Math.PI / 2); grille(U, 0.95, 0.45, -0.756, 1.72, 0.95, -Math.PI / 2);
+  add(U, mergeG([bx(0.006, 0.8, 0.012, 0.753, 1.7, 0.4), bx(0.006, 0.8, 0.012, -0.753, 1.7, 0.4), bx(1.3, 0.006, 0.012, 0, 2.3, 0.6)]), K.black);
+  add(U, mergeG([cy(0.08, 0.08, 0.75, 14, 0.38, 2.62, 1.0), cy(0.095, 0.09, 0.05, 14, 0.38, 3.0, 1.0), cy(0.13, 0.13, 0.28, 16, -0.38, 2.4, 0.8), new THREE.SphereGeometry(0.135, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2).translate(-0.38, 2.54, 0.8)]), K.black);
+  // rear fuel tank with filler cap, tail lights, rear work lights and rail
+  add(U, prism(roundPoly([[-1.34, 1.24, 0], [-1.34, 1.98, 0.05], [-1.82, 1.95, 0.14], [-2.02, 1.6, 0.1], [-2.02, 1.24, 0]]), 1.7), K.paint);
+  add(U, mergeG([cy(0.07, 0.07, 0.08, 14, 0.55, 2.0, -1.6)]), K.black);
+  add(U, mergeG([-1, 1].map((s) => rbox(0.2, 0.12, 0.05, 0.02, s * 0.7, 1.72, -2.03))), K.red, false);
+  for (const s of [-1, 1]) workLight(U, K, s * 0.62, 2.1, -1.9, Math.PI, 0.35, 0.9);
+  add(U, rail([[0.82, 2.3, -1.4], [0.82, 2.3, -1.85], [-0.82, 2.3, -1.85], [-0.82, 2.3, -1.4]], 0.02, 1.96), m.ctx.M.paintYellow);
+  modernCab(m, U, 0, 1.25, -0.55, { w: 1.56, d: 1.58, h: 1.98, door: 1 });
+  for (const s of [-1, 1]) { const b = label(m.spec.brand, 1.0, 0.27, '#15171a'); b.position.set(s * 0.757, 2.02, 1.0); b.rotation.y = s * Math.PI / 2; U.add(b); stick(U, 'warn', 0.16, s * 0.757, 1.38, 1.55, s * Math.PI / 2); }
   // blade on push arms, pivoting at the track frames
   m.armG = new THREE.Group(); m.armG.position.set(0, 0.75, -0.3); U.add(m.armG);
-  for (const s of [-1, 1]) add(m.armG, mergeG([rbox(0.16, 0.28, 3.0, 0.03, s * 1.62, 0, 1.5), pinX(0.1, 0.25, s * 1.62, 0, 0)]), K.paint);
+  for (const s of [-1, 1]) add(m.armG, mergeG([prism(roundPoly([[-0.12, -0.14, 0.08], [-0.12, 0.16, 0.08], [1.4, 0.2, 0], [3.0, 0.14, 0], [3.0, -0.14, 0], [1.4, -0.2, 0]]), 0.17, s * 1.62, 0.02), rbox(0.24, 0.04, 2.6, 0.01, s * 1.62, 0.2, 1.6), pinX(0.1, 0.25, s * 1.62, 0, 0)]), K.paint);
   m.attach = new THREE.Group(); m.attach.position.set(0, 0, 3.05); m.armG.add(m.attach);
   const bladeW = 4.0;
   const prof = curvePts([[0.2, -0.45], [-0.05, 0.1], [0.05, 0.75], [0.35, 1.1]], 14);
@@ -264,7 +380,8 @@ export function buildDozer(m) {
   add(m.attach, bg, K.paint);
   const ribs = []; for (let i = 0; i < 7; i++) ribs.push(bx(0.06, 1.2, 0.25, -bladeW / 2 + 0.25 + i * (bladeW - 0.5) / 6, 0.3, -0.12));
   add(m.attach, mergeG([...ribs, bx(bladeW, 0.12, 0.3, 0, 0.95, -0.05)]), K.paint);
-  add(m.attach, mergeG([bx(bladeW + 0.05, 0.06, 0.12, 0, -0.45, 0.22, 0.3), bx(0.12, 0.6, 0.35, -bladeW / 2, -0.15, 0.1), bx(0.12, 0.6, 0.35, bladeW / 2, -0.15, 0.1), boltRow(V(-bladeW / 2 + 0.2, -0.4, 0.29), V(bladeW / 2 - 0.2, -0.4, 0.29), 18, V(0, 0.3, 1), 0.014, 0.01)]), K.dark);
+  add(m.attach, mergeG([bx(bladeW + 0.05, 0.06, 0.12, 0, -0.45, 0.22, 0.3), bx(0.12, 0.6, 0.35, -bladeW / 2, -0.15, 0.1), bx(0.12, 0.6, 0.35, bladeW / 2, -0.15, 0.1), boltRow(V(-bladeW / 2 + 0.2, -0.4, 0.29), V(bladeW / 2 - 0.2, -0.4, 0.29), 18, V(0, 0.3, 1), 0.014, 0.01),
+    ...[-1, 1].map((s) => tubeAB(V(s * 1.62, 0.03, -0.42), V(s * 1.22, 0.82, -0.17), 0.05, 10)), ...[-1, 1].map((s) => pinX(0.12, 0.24, s * 1.62, 0, -0.05, 16)), ...[-1, 1].map((s) => rbox(0.2, 0.3, 0.2, 0.03, s * 0.85, 0.7, -0.12))]), K.dark);
   // ripper at the back
   m.ripper = new THREE.Group(); m.ripper.position.set(0, 1.1, -2.1); U.add(m.ripper);
   add(m.ripper, mergeG([rbox(2.0, 0.25, 0.3, 0.04, 0, 0, -0.5), ...[-0.7, 0, 0.7].map((x) => rbox(0.12, 1.2, 0.18, 0.02, x, -0.6, -0.55, -0.2)), ...[-0.7, 0, 0.7].map((x) => { const c = new THREE.ConeGeometry(0.07, 0.25, 4); c.rotateX(Math.PI + 0.4); return c.translate(x, -1.25, -0.4); })]), K.dark);
@@ -289,15 +406,18 @@ export function buildDozer(m) {
 export function buildDumper(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U;
   for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 3.0, radius: 0.32, width: 0.45, rollers: 5, rubber: true, frameColor: K.dark, mats: K, side: s }); tu.group.position.x = s * 0.82; U.add(tu.group); m.tracks.push(tu); }
-  add(U, mergeG([rbox(1.3, 0.45, 2.8, 0.06, 0, 0.85, 0), rbox(1.6, 0.85, 0.9, 0.12, 0, 1.45, 1.15)]), K.paint);
-  grille(U, 1.1, 0.4, 0, 1.5, 1.601, 0);
+  add(U, mergeG([rbox(1.3, 0.45, 2.8, 0.06, 0, 0.85, 0), prism(roundPoly([[0.68, 1.05, 0], [0.68, 1.86, 0.06], [1.4, 1.86, 0.18], [1.64, 1.58, 0.1], [1.64, 1.05, 0]]), 1.56)]), K.paint);
+  add(U, mergeG([-1, 1].map((s) => rbox(0.56, 0.05, 3.1, 0.02, s * 0.82, 0.86, 0))), K.dark);
+  grille(U, 1.1, 0.36, 0, 1.3, 1.646, 0);
+  for (const s of [-1, 1]) { add(U, rbox(0.24, 0.16, 0.06, 0.04, s * 0.58, 1.6, 1.62), K.black); add(U, bx(0.18, 0.11, 0.01, s * 0.58, 1.6, 1.655), K.lens, false).userData.keep = true; }
   add(U, mergeG([cy(0.06, 0.06, 0.5, 12, 0.55, 2.05, 1.3), cy(0.07, 0.065, 0.05, 12, 0.55, 2.31, 1.3)]), K.black);
   add(U, mergeG([cy(0.55, 0.58, 0.12, 36, 0, 1.12, -0.35), boltCircle(V(0, 1.18, -0.35), 0.5, 16, V(0, 1, 0), 0.014)]), K.dark);
   // operator seat at the front with ROPS
   const st = new THREE.Group(); st.position.set(0, 1.9, 1.15); U.add(st);
   seat(K, st, 0, 0.2, -0.05, 0);
   add(st, mergeG([rbox(0.4, 0.4, 0.2, 0.04, 0, 0.3, 0.4)]), K.plastic, false);
-  rops(K, U, 1.3, 3.2, 0.8, 0.75, K.paint);
+  const rg = new THREE.Group(); rg.position.y = 1.05; U.add(rg);
+  rops(K, rg, 1.36, 2.2, 0.85, 0.72, K.paint);
   m.seat = anchor(st, 0, 1.15, 0); m.door = anchor(U, 1.0, 0, 1.0);
   m.beacon = add(U, cy(0.05, 0.05, 0.12, 14, 0.55, 3.32, 0.85), K.amber, false); m.beacon.userData.keep = true;
   for (const s of [-1, 1]) { const b = label(m.spec.brand, 0.8, 0.22, '#15171a'); b.position.set(s * 0.802, 1.5, 1.1); b.rotation.y = s * Math.PI / 2; U.add(b); }
@@ -309,7 +429,8 @@ export function buildDumper(m) {
   const bed = new THREE.Group(); bed.position.set(0, 0, 0.75); bed.rotation.y = Math.PI; m.attach.add(bed);
   const prof = [[-0.9, 0.0], [0.75, 0.0], [1.15, 0.85], [-0.95, 0.85]];
   add(bed, mergeG([sidePlate(prof, 0.05, -0.95), sidePlate(prof, 0.05, 0.9), bx(1.9, 0.06, 1.7, 0, 0.03, -0.08), bx(1.9, 0.9, 0.06, 0, 0.45, -0.95), bx(1.9, 0.05, 0.6, 0, 0.42, 0.95, -1.13)]), K.paint);
-  add(bed, mergeG([...[-0.6, 0, 0.6].map((x) => bx(0.05, 0.08, 1.7, x, -0.03, -0.08)), bx(2.0, 0.06, 0.06, 0, 0.87, -0.95)]), K.dark);
+  add(bed, mergeG([...[-0.6, 0, 0.6].map((x) => bx(0.05, 0.08, 1.7, x, -0.03, -0.08)), bx(2.0, 0.06, 0.06, 0, 0.87, -0.95),
+    ...[-1, 1].flatMap((s) => [-0.5, 0.1, 0.6].map((z) => bx(0.04, 0.8, 0.07, s * 0.985, 0.42, z))), ...[-1, 1].map((s) => tubeAB(V(s * 0.98, 0.86, -0.95), V(s * 0.98, 0.86, 0.75), 0.03, 8))]), K.dark);
   stick(bed, 'warn', 0.2, 0.0, 0.5, -0.985, Math.PI);
   cylinder(m, anchor(m.upper, 0, 0.08, -0.25), anchor(bed, 0, -0.02, -0.55), 0.08, 0.05);
   m.att = attStub('bed', { group: bed, grab: anchor(bed, 0, 0.4, 0) });
@@ -330,7 +451,9 @@ export function buildCrane(m) {
   add(U0, mergeG([rbox(2.8, 0.55, 2.2, 0.06, 0, 0.8, 0), cy(1.1, 1.15, 0.16, 48, 0, 1.12, 0), boltCircle(V(0, 1.2, 0), 1.0, 30, V(0, 1, 0), 0.016)]), K.under);
   m.upper = new THREE.Group(); m.upper.position.y = 1.2; m.model.add(m.upper);
   const U = m.upper;
-  add(U, mergeG([rbox(2.9, 0.25, 4.6, 0.04, 0, 0.12, -0.6), rbox(2.6, 1.6, 2.8, 0.12, 0, 1.05, -1.2)]), K.paint);
+  add(U, mergeG([rbox(2.9, 0.25, 4.6, 0.04, 0, 0.12, -0.6), prism(roundPoly([[0.22, 0.25, 0], [0.22, 1.72, 0.08], [-1.7, 1.9, 0.15], [-2.6, 1.76, 0.12], [-2.6, 0.25, 0]]), 2.6)]), K.paint);
+  add(U, mergeG([rail([[1.25, 2.4, 0.1], [1.25, 2.55, -2.4]], 0.02, 1.82), rail([[-1.25, 2.4, 0.1], [-1.25, 2.55, -2.4]], 0.02, 1.82), ladder(-1.42, 0.3, 1.85, -0.5, 0.36, 0.28)]), m.ctx.M.paintYellow);
+  add(U, mergeG([bx(0.006, 1.2, 0.012, 1.302, 1.0, -0.3), bx(0.006, 1.2, 0.012, -1.302, 1.0, -0.3), bx(0.006, 1.2, 0.012, 1.302, 1.0, -2.45), bx(0.006, 1.2, 0.012, -1.302, 1.0, -2.45)]), K.black);
   grille(U, 1.8, 0.8, 1.302, 1.2, -1.4, Math.PI / 2); grille(U, 1.8, 0.8, -1.302, 1.2, -1.4, -Math.PI / 2);
   // stacked counterweight slabs
   const cwp = []; for (let i = 0; i < 5; i++) cwp.push(rbox(2.7, 0.32, 1.0, 0.04, 0, 0.35 + i * 0.34, -3.05));
@@ -340,15 +463,9 @@ export function buildCrane(m) {
   // gantry A-frame, winch drums, cab
   add(U, mergeG([tubeAB(V(-0.9, 1.85, -1.8), V(0, 4.2, -1.2), 0.07), tubeAB(V(0.9, 1.85, -1.8), V(0, 4.2, -1.2), 0.07), tubeAB(V(-0.9, 1.85, -0.4), V(0, 4.2, -1.2), 0.07), tubeAB(V(0.9, 1.85, -0.4), V(0, 4.2, -1.2), 0.07), pinX(0.12, 0.6, 0, 4.2, -1.2)]), K.paint);
   add(U, mergeG([cy(0.35, 0.35, 1.4, 24, 0, 1.95, -0.2, 0, 0, Math.PI / 2), cy(0.42, 0.42, 0.06, 24, 0.72, 1.95, -0.2, 0, 0, Math.PI / 2), cy(0.42, 0.42, 0.06, 24, -0.72, 1.95, -0.2, 0, 0, Math.PI / 2)]), K.dark);
-  const cab = new THREE.Group(); cab.position.set(1.0, 0.25, 1.0); U.add(cab);
+  const cab = modernCab(m, U, 1.0, 0.25, 1.0, { w: 1.0, d: 1.7, h: 1.95, door: 1, wheel: false });
   m.cab = cab;
-  add(cab, mergeG([rbox(1.0, 1.9, 1.7, 0.06, 0, 0.95, 0)]), K.black);
-  const gl = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.2), K.glass); gl.position.set(0, 1.2, 0.86); cab.add(exteriorOnly(gl));
-  const gl2 = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.3), K.glass); gl2.position.set(0.51, 1.15, 0); gl2.rotation.y = Math.PI / 2; cab.add(exteriorOnly(gl2));
-  seat(K, cab, 0, 0.5, -0.1);
-  m.seat = anchor(cab, 0, 1.45, 0.0); m.door = anchor(cab, 0.8, -0.25, 0);
-  add(cab, rbox(1.1, 0.08, 1.8, 0.03, 0, 1.94, 0), K.paint);
-  workLight(cab, K, 0.3, 2.05, 0.85, 0, 0.3); workLight(cab, K, -0.3, 2.05, 0.85, 0, 0.3);
+  m.door = anchor(cab, 0.8, -0.25, 0);
   m.beacon = add(U, cy(0.06, 0.06, 0.14, 14, -1.0, 1.95, -2.4), K.amber, false); m.beacon.userData.keep = true;
   for (const s of [-1, 1]) { const b = label(m.spec.brand, 1.6, 0.42, '#15171a'); b.position.set(s * 1.302, 1.3, -2.25); b.rotation.y = s * Math.PI / 2; U.add(b); }
   // lattice boom: 4 tapered chords + lacing + tip sheaves

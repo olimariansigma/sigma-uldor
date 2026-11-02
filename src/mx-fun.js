@@ -207,6 +207,7 @@ export function funExtras(m) {
 
 // the chain shortens / lengthens with the tool button
 export function stepXBall(m, dt, groundAt) {
+  m.att.hook.updateWorldMatrix(true, false);
   const hook = m.att.hook.getWorldPosition(new THREE.Vector3());
   const L = (m.openTarget > 0.5 ? 3.0 : 1.4) * m.s;
   m.chainL = m.chainL == null ? L : m.chainL + Math.sign(L - m.chainL) * Math.min(Math.abs(L - m.chainL), dt * 1.5);

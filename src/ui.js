@@ -247,8 +247,9 @@ export class UI {
     tb.classList.toggle('empty', !(kg > 0));
     $('trowelAmt').textContent = kg > 0 ? fmtKg(kg) : 'empty';
     $('trowelSw').style.background = kg > 0 ? hex(me.cement.color) : 'transparent';
+    if (g.charges) { const left = 8 - g.charges.mine(g.myId).length; $('chargeAmt').textContent = `${left} left`; }
     const big = document.querySelector('#tbtns-foot [data-act="hammer"]');
-    if (big) { const want = g.tool === 'trowel' ? 'trowel' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${want === 'trowel' ? 'LAY' : 'SMASH'}</small>`; } }
+    if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH' }[want]}</small>`; } }
     if (g.player && g.player.avatar) g.player.avatar.setTool(g.tool, me && me.cement.kg > 0 ? me.cement.color : null);
   }
 
@@ -335,6 +336,7 @@ export class UI {
       $('tbtns-rot').classList.toggle('hidden', mode !== 'machine' || !(machine && controlsFor(machine).rot));
       $('stickR').classList.toggle('hidden', mode !== 'machine' || $('stickR').classList.contains('nostick'));
       $('tbCam').classList.toggle('hidden', mode !== 'machine');
+      $('tbHorn').classList.toggle('hidden', mode !== 'machine');
       $('stickLLabel').textContent = mode === 'machine' ? 'DRIVE' : 'MOVE';
     }
   }

@@ -170,7 +170,7 @@ export class Avatar {
     if (!st.grounded) { L.rotation.x = -0.4; R.rotation.x = 0.3; }
     this.torso.position.y = 0.62 + Math.abs(Math.cos(this.phase)) * 0.03 * amp;
     this.torso.rotation.x = 0;
-    this.hammer.visible = !st.carrying && this.tool !== 'trowel';
+    this.hammer.visible = !st.carrying && this.tool === 'hammer';
     this.trowel.visible = !st.carrying && this.tool === 'trowel';
     this.trowel.rotation.x = st.swingT >= 0 ? -0.6 : -0.2;
     if (st.carrying) {

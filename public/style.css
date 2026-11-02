@@ -315,3 +315,8 @@ body.touch #bucketHud { left: 50%; bottom: 60px; }
 body.touch #carry { bottom: 20px; }
 body.touch #prompt { bottom: 90px; }
 body.panel-open #hotbar { visibility: hidden; }
+
+/* machine horn (touch) and photo mode */
+.tb-horn { position: absolute; right: calc(16px + env(safe-area-inset-right)); top: 132px; width: 52px; height: 52px; }
+.tb-horn .ic { width: 24px; height: 24px; }
+body.photo #hud { visibility: hidden; }

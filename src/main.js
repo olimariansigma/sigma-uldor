@@ -6,6 +6,7 @@ import { materials } from './materials.js';
 import { TypeRegistry } from './pieces.js';
 import { buildWorld } from './world.js';
 import { DayNight, CYCLES, MORNING } from './daynight.js';
+import { Charges, celebrate, MAX_CHARGES } from './fun.js';
 import { encodeFloats, decodeFloats, encodeSnapshot, decodeSnapshot, kindOf, PLAYER_F, MACHINE_F } from './netcodec.js';
 import { SITE, inWater, lakeDist, terrainHeight } from './site.js';
 import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE , RUBBLE } from './demolition.js';
@@ -107,6 +108,7 @@ class Game {
     this.slabGhost.visible = false; this.slabGhost.renderOrder = 3; this.scene.add(this.slabGhost);
     this.tool = 'hammer';
     this.machines = new Map(); this.nextMachineId = 1;
+    this.horns = new Set();
     this.plots = SITE.plots.map(() => null); this.buildingStatics = new Map(); this.groundHandles = new Set();
     this.settings = { hammer: this.prefs.hammer, carry: this.prefs.carry, crusher: 3, grapple: 1 };
     this.net = new Net(); this.setupNet();
@@ -115,6 +117,7 @@ class Game {
     this.bucket = { kind: null, kg: 0, color: new THREE.Color(0.5, 0.5, 0.5) };
     this.events = [];
     this.player = new Player(this, SITE.playerSpawn, SHIRTS[0]);
+    this.charges = new Charges(this);
     this.player.avatar.setHammer(this.settings.hammer);
     this.addPlayerEntry(0, this.myName, SHIRTS[0], true);
     progress(0.7, 'Building the houses…');
@@ -261,6 +264,41 @@ class Game {
     }
   }
 
+  // ======================================================================= fun: blasts, horns, celebrations
+  boomFx(ctr) {
+    const near = this.demo.piecesInSphere(ctr, 3, [0, 1]);
+    const col = near.length ? this.demo.dustColor(near[0]) : 0x8a8278;
+    this.fx.explosion(ctr, col);
+    this.audio.explosion(ctr);
+    // the blast wave shoves you about and shakes the camera
+    const me = this.player.pos, d = me.clone().sub(ctr), dist = d.length();
+    if (dist < 14) this.player.shake = Math.max(this.player.shake || 0, 0.6 * (1 - dist / 14));
+    if (this.mode === 'foot' && dist < 6) { d.y = 0.6; d.normalize(); this.player.vel.addScaledVector(d, (6 - dist) * 1.6); }
+  }
+  hornPitch(m) { return THREE.MathUtils.clamp(1.3 - (m.spec.tons || 20) / 90, 0.82, 1.28); }
+  setHorn(id, on) {
+    const m = this.machines.get(id);
+    if (on && m) { this.horns.add(id); this.audio.horn(id, m.pos, true, this.hornPitch(m)); }
+    else { this.horns.delete(id); this.audio.horn(id, m ? m.pos : null, false); }
+  }
+  // fireworks when a building is down to its last few blocks (the host notices and tells everyone)
+  checkCleared() {
+    for (const b of this.demo.buildings) {
+      if (b.removed || b.pool || b.plot < 0) continue;
+      let intact = 0;
+      for (let i = b.start; i < b.start + b.count; i++) if (this.demo.pieces[i].state === 0) intact++;
+      const done = intact / b.count < 0.04;
+      if (b.cleared === undefined) { b.cleared = done; continue; }   // already flat when loaded: no party
+      if (done && !b.cleared) { b.cleared = true; this.events.push(['party', b.id]); this.party(b.id); }
+      else if (!done) b.cleared = false;
+    }
+  }
+  party(bid) {
+    const b = this.demo.buildings[bid]; if (!b || b.plot < 0) return;
+    const def = BUILDINGS.find((x) => x.id === b.def);
+    celebrate(this, SITE.plots[b.plot], `${def ? def.name : 'The building'} on plot ${SITE.plotNames[b.plot]}`);
+  }
+
   // ======================================================================= helpers
   get authority() { return !this.net.isClient; }
   inWater(x, y, z) { return inWater(x, y, z); }
@@ -394,6 +432,7 @@ class Game {
     for (const bid of [...this.buildingStatics.keys()]) { const st = this.buildingStatics.get(bid); this.scene.remove(st.group); this.physics.world.removeRigidBody(st.body); }
     this.buildingStatics.clear(); this.groundHandles.clear();
     this.demo.clearAll();
+    if (this.charges) this.charges.clear();
     this.plots = SITE.plots.map(() => null);
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
     this.intake.restore(null);
@@ -417,6 +456,7 @@ class Game {
       players: forSave ? [] : [...this.players.values()].map((p) => ({ id: p.id, name: p.name, shirt: p.shirt, driving: p.driving, bucket: [p.bucket.kind, p.bucket.kg, p.bucket.color.r, p.bucket.color.g, p.bucket.color.b], cement: [p.cement.kg, p.cement.color.r, p.cement.color.g, p.cement.color.b] })),
       nextMachineId: this.nextMachineId,
       time: Math.round(this.dn.p * 1e4) / 1e4, cycle: this.dayCycle(),
+      charges: forSave ? [] : this.charges.pack(),
     };
   }
 
@@ -450,7 +490,7 @@ class Game {
     if (w.settings) Object.assign(this.settings, w.settings);
     this.crusher.rate = this.settings.crusher;
     if (typeof w.time === 'number') this.dn.p = w.time;
-    if (mirror) this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0;
+    if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); }
     this.dn.apply();
   }
 
@@ -529,9 +569,31 @@ class Game {
         if (pid === this.myId) this.enterLocal(m);
         break;
       }
+      case 'charge': {
+        // within reach of where the player says they stand, and that has to be close to where we last saw them
+        const seen = pid === this.myId ? this.player.pos : pl && (pl.target || pl.pos);
+        const from = Array.isArray(d.from) ? new THREE.Vector3().fromArray(d.from) : seen;
+        if (!seen || !Array.isArray(d.point) || from.distanceTo(seen) > 12 || new THREE.Vector3().fromArray(d.point).distanceTo(from) > 6) return;
+        if (this.charges.place(pid, d.id, d.point, d.facing || [0, 0, 1])) {
+          const left = MAX_CHARGES - this.charges.mine(pid).length;
+          this.tell(pid, left ? `🧨 Charge set (${left} left). Press <b>E</b> to detonate.` : '🧨 All charges set. Press <b>E</b> to detonate!', true);
+        }
+        break;
+      }
+      case 'detonate': {
+        if (this.charges.arm(pid)) this.tell(pid, '⚠️ Stand back! 3… 2… 1…');
+        break;
+      }
+      case 'horn': {
+        const m = this.machines.get(d.id);
+        if (!m || m.driver !== pid) return;
+        this.setHorn(m.id, d.on ? 1 : 0); this.events.push(['horn', m.id, d.on ? 1 : 0]);
+        break;
+      }
       case 'exit': {
         const m = this.machines.get(d.id);
         if (!m || m.driver !== pid) return;
+        if (this.horns.has(m.id)) { this.setHorn(m.id, 0); this.events.push(['horn', m.id, 0]); }
         m.driver = -1; if (pl) pl.driving = -1;
         this.events.push(['drv', m.id, -1]);
         if (pid === this.myId) this.exitLocal();
@@ -992,6 +1054,10 @@ class Game {
       case 'bld-': this.removeBuildingFull(e[1]); break;
       case 'mix': this.mixer.restore(e[1]); break;
       case 'tod': this.dn.p = e[1]; this.hostCycle = e[2]; break;
+      case 'chg': this.charges.restore(e[1]); break;
+      case 'boom': this.boomFx(new THREE.Vector3(e[1], e[2], e[3])); break;
+      case 'horn': this.setHorn(e[1], e[2]); break;
+      case 'party': this.party(e[1]); break;
       case 'road': this.road.restore(e[1]); break;
       case 'set': Object.assign(this.settings, e[1]); this.crusher.rate = this.settings.crusher; break;
       case 'dep': this.crusher.deposit(e[1], new THREE.Color(e[2], e[3], e[4])); break;
@@ -1099,6 +1165,10 @@ class Game {
   contextAction() {
     const p = this.player.pos, b = this.bucket, touch = this.input.touch;
     const key = (k) => (touch ? '' : `<kbd>${k}</kbd> `);
+    // charges set: E sets them off
+    const mine = this.charges.mine(this.myId).length;
+    if (mine && this.charges.armed(this.myId)) return { text: '🧨 Get clear, the charges are about to blow!' };
+    if (mine && this.tool === 'charges') return { text: `${key('E')}Detonate ${mine} charge${mine > 1 ? 's' : ''} 🧨`, label: 'BOOM', run: () => this.act('detonate', {}) };
     // machines
     let best = null, bd = 1e9;
     for (const m of this.machines.values()) {
@@ -1202,6 +1272,16 @@ class Game {
       this.updateCamera(0);
       if (input.pressed('tool1')) this.selectTool('hammer');
       if (input.pressed('tool2')) this.selectTool('trowel');
+      if (input.pressed('tool3')) this.selectTool('charges');
+      // charge tool: click a block to stick a charge on it (E sets them all off)
+      const fire = input.held('hammer') && !uiOpen;
+      if (this.tool === 'charges' && fire && !this.chargeDown) {
+        const p = this.player.target, aim = this.aimRay();
+        if (p && this.player.aimPoint) this.act('charge', { id: p.id, point: this.player.aimPoint.toArray().map((v) => Math.round(v * 1000) / 1000), facing: [-aim.dir.x, 0, -aim.dir.z], from: this.player.pos.toArray() });
+        else this.ui.toast('🧨 Aim at a wall block within reach to place a charge');
+        this.audio.click();
+      }
+      this.chargeDown = fire;
       // trowel: hold click / the action button to lay cement tiles where you aim
       this.trowelT = (this.trowelT || 0) - dt;
       const me = this.players.get(this.myId);
@@ -1232,6 +1312,8 @@ class Game {
       };
       m.drive(dt, ctl, machList);
       if (input.pressed('cam')) { this.cam.cab = !this.cam.cab; this.cam.cabYaw = 0; this.cam.cabPitch = -0.12; }
+      const honk = input.held('horn');
+      if (honk !== !!this.honking) { this.honking = honk; this.act('horn', { id: m.id, on: honk ? 1 : 0 }); }
       this.updateCamera(dt);
       if (input.pressed('use')) this.act('exit', { id: m.id });
       this.ui.setCrosshair(false, this.cam.cab);
@@ -1321,6 +1403,13 @@ class Game {
     this.env.updateShadow(new THREE.Vector3(Math.round(focus.x), 0, Math.round(focus.z)));
     this.env.water.material.normalMap.offset.x += dt * 0.01; this.env.water.material.normalMap.offset.y += dt * 0.006;
     this.ui.updatePopups(dt, this.camera);
+    if (input.pressed('photo') && !this.input.touch) document.body.classList.toggle('photo');
+    this.charges.update(dt, auth);
+    for (const id of this.horns) { const m = this.machines.get(id); if (!m) { this.horns.delete(id); this.audio.horn(id, null, false); } else this.audio.horn(id, m.pos, true, this.hornPitch(m)); }
+    if (auth) {
+      this.partyTimer = (this.partyTimer || 0) - dt;
+      if (this.partyTimer <= 0) { this.partyTimer = 1; this.checkCleared(); }
+    }
     this.hudTimer = (this.hudTimer || 0) - dt;
     if (this.hudTimer <= 0) {
       this.hudTimer = 0.3;

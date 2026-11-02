@@ -58,6 +58,7 @@
   <div id="hotbar">
     <button class="hb on" data-tool="hammer"><span class="k">1</span><i data-ic="hammer"></i><small>HAMMER</small></button>
     <button class="hb empty" data-tool="trowel"><span class="k">2</span><i data-ic="trowel"></i><small>TROWEL</small><b class="amt" id="trowelAmt">empty</b><i class="sw" id="trowelSw"></i></button>
+    <button class="hb" data-tool="charges"><span class="k">3</span><i data-ic="bomb"></i><small>CHARGES</small><b class="amt" id="chargeAmt">8 left</b></button>
   </div>
   <div id="carry" class="hidden"><span id="carryIcon"></span><span id="carryVal">0/3</span></div>
   <div id="bucketHud" class="hidden"><span id="bucketSw"></span><span id="bucketVal"></span></div>
@@ -99,6 +100,7 @@
   </div>
   <button data-act="use" id="tbUse" class="tb tb-use hidden">ENTER</button>
   <button data-act="cam" id="tbCam" class="tb tb-cam hidden"><i data-ic="camera"></i></button>
+  <button data-act="horn" id="tbHorn" class="tb tb-horn hidden"><i data-ic="horn"></i></button>
 </div>
 
 <!-- Machine showroom (3D preview before spawning) -->
@@ -164,6 +166,8 @@
         <li><kbd>G</kbd> throw (auto-aims into the crusher hopper)</li>
         <li><kbd>E</kbd> use: drive a machine, fill / pour your bucket, open the mixer</li>
         <li><kbd>1</kbd> hammer · <kbd>2</kbd> cement trowel: click on the ground to lay cement</li>
+        <li><kbd>3</kbd> demolition charges: click blocks to stick up to 8 charges, then <kbd>E</kbd> to blow them (stand back!)</li>
+        <li><kbd>P</kbd> photo mode (hides the HUD)</li>
         <li><kbd>B</kbd> spawn menu · <kbd>M</kbd> online · <kbd>H</kbd> help</li>
       </ul>
     </div>
@@ -177,7 +181,7 @@
         <li><kbd>T</kbd> / <kbd>Y</kbd> rotate the BG90 brick clamp</li>
         <li>Tipper trucks: load the body with a machine, drive it over, then <kbd>Z</kbd> tips it and <kbd>X</kbd> lowers it. Back up to the intake funnel behind the crusher and tip: the compactor turns the blocks into cubes for the crusher</li>
         <li>Drive or press the arm into a wall to grind it down. Bricks are sticky: keep pushing.</li>
-        <li><kbd>C</kbd> cab camera · <kbd>E</kbd> climb out</li>
+        <li><kbd>C</kbd> cab camera · <kbd>N</kbd> horn · <kbd>E</kbd> climb out</li>
       </ul>
     </div>
     <div>

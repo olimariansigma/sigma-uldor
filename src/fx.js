@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { softSprite } from './textures.js';
 
-const MAX_DUST = 420, MAX_CHIPS = 500;
+const MAX_DUST = 420, MAX_CHIPS = 500, MAX_SPARKS = 900, MAX_FLASH = 6;
 
 export class FX {
   constructor(scene) {
@@ -44,6 +44,51 @@ export class FX {
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._c = new THREE.Color();
     for (let i = 0; i < MAX_CHIPS; i++) this.chipMesh.setMatrixAt(i, new THREE.Matrix4().makeScale(0, 0, 0));
     this.quality = 1;
+
+    // glowing sparks (explosions, fireworks): additive points that fade out
+    const sg = new THREE.BufferGeometry();
+    this.sPos = new Float32Array(MAX_SPARKS * 3); this.sCol = new Float32Array(MAX_SPARKS * 3);
+    sg.setAttribute('position', new THREE.BufferAttribute(this.sPos, 3).setUsage(THREE.DynamicDrawUsage));
+    sg.setAttribute('color', new THREE.BufferAttribute(this.sCol, 3).setUsage(THREE.DynamicDrawUsage));
+    this.sparkPoints = new THREE.Points(sg, new THREE.PointsMaterial({ size: 0.65, map: softSprite(), vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    this.sparkPoints.frustumCulled = false; this.sparkPoints.renderOrder = 6; scene.add(this.sparkPoints);
+    this.sparkList = []; for (let i = 0; i < MAX_SPARKS; i++) this.sparkList.push({ life: 0, max: 1, p: new THREE.Vector3(), v: new THREE.Vector3(), c: new THREE.Color(), g: 9.8, drag: 0.5 });
+    this.sNext = 0;
+    // flashes: big soft additive sprites that blow up and fade in a fraction of a second
+    this.flashes = [];
+    for (let i = 0; i < MAX_FLASH; i++) {
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: softSprite(), color: 0xffd9a0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+      sp.visible = false; sp.renderOrder = 7; scene.add(sp); this.flashes.push({ sp, life: 0, max: 0.3, size: 1 });
+    }
+    this.fNext = 0;
+  }
+
+  sparks(pos, color, count = 20, speed = 6, { life = 1.2, gravity = 9.8, drag = 0.6, up = 0.3 } = {}) {
+    const c = this._c.set(color);
+    count = Math.ceil(count * this.quality);
+    for (let k = 0; k < count; k++) {
+      const s = this.sparkList[this.sNext]; this.sNext = (this.sNext + 1) % MAX_SPARKS;
+      // random direction on a sphere, a little biased upwards
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = Math.sqrt(1 - u * u);
+      s.v.set(Math.cos(a) * r, u + up, Math.sin(a) * r).multiplyScalar(speed * (0.55 + Math.random() * 0.45));
+      s.p.copy(pos); s.max = s.life = life * (0.6 + Math.random() * 0.6); s.g = gravity; s.drag = drag;
+      s.c.copy(c).multiplyScalar(0.8 + Math.random() * 0.4);
+    }
+  }
+  flash(pos, size = 6, color = 0xffd9a0, dur = 0.3) {
+    const f = this.flashes[this.fNext]; this.fNext = (this.fNext + 1) % MAX_FLASH;
+    f.sp.position.copy(pos); f.sp.material.color.set(color); f.size = size; f.life = f.max = dur; f.sp.visible = true;
+  }
+  firework(pos, color) {
+    this.flash(pos, 9, color, 0.35);
+    this.sparks(pos, color, 110, 11, { life: 1.9, gravity: 2.5, drag: 0.9, up: 0 });
+    this.sparks(pos, 0xffffff, 25, 6, { life: 1.0, gravity: 2.5, drag: 1.2, up: 0 });
+  }
+  explosion(pos, dustColor = 0x8a8278) {
+    this.flash(pos, 7, 0xffc070, 0.28);
+    this.sparks(pos, 0xffa040, 70, 10, { life: 0.9, gravity: 9.8, drag: 0.8, up: 0.4 });
+    this.dust(pos, dustColor, 26, 3.2, { life: 5, size: 2.6, speed: 3.2, alpha: 0.6 });
+    this.dust(pos, 0x3a3632, 10, 1.6, { life: 3, size: 1.6, speed: 4.5, alpha: 0.55 });
   }
 
   dust(pos, color, count = 4, spread = 1, opts = {}) {
@@ -87,6 +132,26 @@ export class FX {
   }
 
   update(dt, camera) {
+    // sparks
+    let live = 0;
+    for (let i = 0; i < MAX_SPARKS; i++) {
+      const s = this.sparkList[i];
+      if (s.life <= 0) { this.sCol[i * 3] = this.sCol[i * 3 + 1] = this.sCol[i * 3 + 2] = 0; this.sPos[i * 3 + 1] = -999; continue; }
+      live++;
+      s.life -= dt;
+      s.v.multiplyScalar(1 - s.drag * dt); s.v.y -= s.g * dt;
+      s.p.addScaledVector(s.v, dt);
+      const k = Math.max(0, s.life / s.max), tw = k * (0.75 + Math.random() * 0.25);
+      this.sPos[i * 3] = s.p.x; this.sPos[i * 3 + 1] = s.p.y; this.sPos[i * 3 + 2] = s.p.z;
+      this.sCol[i * 3] = s.c.r * tw; this.sCol[i * 3 + 1] = s.c.g * tw; this.sCol[i * 3 + 2] = s.c.b * tw;
+    }
+    if (live || this.sparkLive) { const sg = this.sparkPoints.geometry; sg.attributes.position.needsUpdate = true; sg.attributes.color.needsUpdate = true; }
+    this.sparkLive = live; this.sparkPoints.visible = live > 0;
+    for (const f of this.flashes) {
+      if (f.life <= 0) { f.sp.visible = false; continue; }
+      f.life -= dt; const t = 1 - Math.max(0, f.life) / f.max;
+      f.sp.scale.setScalar(f.size * (0.4 + t * 0.9)); f.sp.material.opacity = (1 - t) * (1 - t);
+    }
     // dust
     const fog = this.scene.fog;
     for (let i = 0; i < MAX_DUST; i++) {

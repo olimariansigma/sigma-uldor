@@ -189,6 +189,46 @@ export class Audio {
     this.tone(d, { dur: 0.05, f: 180, f2: 90, type: 'square', gain: 0.12 * s });
     this.noiseBurst(d, { dur: 0.1, f: 600, q: 1, gain: 0.25 * s });
   }
+  // ---- demolition charges, fireworks, horns
+  explosion(pos, s = 1) {
+    if (!this.ctx) return;
+    const d = this.out(pos, 30);
+    this.noiseBurst(d, { dur: 2.8, f: 420, q: 0.5, type: 'lowpass', gain: 1.0 * s, brown: true, attack: 0.004 });
+    this.noiseBurst(d, { dur: 0.45, f: 1500, q: 0.6, gain: 0.7 * s, attack: 0.002 });
+    this.noiseBurst(d, { dur: 1.2, f: 90, q: 0.7, type: 'lowpass', gain: 0.9 * s, brown: true, attack: 0.002 });
+    this.tone(d, { dur: 1.1, f: 62, f2: 26, gain: 0.95 * s, attack: 0.002 });
+    for (let i = 0; i < 5; i++) this.bank('stones', pos, { gain: 0.7, rate: 0.6 + Math.random() * 0.3, ref: 14, t: 0.3 + i * 0.16 + Math.random() * 0.1 });
+  }
+  beep(pos, urgent = false) { if (this.ctx) this.tone(this.out(pos, 5), { dur: urgent ? 0.05 : 0.08, f: urgent ? 2300 : 1900, type: 'square', gain: 0.07 }); }
+  firework(pos, delay = 0) {
+    if (!this.ctx) return;
+    const d = this.out(pos, 60);
+    this.tone(d, { t: Math.max(0, delay - 1.1), dur: 1.0, f: 700, f2: 2200, type: 'sine', gain: 0.035 });
+    this.noiseBurst(d, { t: delay, dur: 1.2, f: 700, q: 0.5, type: 'lowpass', gain: 0.75, brown: true, attack: 0.003 });
+    for (let i = 0; i < 12; i++) this.noiseBurst(d, { t: delay + 0.15 + Math.random() * 0.9, dur: 0.04, f: 4000 + Math.random() * 3000, q: 2, gain: 0.12 });
+  }
+  // an air horn that sounds while held: two detuned saws through a low-pass, per machine
+  horn(key, pos, on, pitch = 1) {
+    if (!this.ctx) return;
+    this.horns = this.horns || new Map();
+    let h = this.horns.get(key);
+    const c = this.ctx, now = c.currentTime;
+    if (on && !h) {
+      const g = c.createGain(); g.gain.value = 0.0001;
+      const pan = c.createStereoPanner ? c.createStereoPanner() : null;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 2400; lp.Q.value = 0.8;
+      const oscs = [311, 392, 466].map((f, i) => { const o = c.createOscillator(); o.type = i === 2 ? 'square' : 'sawtooth'; o.frequency.value = f * pitch; o.detune.value = (Math.random() - 0.5) * 12; o.connect(lp); o.start(); return o; });
+      lp.connect(g); if (pan) { g.connect(pan); pan.connect(this.master); } else g.connect(this.master);
+      h = { g, pan, oscs, vol: 0 }; this.horns.set(key, h);
+      g.gain.setTargetAtTime(1, now, 0.02);
+    }
+    if (!h) return;
+    const sp = this.spatial(pos, 22);
+    h.vol = on ? 0.16 * sp.gain : 0;
+    if (h.pan) h.pan.pan.setTargetAtTime(sp.pan, now, 0.05);
+    h.g.gain.setTargetAtTime(Math.max(0.0001, h.vol), now, on ? 0.02 : 0.05);
+    if (!on) { for (const o of h.oscs) o.stop(now + 0.4); this.horns.delete(key); }
+  }
   click() { if (this.ctx) this.tone(this.out(null), { dur: 0.05, f: 900, type: 'square', gain: 0.04 }); }
   denied() { if (this.ctx) { const d = this.out(null); this.tone(d, { dur: 0.12, f: 220, type: 'square', gain: 0.06 }); this.tone(d, { t: 0.12, dur: 0.2, f: 160, type: 'square', gain: 0.06 }); } }
   pickup(pos) { if (this.ctx) { const d = this.out(pos, 3); this.noiseBurst(d, { dur: 0.08, f: 900, q: 2, gain: 0.2 }); this.tone(d, { dur: 0.06, f: 300, f2: 420, type: 'triangle', gain: 0.08 }); } }

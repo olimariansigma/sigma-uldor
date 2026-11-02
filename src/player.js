@@ -86,7 +86,7 @@ export class Player {
     // ---- actions
     this.cooldown -= dt;
     this.target = this.aimPiece(aim);
-    if (input.held('hammer') && g.tool !== 'trowel' && this.swingT < 0 && this.cooldown <= 0 && !carried.length) { this.swingT = 0; this.hitDone = false; }
+    if (input.held('hammer') && g.tool === 'hammer' && this.swingT < 0 && this.cooldown <= 0 && !carried.length) { this.swingT = 0; this.hitDone = false; }
     if (this.swingT >= 0) {
       this.swingT += dt / [0.5, 0.46, 0.5, 0.4][g.settings.hammer];
       if (this.swingT > 0.55 && !this.hitDone) { this.hitDone = true; this.strike(aim); }

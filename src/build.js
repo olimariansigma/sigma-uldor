@@ -53,8 +53,9 @@ export class Builder {
     const slab = !piece && Math.abs(point.y - P.top) < 0.06 && Math.abs(point.x - P.x) < P.w / 2 && Math.abs(point.z - P.z) < P.d / 2;
     return { point, normal: n, piece, slab, ground: !piece && !slab && point.y < 0.12 };
   }
-  // mortar goes on blocks and on the slab (on bare ground the trowel lays paving tiles instead)
-  mortarTarget(hit) { return hit && (hit.slab || (hit.piece && hit.piece.state !== 4)) ? hit : null; }
+  // mortar goes on the house slab and on pressed blocks; anywhere else the trowel keeps laying paving tiles and
+  // filling potholes (so aiming at rubble lying in the yard does not waste cement)
+  mortarTarget(hit) { return hit && (hit.slab || (hit.piece && hit.piece.brick && (hit.piece.state === INTACT || hit.piece.state === LOOSE))) ? hit : null; }
 
   extents(rot) { return rot ? { x: 0.6, z: 1.2 } : { x: 1.2, z: 0.6 }; }
   snap(v) { return Math.round(v / G) * G; }
@@ -84,30 +85,38 @@ export class Builder {
     });
     return ok && c.y - H / 2 > -0.2;
   }
-  // splashes touching a block placed here (under it or against its sides)
-  splashesFor(c, rot) {
-    const e = this.extents(rot), mx = e.x / 2 + 0.22, mz = e.z / 2 + 0.22, my = H / 2 + 0.2;
-    return this.splashes.filter((s) => Math.abs(s.pos.x - c.x) < mx && Math.abs(s.pos.z - c.z) < mz && Math.abs(s.pos.y - c.y) < my);
+  // splashes touching a block placed here: under it or against its sides, never one sitting on its own top
+  splashesFor(c, rot, self = null) {
+    const e = this.extents(rot), mx = e.x / 2 + 0.22, mz = e.z / 2 + 0.22;
+    return this.splashes.filter((s) => (!self || s.piece !== self.id) && Math.abs(s.pos.x - c.x) < mx && Math.abs(s.pos.z - c.z) < mz && s.pos.y > c.y - H / 2 - 0.2 && s.pos.y < c.y + 0.1);
   }
 
   // ---- host
   addSplash(point, normal, color, piece = -1) {
     if (this.splashes.length >= MAX) this.splashes.shift();
-    this.splashes.push({ pos: point.clone().addScaledVector(normal, 0.01), n: normal.clone().normalize(), col: color.clone(), piece, age: 0 });
+    const pc = piece >= 0 ? this.g.demo.pieces[piece] : null;
+    this.splashes.push({ pos: point.clone().addScaledVector(normal, 0.01), n: normal.clone().normalize(), col: color.clone(), piece, at: pc ? pc.pos.clone() : null, age: 0 });
     this.redraw();
   }
   take(list) { if (!list.length) return; this.splashes = this.splashes.filter((s) => !list.includes(s)); this.redraw(); }
-  // a splash on a block goes with the block when it is knocked out of the wall
+  // a splash on a block goes with the block when the block is picked up, crushed or moved (knocked out of a wall,
+  // pushed off a dry stack); on a block that stays put it stays
   tidy() {
     const before = this.splashes.length, demo = this.g.demo;
-    this.splashes = this.splashes.filter((s) => s.piece < 0 || (demo.pieces[s.piece] && demo.pieces[s.piece].state === INTACT));
+    this.splashes = this.splashes.filter((s) => {
+      if (s.piece < 0) return true;
+      const p = demo.pieces[s.piece];
+      if (!p || (p.state !== INTACT && p.state !== LOOSE)) return false;
+      return !s.at || p.pos.distanceTo(s.at) < 0.15;
+    });
     if (this.splashes.length !== before) { this.redraw(); return true; }
     return false;
   }
 
   pack() { return this.splashes.map((s) => [...s.pos.toArray(), ...s.n.toArray(), s.col.r, s.col.g, s.col.b, s.piece, Math.round(s.age)].map((v) => Math.round(v * 1000) / 1000)); }
   restore(arr) {
-    this.splashes = (arr || []).map((a) => ({ pos: new THREE.Vector3(a[0], a[1], a[2]), n: new THREE.Vector3(a[3], a[4], a[5]), col: new THREE.Color(a[6], a[7], a[8]), piece: a[9], age: a[10] || 60 }));
+    const demo = this.g.demo;
+    this.splashes = (arr || []).map((a) => ({ pos: new THREE.Vector3(a[0], a[1], a[2]), n: new THREE.Vector3(a[3], a[4], a[5]), col: new THREE.Color(a[6], a[7], a[8]), piece: a[9], age: a[10] || 60, at: a[9] >= 0 && demo.pieces[a[9]] ? demo.pieces[a[9]].pos.clone() : null }));
     this.redraw();
   }
 

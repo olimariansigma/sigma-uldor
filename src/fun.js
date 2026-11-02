@@ -42,7 +42,7 @@ export class Charges {
   // ---- authority
   place(pid, pieceId, point, facing) {
     const g = this.g, p = g.demo.pieces[pieceId];
-    if (!p || p.state === GONE || p.pool) return false;
+    if (!p || p.state === GONE || (p.pool && !p.brick)) return false; // rubble chunks no, your own house's blocks yes
     if (this.mine(pid).length >= MAX_CHARGES) { g.tell(pid, `🧨 That's all ${MAX_CHARGES} of your charges. Press E to set them off.`); return false; }
     if (this.armed(pid)) return false;
     const pos = new THREE.Vector3().fromArray(point), f = new THREE.Vector3().fromArray(facing).setY(0);

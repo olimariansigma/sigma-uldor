@@ -10,7 +10,8 @@ export { SITE };
 
 export function buildWorld(scene, renderer, physics, M) {
   const statics = []; // {pos, size, rotY}
-  const addStatic = (x, y, z, sx, sy, sz, rotY = 0) => statics.push({ pos: new THREE.Vector3(x, y, z), size: new THREE.Vector3(sx, sy, sz), rotY });
+  const addStatic = (x, y, z, sx, sy, sz, rotY = 0, ground = false) => statics.push({ pos: new THREE.Vector3(x, y, z), size: new THREE.Vector3(sx, sy, sz), rotY, ground });
+  const groundHandles = []; // statics machines may drive onto (the build slab)
 
   // ---------- sky + lights ----------
   const sky = new Sky();
@@ -295,10 +296,11 @@ export function buildWorld(scene, renderer, physics, M) {
   }
   for (const s of statics) {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.rotY);
-    physics.world.createCollider(physics.R.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z).setRotation(q), body);
+    const c = physics.world.createCollider(physics.R.ColliderDesc.cuboid(s.size.x / 2, s.size.y / 2, s.size.z / 2).setTranslation(s.pos.x, s.pos.y, s.pos.z).setRotation(q), body);
+    if (s.ground) groundHandles.push(c.handle);
   }
 
-  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, buildSlab, pmremEnv: scene.environment, updateShadow(focus) {
+  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, buildSlab, groundHandles, pmremEnv: scene.environment, updateShadow(focus) {
     sun.position.copy(focus).addScaledVector(sunDir, 80);
     sun.target.position.copy(focus);
     // snap to texel grid to avoid shimmering
@@ -633,7 +635,7 @@ function buildPlotArea(scene, M, addStatic) {
   const face = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.2, 0.05), [M.paintWhite, M.paintWhite, M.paintWhite, M.paintWhite,
     new THREE.MeshStandardMaterial({ map: T.labelTexture('BUILD YOUR HOUSE', { w: 1024, h: 512, bg: '#1f5fa8', color: '#ffffff', font: '900 104px Arial', italic: false, sub: 'MORTAR FIRST, THEN LAY THE BLOCK' }) }), M.paintWhite]);
   face.position.y = 2.0; board.add(shadowed(face));
-  addStatic(P.x, P.top / 2, P.z, P.w, P.top, P.d);
+  addStatic(P.x, P.top / 2, P.z, P.w, P.top, P.d, 0, true);
   return { x: P.x, z: P.z, w: P.w, d: P.d, top: P.top };
 }
 

@@ -285,7 +285,7 @@ class Game {
       up.set(0, 1, 0).applyQuaternion(p.quat);
       if (Math.abs(up.y) < 0.97) continue;
       const fwd = new THREE.Vector3(1, 0, 0).applyQuaternion(p.quat), rot = Math.abs(fwd.x) > Math.abs(fwd.z) ? 0 : 1;
-      const glue = this.builder.splashesFor(p.pos, rot);
+      const glue = this.builder.splashesFor(p.pos, rot, p);
       if (!glue.length) continue;
       this.demo.setIntact(p, p.pos.clone(), p.quat.clone()); this.builder.take(glue); any = true;
     }
@@ -407,7 +407,7 @@ class Game {
     this._mctx = {
       scene: this.scene, physics: this.physics, M: this.M, terrainCollider: terrain,
       groundAt: (x, z) => g.groundAt(x, z),
-      isGround: (c) => c.handle === terrain.handle || g.groundHandles.has(c.handle),
+      isGround: (c) => c.handle === terrain.handle || g.groundHandles.has(c.handle) || g.env.groundHandles.includes(c.handle),
       isPiece: (c) => g.demo.byCollider.has(c.handle),
     };
     return this._mctx;
@@ -416,6 +416,8 @@ class Game {
   groundAt(x, z) {
     let h = terrainHeight(x, z);
     for (const st of this.buildingStatics.values()) for (const r of st.rects) if (x > r.x0 - 0.3 && x < r.x1 + 0.3 && z > r.z0 - 0.3 && z < r.z1 + 0.3) h = Math.max(h, r.y);
+    const P = SITE.buildPlot; // the house slab across the road
+    if (Math.abs(x - P.x) < P.w / 2 + 0.3 && Math.abs(z - P.z) < P.d / 2 + 0.3) h = Math.max(h, P.top);
     return h;
   }
   destroyMachine(id) {
@@ -477,6 +479,7 @@ class Game {
     this.demo.clearAll();
     if (this.charges) this.charges.clear();
     if (this.builder) this.builder.restore([]);
+    if (this.press) this.press.restore(null);
     this.plots = SITE.plots.map(() => null);
     this.crusher.restore({ layers: [], totalKg: 0, count: 0, tally: [] });
     this.intake.restore(null);

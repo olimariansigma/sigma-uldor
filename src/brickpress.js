@@ -150,14 +150,21 @@ export class BrickPress {
       if (got && got.kg > 0) { this.addDust(got.kg, got.color); this.beltLoaded = 1; }
       else this.beltLoaded = Math.max(0, (this.beltLoaded || 0) - dt);
     }
+    if (!cb) this.beltLoaded = feedingNow ? 1 : 0; // clients do not see the stockpile take: assume the belt carries dust
     this.beltDust.visible = feedingNow && (this.beltLoaded || 0) > 0.2;
     if (this.beltDust.visible) this.beltDust.material.color.copy(this.color);
     // press cycle
     if (this.phase < 0) {
-      if (cb && this.dust >= BRICK_KG && demo.freeBrick()) {
-        this.slot = this.freeSlot(demo);
-        if (this.slot) { this.phase = 0; this.dust -= BRICK_KG; this.changed = true; this.refresh(); }
-        else this.status = 'Pallet full: take the bricks away';
+      // looking for a free pallet spot scans every block in the world: twice a second is plenty
+      this.waitT = (this.waitT || 0) - dt;
+      if (cb && this.dust >= BRICK_KG && this.waitT <= 0) {
+        this.waitT = 0.5;
+        if (!demo.freeBrick()) this.blocked = 'All 300 pressed blocks are in use: crush some to free them';
+        else {
+          this.slot = this.freeSlot(demo);
+          if (this.slot) { this.phase = 0; this.dust -= BRICK_KG; this.changed = true; this.blocked = null; this.refresh(); }
+          else this.blocked = 'Pallet full: take the blocks away';
+        }
       }
     } else {
       const t0 = this.phase;
@@ -174,12 +181,14 @@ export class BrickPress {
         if (cb) {
           const q = this.root.quaternion.clone();
           if (cb.spawn(this.slot, q, this.color.clone().multiplyScalar(0.92 + Math.random() * 0.12))) { this.made++; if (audio) audio.clank(this.slot, 0.5); }
+          else { this.dust += BRICK_KG; this.refresh(); } // no block to hand out: the dust goes back in the hopper
           this.changed = true;
         }
         this.ram.position.y = 2.0;
       }
     }
-    this.status = this.phase >= 0 ? 'Pressing a block' : this.dust >= BRICK_KG ? (this.status.startsWith('Pallet') ? this.status : 'Ready') : this.feeding ? 'Feeding dust from the stockpile' : 'Waiting for dust';
+    this.status = this.phase >= 0 ? 'Pressing a block' : this.dust >= BRICK_KG ? (this.blocked || 'Ready')
+      : this.feeding ? ((this.beltLoaded || 0) > 0 ? 'Feeding dust from the stockpile' : 'Feeder on, but the stockpile is empty: crush some rubble') : 'Waiting for dust';
     this.screenT = (this.screenT || 0) - dt;
     if (this.screenT <= 0) { this.screenT = 0.5; this.drawScreen(); }
   }

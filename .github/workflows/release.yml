@@ -120,5 +120,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           V: ${{ needs.plan.outputs.latest }}
         run: |
-          gh release upload "v$V" launcher/desktop/out/WreckingYard-Launcher-Windows.exe launcher/android/WreckingYard-Launcher.apk --clobber
+          gh release upload "v$V" launcher/desktop/out/WreckingYard-Launcher-Windows.exe launcher/desktop/out/WreckingYard-Launcher-Windows.zip launcher/android/WreckingYard-Launcher.apk --clobber
           gh release edit "v$V" --latest

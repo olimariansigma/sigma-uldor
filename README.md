@@ -8,7 +8,8 @@ Get the launcher from the **[latest release](https://github.com/olimariansigma/s
 
 | Platform | File |
 |---|---|
-| Windows 10/11 (64-bit) | `WreckingYard-Launcher-Windows.exe` (about 75 MB): portable, no install |
+| Windows 10/11 (64-bit) | `WreckingYard-Launcher-Windows.zip` (about 110 MB): extract it anywhere and run `Wrecking Yard.exe`. The most reliable choice |
+| Windows 10/11 (64-bit) | `WreckingYard-Launcher-Windows.exe` (about 75 MB): one-file portable version. If it says *Installer integrity check has failed*, the download is incomplete or was changed by antivirus or OneDrive: use the zip instead |
 | Android 7.0+ | `WreckingYard-Launcher.apk` (about 0.25 MB): installs over the old Wrecking Yard app, saves are kept |
 
 The launcher shows every published version of the game. **Check for updates** looks for a new one, and you can download, play or delete any version, old ones included. Saves are shared between versions. Each game version is a GitHub release with a `WreckingYard-game-<version>.zip` (the built game, about 80 MB); the launcher downloads it once and then plays offline.

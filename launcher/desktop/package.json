@@ -9,7 +9,7 @@
   "scripts": {
     "ui": "node -e \"const fs=require('fs');fs.rmSync('ui',{recursive:true,force:true});fs.cpSync('../ui','ui',{recursive:true});fs.copyFileSync('../../public/img/logo.png','ui/logo.png');fs.copyFileSync('../../electron/icon.png','icon.png')\"",
     "start": "npm run ui && electron .",
-    "dist": "npm run ui && electron-builder --win portable --x64 --publish never"
+    "dist": "npm run ui && electron-builder --win --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^33.2.0",
@@ -19,13 +19,38 @@
     "appId": "com.wreckingyard.launcher",
     "productName": "Wrecking Yard",
     "electronVersion": "33.2.0",
-    "files": ["main.js", "preload.js", "unzip.js", "ui/**", "icon.png", "package.json"],
-    "directories": { "output": "out" },
-    "win": {
-      "target": [{ "target": "portable", "arch": ["x64"] }],
-      "icon": "icon.png",
-      "signAndEditExecutable": false
+    "files": [
+      "main.js",
+      "preload.js",
+      "unzip.js",
+      "ui/**",
+      "icon.png",
+      "package.json"
+    ],
+    "directories": {
+      "output": "out"
     },
-    "portable": { "artifactName": "WreckingYard-Launcher-Windows.exe" }
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.png",
+      "signAndEditExecutable": false,
+      "artifactName": "WreckingYard-Launcher-Windows.${ext}"
+    },
+    "portable": {
+      "artifactName": "WreckingYard-Launcher-Windows.exe"
+    }
   }
 }

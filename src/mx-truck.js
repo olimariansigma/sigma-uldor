@@ -7,6 +7,31 @@ import { cylinder } from './mx-excavator.js';
 
 const anchor = (p, x, y, z) => { const o = new THREE.Object3D(); o.position.set(x, y, z); p.add(o); return o; };
 
+// ---- cab shell helpers: a side profile (z, y) with rounded corners, extruded across the width with soft edges
+function rounded(corners, n = 5) {
+  const out = [], N = corners.length;
+  for (let i = 0; i < N; i++) {
+    const [z, y, r] = corners[i];
+    if (!r) { out.push([z, y]); continue; }
+    const p = corners[(i - 1 + N) % N], q = corners[(i + 1) % N];
+    const la = Math.hypot(p[0] - z, p[1] - y) || 1, lb = Math.hypot(q[0] - z, q[1] - y) || 1, rr = Math.min(r, la * 0.45, lb * 0.45);
+    const a = [z + (p[0] - z) / la * rr, y + (p[1] - y) / la * rr], b = [z + (q[0] - z) / lb * rr, y + (q[1] - y) / lb * rr];
+    for (let k = 0; k <= n; k++) { const t = k / n, u = 1 - t; out.push([u * u * a[0] + 2 * u * t * z + t * t * b[0], u * u * a[1] + 2 * u * t * y + t * t * b[1]]); }
+  }
+  return out;
+}
+function cabShell(pts, w, bevel) {
+  const sh = new THREE.Shape(); sh.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < pts.length; i++) sh.lineTo(pts[i][0], pts[i][1]); sh.closePath();
+  const g = new THREE.ExtrudeGeometry(sh, { depth: w - bevel * 2, bevelEnabled: true, bevelSize: bevel, bevelThickness: bevel, bevelSegments: 4 });
+  g.rotateY(-Math.PI / 2); g.translate(w / 2 - bevel, 0, 0);
+  return g;
+}
+function pane(a, b, c, d) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([a, b, c, a, c, d].flatMap((v) => [v.x, v.y, v.z]), 3));
+  g.computeVertexNormals(); return g;
+}
+
 // chassis layouts. Axle entries: [z, steer group (1 = first steered axle, 2 = second, 0 = driven twin tyres)]
 export const TRUCK_SIZES = {
   s: { label: 'Small', drive: '4x2', axles: [[3.15, 1], [-0.95, 0]], rear: -2.45, hinge: -2.05, L: 3.8, BH: 1.15, wb: 4.1, tank: 1.4, ad: 0.15, air: 0.5, guard: [1.05, 2.4], radius: 3.4, cam: 1.3 },
@@ -96,8 +121,12 @@ export function buildTruck(m) {
   // ---------------------------------------------------------------- cab (cab-over, sits on the frame)
   const C = new THREE.Group(); C.position.set(0, 1.2, 3.25); U.add(C); m.cabShell = C;
   const cw = 2.5, cd = 2.1, ch = highRoof ? 2.55 : 2.15, zf = cd / 2, zb = -cd / 2;
-  // main shell: lower box, upper glasshouse, roof
-  add(C, mergeG([rbox(cw, 1.0, cd, 0.12, 0, 0.5, 0), rbox(cw, ch - 0.95, cd - 0.15, 0.14, 0, 0.95 + (ch - 0.95) / 2, -0.07), rbox(cw - 0.06, 0.12, cd - 0.2, 0.08, 0, ch + 0.02, -0.1)]), K.paint);
+  // main shell: one sculpted body (side profile extruded across the width with well rounded edges): upright
+  // front, windscreen raked back, rounded roof edge
+  const RK = 0.16, zAt = (y) => zf - RK * Math.max(0, y - 0.97) / (ch - 0.08 - 0.97); // front surface at height y
+  // (the bevel grows the outline by its own width, so the profile is drawn that much inside the finished surface)
+  const bv = 0.1;
+  add(C, cabShell(rounded([[zb + bv, -0.02 + bv, 0], [zf - bv, -0.02 + bv, 0.02], [zf - bv, 0.97, 0.04], [zf - RK - bv, ch - 0.08 - bv, 0.12], [zb + 0.08 + bv, ch + 0.06 - bv, 0.1], [zb + bv, ch - 0.25, 0.05]]), cw, bv), K.paint);
   // front: black grille band with slats, logo, lower panel, steps
   add(C, mergeG([rbox(cw - 0.1, 0.62, 0.08, 0.03, 0, 0.62, zf + 0.01), rbox(cw - 0.2, 0.3, 0.06, 0.03, 0, 0.2, zf + 0.02)]), K.black);
   grille(C, cw - 0.5, 0.42, 0, 0.62, zf + 0.055, 0, 18);
@@ -117,17 +146,26 @@ export function buildTruck(m) {
   if (trim === 'xt') { add(bumper, mergeG([rbox(1.2, 0.08, 0.5, 0.02, 0, -0.32, 0.1, -0.2), pinX(0.04, 0.3, 0, -0.12, 0.2)]), m.ctx.M.paintRed || K.red); add(bumper, mergeG([cy(0.05, 0.05, 0.14, 10, 0.4, -0.08, 0.22, Math.PI / 2), cy(0.05, 0.05, 0.14, 10, -0.4, -0.08, 0.22, Math.PI / 2)]), K.red); }
   for (const s of [-1, 1]) add(bumper, rbox(0.18, 0.1, 0.03, 0.02, s * 0.85, 0.04, 0.17), K.lens, false);
   add(bumper, bx(0.52, 0.11, 0.01, 0, 0.0, 0.165), m.ctx.M.paintWhite || K.grey, false);
-  // windscreen, side windows, rear window; wipers; sun visor
-  // dark interior behind the glass (planes, so the cab camera still sees out through them)
+  // windscreen (raked, in a black rubber surround), door windows with a raked front edge, quarter lights; a dark
+  // interior pane behind the glass (all seen from outside only, so the cab camera looks straight out)
   const tint = new THREE.MeshStandardMaterial({ color: 0x0e1114, roughness: 0.85 });
-  const ws = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, ch - 1.15), K.glass); ws.position.set(0, 0.97 + (ch - 1.15) / 2, zf - 0.04); ws.rotation.x = -0.05; C.add(exteriorOnly(ws));
-  const wsb = new THREE.Mesh(new THREE.PlaneGeometry(cw - 0.25, ch - 1.15), tint); wsb.position.set(0, 0.97 + (ch - 1.15) / 2, zf - 0.09); wsb.rotation.x = -0.05; C.add(exteriorOnly(wsb));
+  const y0 = 1.03, y1 = ch - 0.2, wx = cw / 2 - 0.17;
+  const wsQ = (dz) => pane(V(-wx, y0, zAt(y0) + dz), V(wx, y0, zAt(y0) + dz), V(wx, y1, zAt(y1) + dz), V(-wx, y1, zAt(y1) + dz));
+  C.add(exteriorOnly(new THREE.Mesh(wsQ(0.008), tint))); C.add(exteriorOnly(new THREE.Mesh(wsQ(0.016), K.glass)));
+  const surround = [tubeAB(V(-wx, y0, zAt(y0) + 0.012), V(wx, y0, zAt(y0) + 0.012), 0.03, 6), tubeAB(V(-wx, y1, zAt(y1) + 0.012), V(wx, y1, zAt(y1) + 0.012), 0.03, 6),
+    tubeAB(V(-wx, y0, zAt(y0) + 0.012), V(-wx, y1, zAt(y1) + 0.012), 0.035, 6), tubeAB(V(wx, y0, zAt(y0) + 0.012), V(wx, y1, zAt(y1) + 0.012), 0.035, 6)];
   for (const s of [-1, 1]) {
-    const sw = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), K.glass); sw.position.set(s * (cw / 2 + 0.014), 1.42, 0.45); sw.rotation.y = s * Math.PI / 2; C.add(exteriorOnly(sw));
-    const sb = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 0.75), tint); sb.position.set(s * (cw / 2 + 0.005), 1.42, 0.45); sb.rotation.y = s * Math.PI / 2; C.add(exteriorOnly(sb));
-    add(C, mergeG([bx(0.02, 0.02, 0.5, s * 0.25, 1.0, zf - 0.02), cy(0.02, 0.02, 0.05, 8, s * 0.25, 1.0, zf - 0.27, Math.PI / 2)]).rotateZ(s * 0.9).translate(0, 0, 0), K.black, false);
+    const x = s * (cw / 2 + 0.006), zt = zAt(y1) - 0.18;
+    const side = (dx) => pane(V(x + s * dx, 1.05, 0.0), V(x + s * dx, 1.05, zf - 0.22), V(x + s * dx, y1, zt), V(x + s * dx, y1, 0.0));
+    C.add(exteriorOnly(new THREE.Mesh(side(0), tint))); C.add(exteriorOnly(new THREE.Mesh(side(0.008), K.glass)));
+    surround.push(tubeAB(V(x, 1.05, zf - 0.22), V(x, y1, zt), 0.025, 6), tubeAB(V(x, 1.05, 0), V(x, y1, 0), 0.02, 6), tubeAB(V(x, y1, 0), V(x, y1, zt), 0.02, 6));
+    // wind deflector at the front corner
+    surround.push(rbox(0.05, 1.05, 0.34, 0.02, s * (cw / 2 + 0.025), 1.5, zf - 0.27 - 0.05, 0, s * 0.18, 0));
   }
-  add(C, mergeG([rbox(cw - 0.1, 0.06, 0.32, 0.02, 0, ch - 0.12, zf + 0.1, 0.1)]), trim === 'chrome' ? K.paint : K.black);
+  add(C, mergeG(surround), K.black, false);
+  // wipers parked along the bottom of the windscreen, sun visor along its top
+  C.add(exteriorOnly(add(C, mergeG([bx(0.85, 0.025, 0.025, -0.45, y0 + 0.05, zAt(y0) + 0.04, 0, 0, 0.06), bx(0.85, 0.025, 0.025, 0.5, y0 + 0.05, zAt(y0) + 0.04, 0, 0, 0.06)]), K.black, false)));
+  add(C, mergeG([rbox(cw - 0.12, 0.05, 0.36, 0.02, 0, ch - 0.06, zAt(ch - 0.1) + 0.1, 0.12)]), trim === 'chrome' ? K.paint : K.black);
   // doors: seams, handles, grab rails, steps (2 per side) with tread plates
   const seams = [], chromeBits = [], treads = [];
   for (const s of [-1, 1]) {

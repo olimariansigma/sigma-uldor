@@ -300,7 +300,7 @@ export function buildWorld(scene, renderer, physics, M) {
     if (s.ground) groundHandles.push(c.handle);
   }
 
-  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, buildSlab, groundHandles, pmremEnv: scene.environment, updateShadow(focus) {
+  return { sun, hemi, sky, clouds, water, terrainCollider, sunDir, lamps, glowMats, towers, towerLens, buildSlab, groundHandles, wetMats: [terrainMat, asphMat, conc, M.concretePlain], pmremEnv: scene.environment, updateShadow(focus) {
     sun.position.copy(focus).addScaledVector(sunDir, 80);
     sun.target.position.copy(focus);
     // snap to texel grid to avoid shimmering

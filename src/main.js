@@ -10,6 +10,8 @@ import { Charges, celebrate, MAX_CHARGES } from './fun.js';
 import { BrickPress, BRICK_KG } from './brickpress.js';
 import { Builder, MORTAR_KG } from './build.js';
 import { paintOf } from './mx-vehicles.js';
+import { Traffic } from './traffic.js';
+import { Weather, WEATHERS } from './weather.js';
 import { encodeFloats, decodeFloats, encodeSnapshot, decodeSnapshot, kindOf, PLAYER_F, MACHINE_F } from './netcodec.js';
 import { SITE, inWater, lakeDist, terrainHeight } from './site.js';
 import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE, RUBBLE, BRICKS } from './demolition.js';
@@ -43,7 +45,7 @@ const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
 function progress(p, text) { $('loadfill').style.width = (p * 100) + '%'; if (text) $('loadtext').textContent = text; }
 function loadPrefs() {
-  const def = { quality: null, volume: 0.8, sens: 1, invert: false, name: '', hammer: 1, carry: 8, day: 'normal' };
+  const def = { quality: null, volume: 0.8, sens: 1, invert: false, name: '', hammer: 1, carry: 8, day: 'normal', traffic: true, weather: 'auto' };
   try { return { ...def, ...(JSON.parse(localStorage.getItem(PREFIX + 'prefs')) || {}) }; } catch (e) { return def; }
 }
 
@@ -124,6 +126,9 @@ class Game {
     this.player = new Player(this, SITE.playerSpawn, SHIRTS[0]);
     this.charges = new Charges(this);
     this.builder = new Builder(this);
+    this.traffic = new Traffic(this);
+    this.traffic.setOn(this.prefs.traffic);
+    this.weather = new Weather(this);
     this.player.avatar.setHammer(this.settings.hammer);
     this.addPlayerEntry(0, this.myName, SHIRTS[0], true);
     progress(0.7, 'Building the houses…');
@@ -157,6 +162,7 @@ class Game {
       this.camera.position.set(-6 + Math.sin(a) * 62, 13 + Math.sin(k * 0.11) * 3, -84 + Math.cos(a) * 62);
       this.camera.lookAt(-8, 5, -84);
       for (const m of this.machines.values()) m.idle(1 / 60, false);
+      this.traffic.update(1 / 60);
       this.renderer.render(this.scene, this.camera);
     };
     requestAnimationFrame(loop);
@@ -231,6 +237,11 @@ class Game {
     if (!(s.day in CYCLES)) s.day = 'normal';
     $('optDay').value = s.day;
     $('optDay').addEventListener('change', (e) => { s.day = e.target.value; this.savePrefs(); this.todTimer = 0; });
+    if (!WEATHERS.includes(s.weather)) s.weather = 'auto';
+    $('optWeather').value = s.weather;
+    $('optWeather').addEventListener('change', (e) => { s.weather = e.target.value; this.savePrefs(); if (s.weather === 'auto') this.weather.autoT = 0; });
+    $('optTraffic').checked = s.traffic !== false;
+    $('optTraffic').addEventListener('change', (e) => { s.traffic = e.target.checked; this.traffic.setOn(s.traffic); this.savePrefs(); });
     $('optSkip').addEventListener('click', () => {
       if (this.net.isClient) { this.ui.toast('Only the host can change the time'); return; }
       if (!this.dayCycle()) { this.ui.toast('Turn on day & night first'); return; }
@@ -502,7 +513,7 @@ class Game {
       settings: { crusher: this.settings.crusher, grapple: this.settings.grapple },
       players: forSave ? [] : [...this.players.values()].map((p) => ({ id: p.id, name: p.name, shirt: p.shirt, driving: p.driving, bucket: [p.bucket.kind, p.bucket.kg, p.bucket.color.r, p.bucket.color.g, p.bucket.color.b], cement: [p.cement.kg, p.cement.color.r, p.cement.color.g, p.cement.color.b] })),
       nextMachineId: this.nextMachineId,
-      time: Math.round(this.dn.p * 1e4) / 1e4, cycle: this.dayCycle(),
+      time: Math.round(this.dn.p * 1e4) / 1e4, cycle: this.dayCycle(), weather: this.weather.state,
       charges: forSave ? [] : this.charges.pack(),
       press: this.press.serialize(),
       splashes: this.builder.pack(),
@@ -543,7 +554,7 @@ class Game {
     this.press.restore(w.press);
     this.builder.restore(w.splashes);
     if (typeof w.time === 'number') this.dn.p = w.time;
-    if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); }
+    if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); if (w.weather) this.weather.setState(w.weather); }
     this.dn.apply();
   }
 
@@ -1150,7 +1161,7 @@ class Game {
       case 'bld+': this.buildBuilding(e[1], e[2]); break;
       case 'bld-': this.removeBuildingFull(e[1]); break;
       case 'mix': this.mixer.restore(e[1]); break;
-      case 'tod': this.dn.p = e[1]; this.hostCycle = e[2]; break;
+      case 'tod': this.dn.p = e[1]; this.hostCycle = e[2]; if (e[3]) this.weather.setState(e[3]); break;
       case 'chg': this.charges.restore(e[1]); break;
       case 'press': this.press.restore(e[1]); break;
       case 'mortar': this.builder.restore(e[1]); break;
@@ -1253,6 +1264,18 @@ class Game {
       }
     }
     cam.updateMatrixWorld();
+  }
+  updateFlyCam(dt) {
+    const f = this.flyCam, input = this.input, cam = this.camera;
+    const look = input.consumeLook();
+    f.yaw -= look.x; f.pitch = clamp(f.pitch - look.y, -1.5, 1.5);
+    const dir = new THREE.Vector3(-Math.sin(f.yaw) * Math.cos(f.pitch), Math.sin(f.pitch), -Math.cos(f.yaw) * Math.cos(f.pitch));
+    const right = new THREE.Vector3(Math.cos(f.yaw), 0, -Math.sin(f.yaw));
+    const sp = (input.held('sprint') ? 24 : 8) * dt;
+    f.pos.addScaledVector(dir, clamp(input.moveY, -1, 1) * sp).addScaledVector(right, clamp(input.moveX, -1, 1) * sp);
+    if (input.held('jump')) f.pos.y += sp; if (input.held('cam')) f.pos.y -= sp;
+    f.pos.y = Math.max(terrainHeight(f.pos.x, f.pos.z) + 0.3, Math.min(120, f.pos.y));
+    cam.position.copy(f.pos); cam.lookAt(f.pos.clone().add(dir)); cam.updateMatrixWorld();
   }
   aimRay() {
     const dir = new THREE.Vector3(); this.camera.getWorldDirection(dir);
@@ -1370,7 +1393,8 @@ class Game {
 
     // ---- local control
     let ctxPrompt = null;
-    if (this.mode === 'foot') {
+    if (this.mode === 'foot' && this.flyCam) this.updateFlyCam(dt);
+    else if (this.mode === 'foot') {
       this.updateCamera(dt);
       this.player.update(dt, input, this.cam.yaw, this.aimRay());
       // place the camera again on the player's new position: a camera one frame behind makes the character
@@ -1525,23 +1549,32 @@ class Game {
         tracked: ['steel', 'rubber', 'pontoon'].includes(sp.under) || ['dozer', 'crane', 'paver', 'dumper'].includes(f),
         breaker: !!m.breakerActive, vibrating: !!m.vibrating, beep: ['truck', 'loader', 'dumper', 'roller', 'painter'].includes(f) && m.speed < -0.3 });
     }
+    this.traffic.voices(this.camera.position, voices);
     const sampled = this.audio.updateMachines(voices);
     this.audio.updateLoops(this.crusher, sampled ? null : loud ? { pos: loud.pos, running: true, rpm: loud.rpm, hyd: loud.hyd } : { pos: this.camera.position, running: false, rpm: 0, hyd: 0 });
     const focus = this.mode === 'foot' ? this.player.pos : this.driving.root.position;
     this.dn.cycle = this.dayCycle();
+    this.weather.update(dt, this.camera, auth, this.prefs.weather);
+    if (this.net.isHost && this.weather.state !== this.lastWx) { this.lastWx = this.weather.state; this.todTimer = 0; }
     const view = (this._dnView = this._dnView || { focus: new THREE.Vector3(), head: new THREE.Vector3(), dir: new THREE.Vector3(), machine: null, machines: null });
     view.focus.copy(focus); view.machine = this.driving; view.machines = machList;
     view.head.copy(this.player.pos); view.head.y += 1.75; this.camera.getWorldDirection(view.dir);
     this.dn.update(dt, view);
     if (this.net.isHost) {
       this.todTimer = (this.todTimer || 0) - dt;
-      if (this.todTimer <= 0) { this.todTimer = 10; this.events.push(['tod', Math.round(this.dn.p * 1e4) / 1e4, this.dayCycle()]); }
+      if (this.todTimer <= 0) { this.todTimer = 10; this.events.push(['tod', Math.round(this.dn.p * 1e4) / 1e4, this.dayCycle(), this.weather.state]); }
     }
     this.env.updateShadow(new THREE.Vector3(Math.round(focus.x), 0, Math.round(focus.z)));
     this.env.water.material.normalMap.offset.x += dt * 0.01; this.env.water.material.normalMap.offset.y += dt * 0.006;
     this.ui.updatePopups(dt, this.camera);
-    if (input.pressed('photo') && !this.input.touch) document.body.classList.toggle('photo');
+    if (input.pressed('photo') && !this.input.touch) {
+      const on = document.body.classList.toggle('photo');
+      // on foot, photo mode also frees the camera: fly with WASD + mouse, Space up, C down, Shift faster
+      this.flyCam = on && this.mode === 'foot' ? { pos: this.camera.position.clone(), yaw: this.cam.yaw, pitch: this.cam.pitch } : null;
+      if (on) this.ui.toast(this.flyCam ? '📷 Photo mode: fly with <b>WASD</b> + mouse, <b>Space</b> / <b>C</b> up and down, <b>P</b> to leave' : '📷 Photo mode: <b>P</b> to leave', true, 2500);
+    }
     this.charges.update(dt, auth);
+    this.traffic.update(dt);
     this.builder.update(dt);
     if (auth) {
       this.glueT = (this.glueT || 0) - dt;

@@ -189,6 +189,28 @@ export class Audio {
     this.tone(d, { dur: 0.05, f: 180, f2: 90, type: 'square', gain: 0.12 * s });
     this.noiseBurst(d, { dur: 0.1, f: 600, q: 1, gain: 0.25 * s });
   }
+  // ---- weather
+  setRain(level) {
+    if (!this.ctx) return;
+    if (!this.rainG) {
+      if (level < 0.01) return;
+      const c = this.ctx, src = c.createBufferSource(); src.buffer = this.noise; src.loop = true;
+      const hp = c.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 500;
+      const lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 5200;
+      const g = c.createGain(); g.gain.value = 0;
+      src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(this.master); src.start();
+      this.rainG = g;
+    }
+    this.rainG.gain.setTargetAtTime(Math.min(1, level) * 0.22, this.ctx.currentTime, 0.4);
+  }
+  thunder(delay = 1, s = 1) {
+    if (!this.ctx) return;
+    const d = this.out(null);
+    this.noiseBurst(d, { t: delay, dur: 3.5 + s * 2, f: 140, q: 0.6, type: 'lowpass', gain: 0.85 * s, brown: true, attack: 0.08 });
+    this.noiseBurst(d, { t: delay, dur: 0.5, f: 600, q: 0.5, type: 'lowpass', gain: 0.45 * s, brown: true, attack: 0.01 });
+    for (let i = 0; i < 4; i++) this.noiseBurst(d, { t: delay + 0.4 + Math.random() * 2.5, dur: 1.2, f: 90 + Math.random() * 80, q: 0.7, type: 'lowpass', gain: 0.4 * s, brown: true, attack: 0.15 });
+  }
+
   // ---- demolition charges, fireworks, horns
   explosion(pos, s = 1) {
     if (!this.ctx) return;

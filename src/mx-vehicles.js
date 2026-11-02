@@ -407,8 +407,13 @@ export function buildDumper(m) {
   const st = new THREE.Group(); st.position.set(0, 1.9, 1.15); U.add(st);
   seat(K, st, 0, 0.2, -0.05, 0);
   add(st, mergeG([rbox(0.4, 0.4, 0.2, 0.04, 0, 0.3, 0.4)]), K.plastic, false);
-  const rg = new THREE.Group(); rg.position.y = 1.05; U.add(rg);
-  rops(K, rg, 1.36, 2.2, 0.85, 0.72, K.paint);
+  // two-post ROPS behind the seat with a guard screen towards the skip, roof reaching forward over the operator
+  add(U, mergeG([tubeAB(V(-0.66, 1.05, 0.72), V(-0.66, 3.15, 0.72), 0.055, 12), tubeAB(V(0.66, 1.05, 0.72), V(0.66, 3.15, 0.72), 0.055, 12), tubeAB(V(-0.66, 3.15, 0.72), V(0.66, 3.15, 0.72), 0.055, 12),
+    tubeAB(V(-0.66, 2.2, 0.72), V(0.66, 2.2, 0.72), 0.04, 10), tubeAB(V(-0.66, 3.1, 0.72), V(-0.6, 3.12, 1.55), 0.035, 8), tubeAB(V(0.66, 3.1, 0.72), V(0.6, 3.12, 1.55), 0.035, 8)]), K.black);
+  add(U, mergeG([rbox(1.5, 0.1, 1.15, 0.05, 0, 3.22, 1.15)]), K.paint);
+  grille(U, 1.2, 0.85, 0, 2.65, 0.69, Math.PI, 12);
+  for (const sx of [-1, 1]) workLight(U, K, sx * 0.6, 3.32, 1.65, 0, 0.35, 0.8);
+  mirror(U, K, V(0.66, 2.6, 0.75), V(0.95, 2.75, 0.9), -0.3); mirror(U, K, V(-0.66, 2.6, 0.75), V(-0.95, 2.75, 0.9), 0.3);
   m.seat = anchor(st, 0, 1.15, 0); m.door = anchor(U, 1.0, 0, 1.0);
   m.beacon = add(U, cy(0.05, 0.05, 0.12, 14, 0.55, 3.32, 0.85), K.amber, false); m.beacon.userData.keep = true;
   for (const s of [-1, 1]) { const b = label(m.spec.brand, 0.8, 0.22, '#15171a'); b.position.set(s * 0.802, 1.5, 1.1); b.rotation.y = s * Math.PI / 2; U.add(b); }
@@ -418,10 +423,12 @@ export function buildDumper(m) {
   // skip pivots on its open, sloped lip (facing rearwards, away from the operator) and tips over it
   m.attach = new THREE.Group(); m.attach.position.set(0, 0.15, -0.75); m.upper.add(m.attach);
   const bed = new THREE.Group(); bed.position.set(0, 0, 0.75); bed.rotation.y = Math.PI; m.attach.add(bed);
-  const prof = [[-0.9, 0.0], [0.75, 0.0], [1.15, 0.85], [-0.95, 0.85]];
-  add(bed, mergeG([sidePlate(prof, 0.05, -0.95), sidePlate(prof, 0.05, 0.9), bx(1.9, 0.06, 1.7, 0, 0.03, -0.08), bx(1.9, 0.9, 0.06, 0, 0.45, -0.95), bx(1.9, 0.05, 0.6, 0, 0.42, 0.95, -1.13)]), K.paint);
-  add(bed, mergeG([...[-0.6, 0, 0.6].map((x) => bx(0.05, 0.08, 1.7, x, -0.03, -0.08)), bx(2.0, 0.06, 0.06, 0, 0.87, -0.95),
-    ...[-1, 1].flatMap((s) => [-0.5, 0.1, 0.6].map((z) => bx(0.04, 0.8, 0.07, s * 0.985, 0.42, z))), ...[-1, 1].map((s) => tubeAB(V(s * 0.98, 0.86, -0.95), V(s * 0.98, 0.86, 0.75), 0.03, 8))]), K.dark);
+  // curved tub: back wall rolling into the floor and up into the tipping lip, sides following the curve
+  const tub = curvePts([[-0.95, 0.9], [-0.94, 0.3], [-0.78, 0.04], [-0.3, 0.0], [0.55, 0.02], [0.92, 0.38], [1.15, 0.88]], 22);
+  add(bed, mergeG([shell(tub, 0.05, 1.86), sidePlate([...tub, [-0.95, 0.9]], 0.05, -0.98), sidePlate([...tub, [-0.95, 0.9]], 0.05, 0.93)]), K.paint);
+  add(bed, mergeG([...[-0.55, 0, 0.55].map((x) => bx(0.06, 0.1, 1.4, x, -0.04, -0.1)), tubeAB(V(-0.99, 0.92, -0.97), V(0.99, 0.92, -0.97), 0.04, 10),
+    ...[-1, 1].flatMap((s) => [-0.55, 0.05, 0.6].map((z) => bx(0.05, 0.75, 0.08, s * 1.0, 0.45, z))), ...[-1, 1].map((s) => tubeAB(V(s * 1.0, 0.91, -0.96), V(s * 1.0, 0.9, 1.15), 0.035, 8)),
+    ...[-1, 1].map((s) => rbox(0.08, 0.18, 0.3, 0.02, s * 0.75, -0.07, -0.55))]), K.dark);
   stick(bed, 'warn', 0.2, 0.0, 0.5, -0.985, Math.PI);
   cylinder(m, anchor(m.upper, 0, 0.08, -0.25), anchor(bed, 0, -0.02, -0.55), 0.08, 0.05);
   m.att = attStub('bed', { group: bed, grab: anchor(bed, 0, 0.4, 0) });
@@ -464,17 +471,21 @@ export function buildCrane(m) {
   const L = 16, w0 = 0.95, w1 = 0.45;
   const chordAt = (t, sx, sy) => { const w = w0 + (w1 - w0) * t; return V(sx * w / 2, sy * w / 2, t * L); };
   const lat = [];
-  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) lat.push(tubeAB(chordAt(0, sx, sy), chordAt(1, sx, sy), 0.045, 8));
+  for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) lat.push(tubeAB(chordAt(0, sx, sy), chordAt(1, sx, sy), 0.065, 8));
   const bays = 20;
   for (let i = 0; i < bays; i++) {
     const t0 = i / bays, t1 = (i + 1) / bays;
     for (const [a, b] of [[[-1, -1], [1, -1]], [[1, -1], [1, 1]], [[1, 1], [-1, 1]], [[-1, 1], [-1, -1]]]) {
-      lat.push(tubeAB(chordAt(t0, ...a), chordAt(t1, ...b), 0.02, 6));
-      if (i % 2 === 0) lat.push(tubeAB(chordAt(t0, ...a), chordAt(t0, ...b), 0.018, 6));
+      lat.push(tubeAB(chordAt(t0, ...a), chordAt(t1, ...b), 0.028, 6));
+      if (i % 2 === 0) lat.push(tubeAB(chordAt(t0, ...a), chordAt(t0, ...b), 0.025, 6));
     }
   }
   add(m.boomG, mergeG(lat), K.paint);
-  add(m.boomG, mergeG([pinX(0.1, 1.2, 0, 0, 0), cy(0.35, 0.35, 0.12, 24, 0.1, 0.2, L + 0.1, 0, 0, Math.PI / 2), cy(0.35, 0.35, 0.12, 24, -0.1, 0.2, L + 0.1, 0, 0, Math.PI / 2), rbox(0.5, 0.6, 0.6, 0.04, 0, 0.1, L - 0.1)]), K.dark);
+  add(m.boomG, mergeG([pinX(0.1, 1.2, 0, 0, 0), cy(0.35, 0.35, 0.12, 24, 0.1, 0.2, L + 0.1, 0, 0, Math.PI / 2), cy(0.35, 0.35, 0.12, 24, -0.1, 0.2, L + 0.1, 0, 0, Math.PI / 2), rbox(0.5, 0.6, 0.6, 0.04, 0, 0.1, L - 0.1),
+    // boom foot: side plates round the hinge pin
+    ...[-1, 1].map((s) => rbox(0.06, 0.95, 1.4, 0.03, s * 0.5, 0, 0.5)), rbox(1.06, 0.06, 1.2, 0.02, 0, -0.47, 0.5)]), K.dark);
+  // backstops: telescopic struts from the house to the boom that stop it going over backwards
+  for (const s of [-1, 1]) cylinder(m, anchor(U, s * 0.45, 1.95, -0.6), anchor(m.boomG, s * 0.42, 0.45, 2.6), 0.07, 0.045);
   stick(m.boomG, 'warn', 0.3, 0, 0.5, L - 0.39, 0);
   m.tip = anchor(m.boomG, 0, -0.1, L + 0.3);
   // pendant ropes from the gantry to the boom tip and the hoist rope + ball (updated every frame)

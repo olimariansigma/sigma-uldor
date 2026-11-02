@@ -55,7 +55,7 @@ export class DayNight {
       skyDay: new THREE.Color(0xcfe3ff), skyNight: new THREE.Color(0x3a4c76), skyDusk: new THREE.Color(0xffc29a),
       gndDay: new THREE.Color(0x5b5040), gndNight: new THREE.Color(0x17161d),
       fogDay: new THREE.Color(0xc6d3df), fogNight: new THREE.Color(0x242d3c), fogDusk: new THREE.Color(0xd7a487),
-      cloudNight: new THREE.Color(0x2a3242), cloudDusk: new THREE.Color(0xffb38c), white: new THREE.Color(0xffffff),
+      cloudNight: new THREE.Color(0x2a3242), cloudDusk: new THREE.Color(0xffb38c), white: new THREE.Color(0xffffff), overcast: new THREE.Color(0x8c939b),
     };
     this.tmp = new THREE.Color();
 
@@ -190,29 +190,36 @@ export class DayNight {
     // shadows from a very low light are endless streaks: keep the shadow (and light) direction at least ~11° up
     if (this.key.y < 0.2) { const h = Math.hypot(this.key.x, this.key.z) || 1; const k = Math.sqrt(1 - 0.04) / h; this.key.x *= k; this.key.z *= k; this.key.y = 0.2; }
     e.sunDir.copy(this.key);
+    const oc = this.overcast || 0;
+    sun.intensity *= 1 - 0.78 * oc;
 
     e.hemi.color.copy(C.skyNight).lerp(C.skyDay, day).lerp(C.skyDusk, dusk * 0.35 * day);
     e.hemi.groundColor.copy(C.gndNight).lerp(C.gndDay, day);
-    e.hemi.intensity = lerp(0.42, 0.55, day);
-    this.scene.environmentIntensity = lerp(0.1, 0.75, day);
+    e.hemi.intensity = lerp(0.42, 0.55, day) + (this.flash || 0) * 2.5; // lightning
+    this.scene.environmentIntensity = lerp(0.1, 0.75, day) * (1 - 0.3 * oc);
+    e.hemi.color.lerp(C.overcast, oc * 0.5 * day);
     const fog = this.scene.fog;
     fog.color.copy(C.fogNight).lerp(C.fogDay, day).lerp(C.fogDusk, dusk * 0.5 * SS(y, -0.1, 0.05));
-    fog.near = lerp(55, 110, day); fog.far = lerp(420, 700, day);
+    fog.color.lerp(this.tmp.copy(C.overcast).multiplyScalar(0.25 + 0.75 * day), oc * 0.75);
+    fog.near = lerp(55, 110, day) * (1 - 0.55 * oc); fog.far = lerp(420, 700, day) * (1 - 0.5 * oc);
     this.renderer.toneMappingExposure = lerp(1.35, 1.0, day); // eyes adjust to the dark
 
     const cm = e.clouds.material;
     cm.color.copy(C.cloudNight).lerp(C.white, day).lerp(C.cloudDusk, dusk * 0.6);
-    cm.opacity = lerp(0.5, 0.85, day);
-    this.stars.material.opacity = night;
-    this.stars.visible = night > 0.01;
+    cm.opacity = lerp(0.5, 0.85, day) + (1 - lerp(0.5, 0.85, day)) * oc;
+    cm.color.lerp(this.tmp.copy(C.overcast).multiplyScalar(0.2 + 0.8 * day), oc * 0.8);
+    su.uDay.value *= 1 - 0.45 * oc;
+    this.stars.material.opacity = night * (1 - oc);
+    this.stars.visible = this.stars.material.opacity > 0.01;
     this.stars.rotation.y = this.p * Math.PI * 2 * 0.25;
     this.moon.position.copy(this.moonV).multiplyScalar(2050);
     this.moon.lookAt(0, 0, 0);
     this.moon.visible = this.moonV.y > -0.08;
-    this.moon.material.opacity = 1 - day * 0.8;
+    this.moon.material.opacity = (1 - day * 0.8) * (1 - 0.85 * oc);
 
     // glowing things
     this.M.lightLens.emissiveIntensity = 0.6 + lit * 3.4;
+    this.M.redLens.emissiveIntensity = 0.6 + lit * 2.2; // tail lights
     e.towerLens.emissiveIntensity = lit * 5;
     for (const w of this.windows) w.m.emissiveIntensity = w.k * lit;
     this.poolMat.opacity = 0.42 * lit; this.pools.visible = lit > 0.01;

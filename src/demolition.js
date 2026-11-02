@@ -370,6 +370,7 @@ export class Demolition {
 
   detach(p, impulse = null, collapse = false) {
     if (p.state !== INTACT) return;
+    this.detachCount = (this.detachCount || 0) + 1; // blocks broken loose (destruction combos)
     this.byCollider.delete(p.collider.handle);
     this.world.removeCollider(p.collider, false);
     this.makeBody(p, !this.authority);

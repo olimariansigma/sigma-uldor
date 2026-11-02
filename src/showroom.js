@@ -83,7 +83,7 @@ export class Showroom {
     this.machine = new Machine(this.ctx(), spec, -1, new THREE.Vector3(0, 0, 0), this.spin);
     this.machine.driver = -1;
     // let the crane ball settle so it does not start mid-swing
-    if (spec.family === 'crane') for (let i = 0; i < 240; i++) this.machine.idle(1 / 60, false);
+    if (spec.family === 'crane' || this.machine.xball) for (let i = 0; i < 240; i++) this.machine.idle(1 / 60, false);
     this.frame();
   }
 

@@ -328,3 +328,13 @@ body.panel-open #hotbar { visibility: hidden; }
 }
 .tb-horn .ic { width: 24px; height: 24px; }
 body.photo #hud { visibility: hidden; }
+
+/* destruction combo popup */
+#combo { position: absolute; top: 20%; left: 50%; transform: translateX(-50%); pointer-events: none; text-align: center; white-space: nowrap; opacity: 0; }
+#combo b { display: block; font-family: var(--fd); font-size: 54px; color: #ffd23c; letter-spacing: 1px; text-shadow: 0 4px 0 #b4560e, 0 0 24px rgba(255, 140, 30, .7), 0 8px 18px rgba(0, 0, 0, .55); }
+#combo small { display: block; margin-top: 4px; font-weight: 800; font-size: 17px; color: #fff; text-shadow: 0 2px 6px rgba(0, 0, 0, .8); }
+#combo.pop { animation: comboPop 2.2s ease-out forwards; }
+#combo.rec b { color: #7ff0ff; text-shadow: 0 4px 0 #1a6f88, 0 0 26px rgba(80, 220, 255, .8), 0 8px 18px rgba(0, 0, 0, .55); }
+@keyframes comboPop { 0% { opacity: 0; transform: translateX(-50%) scale(.4) rotate(-6deg); } 12% { opacity: 1; transform: translateX(-50%) scale(1.15) rotate(2deg); } 22% { transform: translateX(-50%) scale(1) rotate(0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(.95); } }
+body.touch #combo b { font-size: 38px; }
+body.photo #combo { display: none; }

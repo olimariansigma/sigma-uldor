@@ -5,9 +5,21 @@ import { paintOf } from './mx-vehicles.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { INTACT, LOOSE, HELD, machineBit } from './demolition.js';
 import { inWater, terrainHeight } from './site.js';
+import { funBehaviour, frontLoader } from './funLogic.js';
 
 const _m = new THREE.Matrix4(), _p = new THREE.Vector3(), _q = new THREE.Quaternion(), _s = new THREE.Vector3();
 const WATER_COL = new THREE.Color(0x3d7080);
+const FUN_BEH = new Set(['magnet', 'xball', 'blaster', 'cutter', 'saw', 'auger', 'plate', 'forks', 'jet']);
+
+// world matrix of a held piece. The hold matrix's last element says which machine frame it rides on:
+// 1 = the tool (holdFrame), 2 = the backhoe's front bucket, 3 = the blaster's block cage
+const _hl = new THREE.Matrix4();
+export function heldWorld(m, local, out) {
+  const k = Math.round(local.elements[15]);
+  const f = (k === 2 && m.frontFrame) || (k === 3 && m.magFrame) || m.holdFrame();
+  _hl.copy(local); _hl.elements[15] = 1;
+  return out.multiplyMatrices(f.matrixWorld, _hl);
+}
 
 export function machineInteract(m, dt, W) {
   const { demo, sfx } = W;
@@ -42,7 +54,7 @@ export function machineInteract(m, dt, W) {
       const { p, q } = m.shapePose(b);
       const pv = m.prevBreak[i], v = pv ? p.distanceTo(pv) / Math.max(dt, 1e-3) : 0;
       m.prevBreak[i] = p.clone();
-      if (m.family === 'crane' && m.ballSt) {
+      if (b.ball && m.ballSt) {
         const bs = m.ballSt.v.length();
         const n = hitWith(b.outer, p, q, () => Math.max(0, bs - 1.0) * 1.4);
         if (n && bs > 1) { m.ballSt.v.multiplyScalar(0.72); m.hyd = 1; }
@@ -98,7 +110,7 @@ export function machineInteract(m, dt, W) {
 
   if (beh === 'jaw') {
     if (m.openTarget < 0.5 && prevOpen > 0.4 && m.open <= 0.4) grab(m, demo, gp, sfx, W.capacityScale || 1);
-    if (m.openTarget > 0.5 && m.held.length && m.open > 0.3) releaseAll(m, demo, dt);
+    if (m.openTarget > 0.5 && m.held.length && m.open > 0.3) releaseMain(m, demo, dt);
   } else if (beh === 'scoop' || beh === 'skip' || beh === 'crusher') {
     const mouth = att.mouth.getWorldPosition(new THREE.Vector3());
     const n = att.mouthN.clone().applyQuaternion(att.group.getWorldQuaternion(new THREE.Quaternion()));
@@ -108,7 +120,7 @@ export function machineInteract(m, dt, W) {
       const room = att.pieces - m.held.length;
       // scoop while the bucket is facing up or actively curling through the pile
       if ((up || curlingIn) && room > 0 && (!m.payload.kg || beh === 'crusher')) scoop(m, demo, gp, Math.max(0.95, att.grabR * s * 1.15), room);
-      if (down && m.held.length) releaseAll(m, demo, dt);
+      if (down && m.held.length) releaseMain(m, demo, dt);
     }
     if (beh === 'crusher') crushInBucket(m, dt, W);
     if (!down && n.y > -0.2 && !m.held.length && beh !== 'crusher') fillBulk(m, dt, mouth, W);
@@ -118,7 +130,8 @@ export function machineInteract(m, dt, W) {
   } else if (beh === 'breaker') {
     m.breakerActive = m.openTarget > 0.5;
     if (m.breakerActive) breaker(m, dt, W);
-  } else if (beh === 'roller') roller(m, dt, W);
+  } else if (FUN_BEH.has(beh)) funBehaviour(m, dt, W);
+  else if (beh === 'roller') roller(m, dt, W);
   else if (beh === 'paver') paver(m, dt, W);
   else if (beh === 'paint') painter(m, dt, W);
   else if (beh === 'ball') wreckingBall(m, dt, W);
@@ -144,14 +157,16 @@ export function machineInteract(m, dt, W) {
     }
   }
 
-  // ---- held pieces follow the attachment
-  const am = m.holdFrame().matrixWorld;
-  for (const h of m.held) {
+  if (m.frontFrame) frontLoader(m, dt, W);
+
+  // ---- held pieces follow the attachment (or the front bucket / block cage they ride in)
+  for (const list of m.held2 ? [m.held, m.held2] : [m.held]) for (const h of list) {
     if (h.p.state !== HELD) continue;
-    _m.multiplyMatrices(am, h.local); _m.decompose(_p, _q, _s);
+    heldWorld(m, h.local, _m); _m.decompose(_p, _q, _s);
     demo.moveHeld(h.p, _p, _q);
   }
   m.held = m.held.filter((h) => h.p.state === HELD);
+  if (m.held2) m.held2 = m.held2.filter((h) => h.p.state === HELD);
   m.lastGp = gp;
 }
 
@@ -195,7 +210,7 @@ function clampLogic(m, dt, W, gp) {
 }
 function finishClamp(m, demo, gp, dt) {
   m.lastGpC = gp.clone(); m.lastVC = null; m.accSm = 0;
-  if (m.openTarget > 0.5 && m.held.length && m.open > 0.45) releaseAll(m, demo, dt);
+  if (m.openTarget > 0.5 && m.held.length && m.open > 0.45) releaseMain(m, demo, dt);
 }
 
 // grind an intact block down; returns true when it breaks loose
@@ -254,11 +269,17 @@ function scoop(m, demo, gp, r, room) {
   }
 }
 
-export function releaseAll(m, demo, dt) {
+// drop what the tool holds
+function releaseMain(m, demo, dt) {
   const gp = m.grabPoint.getWorldPosition(new THREE.Vector3());
   const vel = m.lastGp ? gp.clone().sub(m.lastGp).divideScalar(Math.max(dt, 1e-3)).clampLength(0, 6) : new THREE.Vector3();
   for (const h of m.held) demo.release(h.p, vel, machineBit(m.id));
   m.held = [];
+}
+// drop everything (also the backhoe's front bucket and the blaster's cage), e.g. when the machine is removed
+export function releaseAll(m, demo, dt) {
+  releaseMain(m, demo, dt);
+  if (m.held2) { for (const h of m.held2) demo.release(h.p, null, machineBit(m.id)); m.held2 = []; }
 }
 
 function setPay(m, kind, kg, color, W) {

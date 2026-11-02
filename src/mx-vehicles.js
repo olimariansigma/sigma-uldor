@@ -82,7 +82,7 @@ function fender(cz, cyy, r, a0, a1, w, x, thick = 0.035) {
 function tooth(x, y, z, s = 1) { return [rbox(0.11 * s, 0.09 * s, 0.24 * s, 0.02, x, y, z), cy(0.005, 0.055 * s, 0.2 * s, 4, x, y, z + 0.21 * s, Math.PI / 2, Math.PI / 4)]; }
 
 // enclosed operator cab with a leaning glasshouse, framed door, roof with visor and AC unit, full interior
-function modernCab(m, parent, x, y, z, { w = 1.5, d = 1.65, h = 1.95, door = 1, roofMat = null, wheel = true } = {}) {
+export function modernCab(m, parent, x, y, z, { w = 1.5, d = 1.65, h = 1.95, door = 1, roofMat = null, wheel = true } = {}) {
   const K = m.mats, c = new THREE.Group(); c.position.set(x, y, z); parent.add(c);
   const hw = w / 2, hd = d / 2, base = 0.34, top = h - 0.15, bz = -0.12;
   const B = (sx, sz) => V(sx * hw, base, sz * hd);

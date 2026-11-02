@@ -189,6 +189,25 @@ export class Audio {
     this.tone(d, { dur: 0.05, f: 180, f2: 90, type: 'square', gain: 0.12 * s });
     this.noiseBurst(d, { dur: 0.1, f: 600, q: 1, gain: 0.25 * s });
   }
+  // ---- special excavator tools (synthesised)
+  tool(kind, pos, s = 1) {
+    if (!this.ctx) return;
+    const d = this.out(pos, 8), N = (o) => this.noiseBurst(d, o), T = (o) => this.tone(d, o);
+    switch (kind) {
+      case 'zap': T({ dur: 0.35, f: 90, f2: 240, type: 'sawtooth', gain: 0.12 * s }); N({ dur: 0.25, f: 3000, q: 2, gain: 0.15 * s }); break;
+      case 'hum': T({ dur: 0.75, f: 100, type: 'sawtooth', gain: 0.05 * s, attack: 0.1 }); T({ dur: 0.75, f: 50, type: 'sine', gain: 0.08 * s, attack: 0.1 }); break;
+      case 'chain': for (let i = 0; i < 5; i++) N({ t: i * 0.07, dur: 0.06, f: 2600 + Math.random() * 1500, q: 4, gain: 0.25 * s }); break;
+      case 'vac': N({ dur: 0.95, f: 1400, q: 0.6, gain: 0.22 * s, attack: 0.15 }); T({ dur: 0.95, f: 420, f2: 470, type: 'triangle', gain: 0.03 * s, attack: 0.15 }); break;
+      case 'thunk': T({ dur: 0.18, f: 160, f2: 60, type: 'sine', gain: 0.5 * s }); N({ dur: 0.12, f: 500, q: 1, gain: 0.3 * s }); break;
+      case 'fire': N({ dur: 0.35, f: 700, q: 0.5, type: 'lowpass', gain: 0.7 * s, attack: 0.004, brown: true }); T({ dur: 0.25, f: 140, f2: 45, type: 'sine', gain: 0.6 * s }); N({ dur: 0.2, f: 2500, q: 0.8, gain: 0.25 * s }); break;
+      case 'grind': N({ dur: 0.3, f: 900, q: 1.5, gain: 0.35 * s }); N({ dur: 0.3, f: 3200, q: 3, gain: 0.15 * s }); T({ dur: 0.3, f: 110, type: 'square', gain: 0.05 * s }); break;
+      case 'saw': N({ dur: 0.26, f: 4200, q: 6, gain: 0.3 * s }); T({ dur: 0.26, f: 1800, f2: 1500, type: 'sawtooth', gain: 0.05 * s }); break;
+      case 'whine': T({ dur: 0.9, f: 1300, f2: 1350, type: 'triangle', gain: 0.025 * s, attack: 0.2 }); break;
+      case 'drill': N({ dur: 0.3, f: 600, q: 1.2, gain: 0.3 * s }); T({ dur: 0.3, f: 75, type: 'square', gain: 0.06 * s }); break;
+      case 'thump': T({ dur: 0.1, f: 70, f2: 45, type: 'sine', gain: 0.45 * s }); T({ t: 0.15, dur: 0.1, f: 70, f2: 45, type: 'sine', gain: 0.4 * s }); break;
+      case 'jet': N({ dur: 0.45, f: 5000, q: 0.7, type: 'highpass', gain: 0.18 * s, attack: 0.05 }); N({ dur: 0.45, f: 1200, q: 0.8, gain: 0.1 * s, attack: 0.05 }); break;
+    }
+  }
   // ---- weather
   setRain(level) {
     if (!this.ctx) return;

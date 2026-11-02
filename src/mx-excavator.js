@@ -4,12 +4,14 @@ import { buildTrackUnit } from './tracks.js';
 import { buildAttachment, sidePlate } from './attachments.js';
 import { mergeG, rbox, bx, cy, pinX, tubeAB, hose, bolts, boltRow, boltCircle, rail, ladder, workLight, mirror, grille, stick, label, stripeDecal, add, V, exteriorOnly, tyreLathe, wheelRim } from './detail.js';
 import * as T from './textures.js';
+import { buildBackhoe, funExtras } from './mx-fun.js';
 
-const BOOMS = { mono: { len: 5.6, ky: 1.0 }, long: { len: 9.6, ky: 1.15 }, straight: { len: 7.0, ky: 0.55 } };
+const BOOMS = { mono: { len: 5.6, ky: 1.0 }, long: { len: 9.6, ky: 1.15 }, straight: { len: 7.0, ky: 0.55 }, backhoe: { len: 4.1, ky: 1.25 } };
 const UNDER_Y = { steel: 1.06, rubber: 1.0, wheels: 1.5, pontoon: 1.75, spider: 1.55, robot: 0.95 };
 
 export function buildExcavator(m) {
   const sp = m.spec;
+  if (sp.under === 'backhoe') return buildBackhoe(m, arm);
   m.under = new THREE.Group(); m.model.add(m.under);
   ({ steel: tracks, rubber: tracks, wheels, pontoon: pontoons, spider, robot: robotUnder })[sp.under](m);
   if (sp.blade) blade(m);
@@ -18,12 +20,13 @@ export function buildExcavator(m) {
   if (sp.cab !== 'none') cab(m);
   else { m.seat = m.anchor(m.upper, 0, 1.3, -0.4); m.door = m.anchor(m.upper, 1.2, 0, 0); }
   arm(m);
+  funExtras(m);
   m.colliderSets.push({ obj: m.under, boxes: m.underBoxes, chassis: true }, { obj: m.upper, boxes: m.upperBoxes, chassis: true });
   m.bakeList.push(m.under, m.upper, m.boomG, m.stickG, m.cabShell || m.upper, m.att.group);
   const lim = sp.boom === 'long' ? { boom: [-1.5, 0.35], stick: [0.35, 2.7], curl: [-0.9, 1.9] } : sp.boom === 'straight' ? { boom: [-1.32, 0.5], stick: [0.3, 2.6], curl: [-0.9, 2.0] } : { boom: [-1.25, 0.62], stick: [0.25, 2.55], curl: [-1.0, 2.1] };
   m.rig = {
     family: 'excavator', drive: sp.under === 'wheels' || sp.under === 'spider' ? 'car' : 'tank', swing: true,
-    limits: { swing: null, ...lim, ...(sp.attach === 'brickclamp' ? { rot: null } : {}) }, rates: { swing: 0.7, boom: 0.5, stick: 0.7, curl: 1.1, rot: 0.75 },
+    limits: { swing: null, ...lim, ...(sp.attach === 'brickclamp' || sp.attach === 'blaster' ? { rot: null } : {}) }, rates: { swing: 0.7, boom: 0.5, stick: 0.7, curl: 1.1, rot: 0.75 },
     apply(mm) {
       mm.upper.rotation.y = mm.swing; mm.boomG.rotation.x = mm.boom; mm.stickG.rotation.x = mm.stickA; mm.attach.rotation.x = mm.curl;
       if (mm.updateLink) mm.updateLink();
@@ -36,9 +39,10 @@ export function buildExcavator(m) {
       if (mm.tiltPivot) mm.tiltPivot.rotation.x = Math.max(-0.5, Math.min(0, mm.boom * 0.45));
       for (const w of mm.steerWheels) w.rotation.y = mm.steerVis;
       if (mm.att.crushJaw) mm.att.crushJaw.rotation.x = mm.crushing ? Math.sin(performance.now() * 0.03) * 0.12 : 0;
+      if (mm.att.applyFun) mm.att.applyFun(mm);
     },
   };
-  m.defaults = sp.boom === 'long' ? { boom: -0.75, stick: 2.0, curl: 0.9 } : { boom: -0.3, stick: 1.5, curl: 0.9 };
+  m.defaults = m.defaultsOverride || (sp.boom === 'long' ? { boom: -0.75, stick: 2.0, curl: 0.9 } : { boom: -0.3, stick: 1.5, curl: 0.9 });
 }
 
 // =============================================================================== undercarriages
@@ -447,7 +451,8 @@ function arm(m) {
   const bd = BOOMS[sp.boom] || BOOMS.mono;
   const kz = bd.len / 5.6, ky = bd.ky;
   m.boomLen = bd.len;
-  m.boomG = new THREE.Group(); m.boomG.position.set(sp.mini ? -0.55 : -0.21, sp.upper === 'robot' ? 0.78 : 0.78, sp.mini ? 1.45 : 1.28); U.add(m.boomG);
+  const bm = m.boomMount || [sp.mini ? -0.55 : -0.21, 0.78, sp.mini ? 1.45 : 1.28];
+  m.boomG = new THREE.Group(); m.boomG.position.set(bm[0], bm[1], bm[2]); U.add(m.boomG);
   if (sp.mini) {
     // swing post bracket that carries the boom on a mini excavator
     add(U, mergeG([rbox(0.55, 0.7, 0.45, 0.06, -0.55, 0.5, 1.45), cy(0.12, 0.12, 0.8, 16, -0.55, 0.55, 1.2)]), K.paint);
@@ -536,7 +541,7 @@ function arm(m) {
   for (const p of m.att.probes) m.probes.push(p);
   m.probes.push({ obj: m.anchor(m.stickG, 0, 0, stickLen * 0.75), r: 0.38 }, { obj: m.anchor(m.stickG, 0, 0.4, -0.4), r: 0.38 });
   // hydraulic cylinders
-  for (const s of [-1, 1]) cylinder(m, m.anchor(U, (sp.mini ? -0.55 : -0.21) + s * 0.36, 0.42, sp.mini ? 2.0 : 1.95), m.anchor(m.boomG, s * 0.36, lug[1] - 0.08, lug[0]), 0.11, 0.065);
+  for (const s of [-1, 1]) cylinder(m, m.anchor(U, bm[0] + s * 0.36, bm[1] - 0.36, bm[2] + (sp.mini ? 0.55 : 0.67)), m.anchor(m.boomG, s * 0.36, lug[1] - 0.08, lug[0]), 0.11, 0.065);
   cylinder(m, m.anchor(m.boomG, 0, knee[1] + 0.03, knee[0]), m.anchor(m.stickG, 0, 0.5, -0.6), 0.1, 0.06);
   linkage(m, stickLen, armMat, ak);
   cylinder(m, m.anchor(m.stickG, 0, 0.5, 0.45), m.linkJ, 0.085, 0.05);

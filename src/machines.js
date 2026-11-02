@@ -8,6 +8,7 @@ import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCra
 import { buildTruck, TRUCK_SIZES } from './mx-truck.js';
 import { terrainHeight, SITE } from './site.js';
 import { machineGroups } from './demolition.js';
+import { STARTS_OFF } from './mx-fun.js';
 
 const clamp = THREE.MathUtils.clamp;
 const _v = new THREE.Vector3(), _q = new THREE.Quaternion();
@@ -31,6 +32,17 @@ export const MACHINES = [
   { id: 'lc200', tons: 20, family: EX, name: 'LIMEWORKS LC200 Concrete', brand: 'LIMEWORKS', model: 'LC200', icon: '🪣', desc: 'Concrete skip. Fill it at the mixer, then open the gate over a pothole or into the paver.', scale: 0.9, paint: 0x9acb12, accent: 0x1b1b1b, under: 'steel', cab: 'cab', boom: 'mono', stickLen: 3.2, attach: 'skip', speed: 2.6 },
   { id: 'sx5', tons: 9, family: EX, name: 'ALPINA SX5 Walking Spider', brand: 'ALPINA', model: 'SX5', icon: '🕷️', desc: 'Walking excavator on four legs: wheels at the back, steel claws at the front.', scale: 0.9, paint: 0xd8262b, accent: 0x222222, under: 'spider', cab: 'cab', boom: 'mono', stickLen: 3.0, attach: 'bucket', speed: 3.2 },
   { id: 'dr160', tons: 1.6, family: EX, name: 'BROCKMAN DR160 Demolition Robot', brand: 'BROCKMAN', model: 'DR160', icon: '🤖', desc: 'Remote-controlled demolition robot with outrigger legs and a breaker. Tiny but brutal.', scale: 0.55, paint: 0xf5f5f2, accent: 0xff6a00, under: 'robot', upper: 'robot', cab: 'none', boom: 'mono', stickLen: 2.6, attach: 'breaker', speed: 1.6 },
+  // ---- special excavators
+  { id: 'bl4', tons: 8.5, family: EX, name: 'BRAVO BL4 Backhoe Loader', brand: 'BRAVO', model: 'BL4', icon: '🚜', desc: 'Two machines in one, like the ones digging up city streets: a loader bucket on the front (T / Y raise it, Click tips it to dump) and a digging arm on the back with stabiliser legs. Quick on the road.', scale: 1, paint: 0xf3b21a, accent: 0x1d1e20, under: 'backhoe', cab: 'cab', boom: 'backhoe', stickLen: 2.5, attach: 'bucket', attachScale: 0.78, speed: 8.5 },
+  { id: 'mg40', tons: 40, family: EX, name: 'HALDEN MG40 Scrap Magnet', brand: 'HALDEN', model: 'MG40', icon: '🧲', desc: 'Material handler with a huge electromagnet. Switch it on and loose blocks fly up and stick to it (up to 10), and it rips blocks right out of walls. Switch it off to drop the lot.', scale: 1.05, paint: 0x2e7d4f, accent: 0xf2c200, under: 'wheels', cab: 'elevated', boom: 'straight', stickLen: 4.0, attach: 'magnet', speed: 4.6 },
+  { id: 'wb300', tons: 30, family: EX, name: 'TORVA WB300 Ball Swinger', brand: 'TORVA', model: 'WB300', icon: '⛓️', desc: 'An excavator with a 2-tonne wrecking ball on a chain. Whip the arm around and let the ball fly into walls. Click lets the chain out or reels it in.', scale: 1, paint: 0x2b2d31, accent: 0xff5a1f, armPaint: 0xff5a1f, under: 'steel', cab: 'cab', boom: 'mono', attach: 'xball', speed: 2.6 },
+  { id: 'vx50', tons: 28, family: EX, name: 'VORTEX VX50 Block Blaster', brand: 'VORTEX', model: 'VX50', icon: '🌀', desc: 'A suction excavator gone wild. Switch the vacuum on and it sucks loose blocks into the nozzle and stacks them in the cage on its back (up to 8). Then hold T or Y to fire them out at walls.', scale: 1, paint: 0x7a3fd6, accent: 0x1b1c20, under: 'steel', cab: 'cab', boom: 'mono', attach: 'blaster', speed: 2.6 },
+  { id: 'dc60', tons: 34, family: EX, name: 'GRINDA DC60 Drum Cutter', brand: 'GRINDA', model: 'DC60', icon: '🥁', desc: 'Twin spinning drums full of carbide picks. Switch them on and press into a wall or a heap of rubble: it grinds the blocks straight into coloured dust, and the dust counts as crushed.', scale: 1.05, paint: 0xe0571c, accent: 0x202124, under: 'steel', cab: 'cab', boom: 'mono', attach: 'cutter', heavy: true, speed: 2.3 },
+  { id: 'rs30', tons: 30, family: EX, name: 'SAWTEK RS30 Rock Saw', brand: 'SAWTEK', model: 'RS30', icon: '🪚', desc: 'A 2-metre diamond saw blade on the arm. Spin it up and slice through walls: every block the blade passes through is cut clean out, so you can cut whole wall sections loose.', scale: 1, paint: 0x1f8fd6, accent: 0x15171a, under: 'steel', cab: 'cab', boom: 'mono', attach: 'saw', speed: 2.6 },
+  { id: 'ad20', tons: 20, family: EX, name: 'TORQUE AD20 Auger Drill', brand: 'TORQUE', model: 'AD20', icon: '🌪️', desc: 'A giant spinning auger on a wheeled excavator. Bore straight through walls, or drill new potholes into the road in seconds.', scale: 0.95, paint: 0xc8d81e, accent: 0x1b1b1b, under: 'wheels', cab: 'cab', boom: 'mono', attach: 'auger', blade: true, speed: 6.0 },
+  { id: 'vp12', tons: 14, family: EX, name: 'PLATO VP12 Plate Compactor', brand: 'PLATO', model: 'VP12', icon: '〰️', desc: 'A vibrating compaction plate on the arm. Press it on a filled pothole to compact it to a perfect finish, or hold it against a building to shake the blocks loose. Rubble nearby hops around.', scale: 0.8, paint: 0x3fa34d, accent: 0x18191b, under: 'rubber', cab: 'cab', boom: 'mono', attach: 'plate', speed: 2.4 },
+  { id: 'fk18', tons: 18, family: EX, name: 'MERIDIAN FK18 Fork Handler', brand: 'MERIDIAN', model: 'FK18', icon: '🍴', desc: 'Wheeled excavator with pallet forks. Lower the forks next to a pile of blocks and lock: up to 8 blocks snap into a neat stack on the tines. Perfect for carrying pressed blocks to your building plot.', scale: 0.92, paint: 0xd9dde0, accent: 0x2f9a46, under: 'wheels', cab: 'cab', boom: 'mono', attach: 'forks', blade: true, speed: 6.5 },
+  { id: 'hj40', tons: 4, family: EX, name: 'AQUAJET HJ40 Water Cannon', brand: 'AQUAJET', model: 'HJ40', icon: '💦', desc: 'Remote hydrodemolition robot: a high-pressure water jet that blasts blocks out of walls from 14 m away and sends loose ones flying. Aim it into the mixer to add water.', scale: 0.6, paint: 0x1aa6c9, accent: 0xf2f2ee, under: 'robot', upper: 'robot', cab: 'none', boom: 'mono', stickLen: 2.8, attach: 'jet', speed: 1.8 },
   // ---- road & site machines
   { id: 'cr64', tons: 9, family: 'roller', name: 'TORVA CR64 Tandem Roller', brand: 'TORVA', model: 'CR64', icon: '🛞', desc: 'Twin vibrating steel drums. Roll over a cement-filled pothole to compact it to a perfect finish.', scale: 1.0, paint: 0xf2b200, speed: 3.5 },
   { id: 'ap600', tons: 18, family: 'paver', name: 'VELOTA AP600 Paver', brand: 'VELOTA', model: 'AP600', icon: '🛣️', desc: 'Pour cement into its hopper, switch the flow on and drive over potholes to pave them.', scale: 1.0, paint: 0xf5c400, accent: 0x222222, speed: 2.2 },
@@ -80,7 +92,7 @@ export class Machine {
     if (this.att && this.att.pieces && this.att.behaviour !== 'clamp') this.att.pieces = Math.max(1, Math.round(this.att.pieces / (this.att.behaviour === 'jaw' ? 2 : 3)));
     const d = this.defaults || {};
     this.boom = d.boom ?? 0; this.stickA = d.stick ?? 0; this.curl = d.curl ?? 0;
-    if (['breaker', 'skip', 'crusher'].includes(spec.attach) || spec.family !== EX) { this.open = 0; this.openTarget = 0; }
+    if (['breaker', 'skip', 'crusher'].includes(spec.attach) || STARTS_OFF.has(spec.attach) || spec.under === 'backhoe' || spec.family !== EX) { this.open = 0; this.openTarget = 0; }
     // merge static parts to keep draw calls low (every group: children never move relative to it)
     const groups = []; this.model.traverse((o) => { if (o.isGroup) groups.push(o); });
     for (const g of groups) bake(g);
@@ -175,7 +187,7 @@ export class Machine {
         // inner: may not overlap intact blocks (hard stop). Between inner and outer the machine is pressing
         // against the wall and damages it (machineLogic) until the blocks give way.
         if (set.chassis) { info.off.y = Math.max(y, sy / 2 + 0.2 / s); info.inner = cub(-0.22); info.outer = cub(0.12); this.blockShapes.push(info); }
-        if (set.breaks) this.breakShapes.push({ ...info, shape: cub(0.02), inner: cub(-0.16), outer: cub(0.04) });
+        if (set.breaks) this.breakShapes.push({ ...info, ball: !!set.ball, shape: cub(0.02), inner: cub(-0.16), outer: cub(0.04) });
       }
       this.bodies.push({ obj: set.obj, body });
     }
@@ -244,6 +256,7 @@ export class Machine {
     let worst = -9;
     const ga = this.ctx.groundAt || terrainHeight;
     for (const b of this.breakShapes) {
+      if (b.ball) continue; // a ball on a rope / chain is not part of the arm
       const { p, q } = this.shapePose(b);
       const h = b.shape.halfExtents;
       for (let i = 0; i < 8; i++) {
@@ -343,7 +356,7 @@ export class Machine {
       if (Math.abs(dl) > 1e-5 || Math.abs(dr) > 1e-5) { this.tracks[0].move(dr); this.tracks[1].move(dl); }
     }
     const r = this.family === 'roller' ? 0.68 : this.family === 'loader' ? 0.88 : this.family === 'truck' ? 0.54 : this.spec.under === 'spider' ? 0.58 : 0.55;
-    for (const w of this.wheels) w.rotation.x += dist / (r * this.s);
+    for (const w of this.wheels) w.rotation.x += dist / ((w.userData.r || r) * this.s);
   }
 
   // ======================================================================= network pose
@@ -380,6 +393,7 @@ export class Machine {
     this.crushing = this.att && this.att.behaviour === 'crusher' && this.openTarget > 0.5 && this.held.length > 0;
     if (this.vibrating || this.crushing) this.rig.apply(this);
     if (this.family === 'crane') this.ballSt = stepCrane(this, dt, (x, z) => this.groundAt(x, z));
+    if (this.funIdle) this.funIdle(dt);
   }
 
   serialize() {
@@ -411,6 +425,10 @@ export function controlsFor(m) {
   if (f === 'roller') return { right: null, stickOut: null, stickIn: null, curlIn: null, curlOut: null, grab: '〰️<small>VIBRATE</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> drum vibration on / off' };
   if (f === 'paver') return { right: 'SCREED', stickOut: null, stickIn: null, curlIn: 'WINGS ↑', curlOut: 'WINGS ↓', grab: '🛣️<small>PAVE</small>', hint: '<kbd>Click</kbd>/<kbd>Space</kbd> paving flow · <kbd>Z</kbd><kbd>X</kbd> hopper wings' };
   if (f === 'crane') return { right: 'SWING · BOOM', stickOut: 'LOWER', stickIn: 'HOIST', curlIn: null, curlOut: null, grab: null, hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> winch' };
+  if (m.spec.under === 'backhoe') return { right: 'SWING · BOOM', stickOut: 'ARM OUT', stickIn: 'ARM IN', curlIn: 'CURL', curlOut: 'DUMP', rot: true, rotLabels: ['LOADER ↓', 'LOADER ↑'], grab: '🪣<small>FRONT</small>', hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> arm · <kbd>Z</kbd><kbd>X</kbd> curl the rear bucket · <kbd>T</kbd><kbd>Y</kbd> front loader down / up · <kbd>Click</kbd> tip the front bucket (drive into rubble with it lowered to fill it)' };
+  const FUN = { magnet: ['🧲<small>MAGNET</small>', 'magnet on / off'], xball: ['⛓️<small>CHAIN</small>', 'chain out / in · swing hard to smash'], blaster: ['🌀<small>VACUUM</small>', 'vacuum on / off · hold <kbd>T</kbd> or <kbd>Y</kbd> to fire blocks'],
+    cutter: ['🥁<small>DRUMS</small>', 'drums on / off'], saw: ['🪚<small>SAW</small>', 'saw on / off'], auger: ['🌪️<small>DRILL</small>', 'drill on / off'], plate: ['〰️<small>VIBRATE</small>', 'vibration on / off'], forks: ['🔒<small>LOCK</small>', 'lock / unlock the blocks on the forks'], jet: ['💦<small>JET</small>', 'water jet on / off'] }[a];
+  if (FUN) return { right: 'SWING · BOOM', stickOut: 'ARM OUT', stickIn: 'ARM IN', curlIn: 'CURL', curlOut: 'CURL', grab: FUN[0], ...(a === 'blaster' ? { rot: true, rotLabels: ['FIRE', 'FIRE'] } : {}), hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> arm · <kbd>Z</kbd><kbd>X</kbd> curl · <kbd>Click</kbd> ' + FUN[1] };
   if (a === 'brickclamp') return { right: 'SWING · BOOM', stickOut: 'ARM OUT', stickIn: 'ARM IN', curlIn: 'TILT', curlOut: 'TILT', rot: true, grab: '✊<small>CLAMP</small>', hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> arm · <kbd>Z</kbd><kbd>X</kbd> tilt · <kbd>T</kbd><kbd>Y</kbd> rotate clamp · <kbd>Click</kbd> magnetic clamp (grabs up to 4 blocks)' };
   const g = a === 'breaker' ? '🔨<small>HAMMER</small>' : a === 'skip' ? '🚪<small>GATE</small>' : a === 'crusher' ? '⚙️<small>CRUSH</small>' : ['bucket', 'bigbucket', 'minibucket', 'tank'].includes(a) ? null : '✊<small>GRAB</small>';
   return { right: 'SWING · BOOM', stickOut: 'ARM OUT', stickIn: 'ARM IN', curlIn: 'CURL', curlOut: 'DUMP', grab: g, hint: '<kbd>←</kbd><kbd>→</kbd> swing · <kbd>↑</kbd><kbd>↓</kbd> boom · <kbd>R</kbd><kbd>F</kbd> arm · <kbd>Z</kbd><kbd>X</kbd> curl' + (g ? ' · <kbd>Click</kbd> tool' : '') };

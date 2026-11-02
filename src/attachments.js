@@ -2,6 +2,7 @@
 // -y faces the machine (the side a bucket curls toward). K = machine material set (weathered).
 import * as THREE from 'three';
 import { mergeG, rbox, bx, cy, pinX, hose, bolts, boltRow, boltCircle, stick } from './detail.js';
+import { FUN_KINDS, buildFunAttachment } from './mx-fun.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 function mesh(geo, mat, parent, cast = true) { const m = new THREE.Mesh(geo, mat); m.castShadow = cast; m.receiveShadow = true; parent.add(m); return m; }
@@ -30,13 +31,13 @@ export function shell(curve, thick, w) {
 }
 
 // quick-coupler + mounting ears with pins, retainers and grease nipples
-function coupler(K, A, w = 0.5) {
+export function coupler(K, A, w = 0.5) {
   mesh(mergeG([rbox(0.08, 0.34, 0.4, 0.015, -0.17, 0.2, 0.05), rbox(0.08, 0.34, 0.4, 0.015, 0.17, 0.2, 0.05), rbox(w, 0.1, 0.44, 0.02, 0, 0.32, 0.1), bx(w, 0.06, 0.2, 0, 0.12, 0.28)]), K.paint, A);
   mesh(mergeG([pinX(0.06, 0.52, 0, 0, 0), pinX(0.05, 0.52, 0, 0.3, 0.05), cy(0.08, 0.08, 0.03, 12, 0.26, 0, 0, 0, 0, Math.PI / 2), cy(0.08, 0.08, 0.03, 12, -0.26, 0, 0, 0, 0, Math.PI / 2)]), K.steel, A);
   mesh(mergeG([bolts([V(0.275, 0.03, 0.03), V(0.275, -0.03, -0.03), V(-0.275, 0.03, 0.03), V(-0.275, -0.03, -0.03)], V(1, 0, 0), 0.012, 0.01), cy(0.008, 0.008, 0.04, 6, 0.2, 0.39, 0.05)]), K.dark, A);
 }
 // rotator hub with swivel hoses (grapple / claw / shear / orange peel)
-function rotator(K, A, r = 0.3, z = 0.66) {
+export function rotator(K, A, r = 0.3, z = 0.66) {
   mesh(mergeG([cy(r, r, 0.12, 28, 0, 0, z, Math.PI / 2), cy(r * 0.86, r * 0.86, 0.1, 28, 0, 0, z + 0.11, Math.PI / 2), boltCircle(V(0, 0, z + 0.165), r * 0.7, 12, V(0, 0, 1), 0.016)]), K.dark, A);
   mesh(mergeG([hose([[0.12, 0.3, 0.2], [0.2, 0.32, 0.45], [0.2, 0.18, z]], 0.02, 12), hose([[-0.12, 0.3, 0.2], [-0.2, 0.32, 0.45], [-0.2, 0.18, z]], 0.02, 12)]), K.black, A);
 }
@@ -47,6 +48,7 @@ function rotator(K, A, r = 0.3, z = 0.66) {
 export function buildAttachment(kind, K) {
   const A = new THREE.Group();
   const out = { group: A, kind, jaws: [], probes: [], colliders: [], behaviour: 'jaw', bulk: null, pieces: 6 };
+  if (FUN_KINDS.has(kind)) { buildFunAttachment(kind, K, out); if (!out.grab) out.grab = point(A, 0, 0, 1.2); return out; }
 
   if (kind === 'grapple' || kind === 'shear') {
     const shearMode = kind === 'shear';

@@ -23,7 +23,7 @@ import { IntakeLine } from './intake.js';
 import { Mixer } from './mixer.js';
 import { Road } from './road.js';
 import { Machine, MACHINES, controlsFor } from './machines.js';
-import { machineInteract, releaseAll } from './machineLogic.js';
+import { machineInteract, releaseAll, heldWorld } from './machineLogic.js';
 import { Showroom } from './showroom.js';
 import { Slabs, SLAB, SLAB_KG } from './slabs.js';
 import { loadTexturePack } from './texpack.js';
@@ -183,16 +183,14 @@ class Game {
       this.ui.setMode('foot', this.input.touch);
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
       // once per version: point at what is new
-      if (this.prefs.seenTips && this.prefs.news !== '4.3') {
-        const old = this.prefs.news !== '4.2';
-        this.ui.toast('🚗 New: <b>street traffic</b> bumps through every pothole you leave open, and the <b>weather</b> changes: rain and thunderstorms. Settings can fix the weather or switch traffic off', true, 8000);
-        if (!touch) setTimeout(() => this.ui.toast('📷 <b>P</b> photo mode now frees the camera: fly with <b>WASD</b> + mouse, <b>Space</b> / <b>C</b> up and down', true, 6000), 8200);
-        if (old) setTimeout(() => this.ui.toast('🧱 The <b>brick press</b> next to the dust pile makes blocks. Build your own house on the slab across the road (tool <b>4</b>, mortar with the trowel first)', true, 8000), 14500);
+      if (this.prefs.seenTips && this.prefs.news !== '4.4') {
+        this.ui.toast('🚜 New: <b>10 special excavators</b> in Spawn: a backhoe loader, a scrap magnet, a wrecking ball on a chain, a block blaster, a drum cutter, a rock saw, an auger, a plate compactor, pallet forks and a water cannon', true, 9000);
+        setTimeout(() => this.ui.toast('💥 Bring lots of blocks down at once for a <b>destruction combo</b>. Your biggest smash is your record', true, 6000), 9200);
       }
-      this.prefs.news = '4.3'; this.savePrefs();
+      this.prefs.news = '4.4'; this.savePrefs();
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
-        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 26 machines or new buildings', false, 6000), 6200);
+        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 36 machines or new buildings', false, 6000), 6200);
         setTimeout(() => this.ui.toast('🌐 <b>Multiplayer</b>: host a game and share the code with friends', true, 6000), 12500);
         this.prefs.seenTips = true; this.savePrefs();
       }
@@ -273,6 +271,7 @@ class Game {
       splash(p, s) { g.audio.splash(p, s); emit(['fx', 's', A(p), s]); },
       breaker(p, s) { g.audio.breaker(p, s); emit(['fx', 'b', A(p), s]); },
       clank(p, s) { g.audio.clank(p, s); emit(['fx', 'k', A(p), s]); },
+      tool(k, p, s) { g.audio.tool(k, p, s); emit(['fx', 't', k, A(p), s]); },
     };
   }
   playFx(e) {
@@ -286,6 +285,7 @@ class Game {
       case 's': this.audio.splash(V(e[2]), e[3]); break;
       case 'b': this.audio.breaker(V(e[2]), e[3]); break;
       case 'k': this.audio.clank(V(e[2]), e[3]); break;
+      case 't': this.audio.tool(e[2], V(e[3]), e[4]); break;
     }
   }
 
@@ -422,6 +422,15 @@ class Game {
       groundAt: (x, z) => g.groundAt(x, z),
       isGround: (c) => c.handle === terrain.handle || g.groundHandles.has(c.handle) || g.env.groundHandles.includes(c.handle),
       isPiece: (c) => g.demo.byCollider.has(c.handle),
+      // the water cannon's jet: first thing along the ray that is not a machine (blocks held by machines count)
+      castJet: (o, dir, max) => {
+        const hit = g.physics.world.castRay(new RAPIER.Ray(o, dir), max, true, RAPIER.QueryFilterFlags.EXCLUDE_SENSORS, undefined, undefined, undefined,
+          (c) => { const b = c.parent(); return !(b && b.isKinematic() && !g.demo.byCollider.has(c.handle)); });
+        let t = hit ? hit.timeOfImpact ?? hit.toi : max, collider = hit ? hit.collider : null;
+        // rays miss the terrain heightfield: march along the jet against the ground height
+        for (let s = 0.2; s < t; s += 0.2) if (o.y + dir.y * s < g.groundAt(o.x + dir.x * s, o.z + dir.z * s)) { t = s; collider = null; break; }
+        return t < max ? { t, collider } : null;
+      },
     };
     return this._mctx;
   }
@@ -548,7 +557,11 @@ class Game {
       if (!forSave) m.driver = s.driver;
     }
     // re-attach held pieces on the authority side
-    if (!mirror) for (const p of this.demo.pieces) if (p.state === HELD) { const m = this.machines.get(p.holder); if (m && p.holdLocal) m.held.push({ p, local: p.holdLocal }); }
+    if (!mirror) for (const p of this.demo.pieces) if (p.state === HELD) {
+      const m = this.machines.get(p.holder); if (!m || !p.holdLocal) continue;
+      // hold code 2 / 3: the backhoe's front bucket or the blaster's cage
+      if (Math.round(p.holdLocal.elements[15]) > 1) (m.held2 = m.held2 || []).push({ p, local: p.holdLocal }); else m.held.push({ p, local: p.holdLocal });
+    }
     this.nextMachineId = w.nextMachineId || this.nextMachineId;
     this.crusher.restore(w.crusher); this.intake.restore(w.intake); this.mixer.restore(w.mixer); this.road.restore(w.road); this.slabs.restore(w.slabs || []);
     if (w.settings) Object.assign(this.settings, w.settings);
@@ -1267,6 +1280,28 @@ class Game {
     }
     cam.updateMatrixWorld();
   }
+  // destruction combos: lots of blocks coming down within a few seconds of each other pop up big on screen
+  comboUpdate(dt) {
+    this.comboT = (this.comboT || 0) - dt;
+    if (this.comboT > 0) return;
+    this.comboT = 0.25;
+    const cam = this.camera.position, total = this.demo.detachCount || 0;
+    const c = this.combo || (this.combo = { last: total, n: 0, quiet: 0 });
+    const fell = Math.max(0, total - c.last); c.last = total;
+    if (fell > 0) { c.n += fell; c.quiet = 0; } else if (c.n) c.quiet += 0.25;
+    if (c.n && (c.quiet >= 1.6 || c.n > 400)) {
+      const n = c.n; c.n = 0; c.quiet = 0;
+      if (n < 10) return;
+      const best = this.prefs.bestCombo || 0, rec = n > best && n >= 15;
+      if (rec) { this.prefs.bestCombo = n; this.savePrefs(); }
+      const word = n >= 120 ? 'APOCALYPSE!' : n >= 70 ? 'MEGA SMASH!' : n >= 40 ? 'HUGE SMASH!' : n >= 20 ? 'BIG SMASH!' : 'SMASH!';
+      const el = $('combo');
+      el.innerHTML = `<b>💥 ${n} BLOCKS</b><small>${rec ? '🏆 NEW RECORD! ' : ''}${word}${!rec && best ? ` · best ${best}` : ''}</small>`;
+      el.classList.toggle('rec', rec);
+      el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+      if (rec && n >= 40) this.audio.firework(cam.clone().add(new THREE.Vector3(0, 8, 0)), 0.1);
+    }
+  }
   updateFlyCam(dt) {
     const f = this.flyCam, input = this.input, cam = this.camera;
     const look = input.consumeLook();
@@ -1512,7 +1547,7 @@ class Game {
       this.intake.update(dt, this.demo, this.fx, this.audio, null);
       for (const p of this.demo.pieces) if (p.state === HELD && p.holdLocal) {
         const m = this.machines.get(p.holder); if (!m) continue;
-        const mw = new THREE.Matrix4().multiplyMatrices(m.holdFrame().matrixWorld, p.holdLocal);
+        const mw = heldWorld(m, p.holdLocal, new THREE.Matrix4());
         const pos = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3(); mw.decompose(pos, q, s);
         this.demo.placeCarried(p, pos, q, 1);
       }
@@ -1577,6 +1612,7 @@ class Game {
     }
     this.charges.update(dt, auth);
     this.traffic.update(dt);
+    this.comboUpdate(dt);
     this.builder.update(dt);
     if (auth) {
       this.glueT = (this.glueT || 0) - dt;

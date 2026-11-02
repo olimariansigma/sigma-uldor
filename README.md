@@ -1,6 +1,6 @@
 # Wrecking Yard
 
-A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. Press the dust into new blocks and build your own house on the plot across the road. There are 26 machines to spawn (16 excavators, 7 road and site machines and 3 tipper trucks in three sizes), a truck intake line that compacts blocks into cubes for the crusher, and cross-play multiplayer between PC and phones.
+A 3D demolition sandbox. Smash painted cinder-block buildings, feed the rubble to a tracked jaw crusher, and collect the coloured dust it makes. Mix the dust with water from the lake into cement and use it to fix the potholes in the street. Press the dust into new blocks and build your own house on the plot across the road. There are 36 machines to spawn (26 excavators, among them a backhoe loader, a scrap magnet, a block blaster and a rock saw, 7 road and site machines and 3 tipper trucks in three sizes), a truck intake line that compacts blocks into cubes for the crusher, and cross-play multiplayer between PC and phones.
 
 ## Download: the launcher
 
@@ -34,11 +34,12 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 * **Cement.** Put dust in the pan mixer and add any amount of water (lake water or the hose button). Each colour swirls around the tub and the paddles blend it all into cement in a couple of seconds.
 * **Cement trowel.** Take cement from the mixer onto your trowel (hotbar slot 2). Click the ground to lay cement tiles anywhere in the yard (they dry from dark to their final colour), or click a pothole to fill it. Tiles are saved and shared in multiplayer.
 * **Road repair.** Pour cement into the potholes, or load the paver and drive over them. Each patch takes the cement's colour and dries over time. Then roll it with the tandem roller to compact it to a perfect finish (⭐ on the HUD). The breaker excavator can make new potholes.
+* **Destruction combos.** Bring a lot of blocks down within a few seconds and a big *💥 23 BLOCKS · BIG SMASH!* pops up. Your biggest smash is kept as a record.
 * **Real machine sounds.** Engines, tracks, the hydraulic breaker, stones, footsteps and bucket clanks are real field recordings (a 5 t Volvo excavator's engine at idle and working, rubber tracks, a telehandler's diesel, a jackhammer on a mini excavator). Every running machine near you gets its own engine voice: idle crossfades into the working engine as you move the joysticks or drive, pitch follows the revs and the size of the machine, with a hydraulic pump whine and relief hiss on top, track clatter when it drives and a reverse beeper on trucks and loaders.
 * **Breakable big pieces.** Roof, floor and door panels break into rubble chunks: hit them three times with the hammer, close a claw on them, push them with an arm or bucket, or drop them on the crusher hopper or in the truck intake. The chunks keep the panel's colour and weight.
 * **Pothole repair like the real thing.** The hot mix goes in as a loose, steaming heap standing proud of the road. Each pass of the roller (or tamping with the hammer) presses it down until it is flush and smooth; the paver lays a pre-compacted mat.
 * **Truck intake line.** Behind the crusher there's a ground-level tip funnel with a wheel-stop: back a truck up to it and tip. A walled belt carries the blocks into the BP-40 compactor, which presses every 5 blocks into a strapped cube (you can see the fragments of each block in it), and a cleated incline belt lifts the cubes into the crusher hopper, where they become dust in the blocks' own colours.
-* **26 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders. The loader, dozer, roller, paver, dumper and crane have shaped bodies (sloping hoods, curved mudguards, counterweights with tail lights, bucket teeth) and a glazed cab with a framed door. The tipper trucks have rounded, bevelled cabs with a raked windscreen, wind deflectors and wipers; the tracked dumper has a roll-over frame and a curved tub; the crane's lattice boom has proper chords, lacing and backstops. From the operator's seat, guard grids, wipers and window tint are left out so you can see what you're doing.
+* **36 machines.** Spawn up to 20 at once. Every model is built from hundreds of parts: weathered paint with chipped edges and grime, bolts, hoses, grilles, lights, mirrors, ladders, handrails, a full cab interior with seat, joysticks and monitor, and working hydraulic cylinders. The loader, dozer, roller, paver, dumper and crane have shaped bodies (sloping hoods, curved mudguards, counterweights with tail lights, bucket teeth) and a glazed cab with a framed door. The tipper trucks have rounded, bevelled cabs with a raked windscreen, wind deflectors and wipers; the tracked dumper has a roll-over frame and a curved tub; the crane's lattice boom has proper chords, lacing and backstops. From the operator's seat, guard grids, wipers and window tint are left out so you can see what you're doing.
   * Excavators:
     * TORVA TX330 (rotating sorting grapple)
     * KESTREL K35 mini on rubber tracks (zero tail, canopy, swing-post boom)
@@ -56,6 +57,17 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * LIMEWORKS LC200 (concrete skip)
     * ALPINA SX5 walking spider excavator
     * BROCKMAN DR160 remote demolition robot
+  * Special excavators (Click switches each tool on and off):
+    * BRAVO BL4 backhoe loader: a loader bucket on the front (T / Y raise and lower it, Click tips it; drive into rubble with it lowered to fill it) and a digging arm on the back with stabiliser legs that come down when you stop. Quick on the road
+    * HALDEN MG40 scrap magnet: switch on and loose blocks fly up and stick to the plate (up to 10); it rips blocks out of walls too. Switch off to drop the lot
+    * TORVA WB300 ball swinger: a 2 t wrecking ball on a chain under the arm. Whip the arm around to smash walls; Click lets the chain out or reels it in
+    * VORTEX VX50 block blaster: the vacuum sucks loose blocks into the nozzle and stacks them in the cage on its back (up to 8); hold T or Y to fire them out at walls
+    * GRINDA DC60 drum cutter: twin spinning drums grind wall blocks and rubble straight into dust, which counts as crushed
+    * SAWTEK RS30 rock saw: a 2 m diamond blade cuts every block it passes through clean out of the wall
+    * TORQUE AD20 auger drill: bores through walls and drills new potholes into the road
+    * PLATO VP12 plate compactor: compacts filled potholes to a perfect finish, shakes walls loose and makes rubble hop
+    * MERIDIAN FK18 fork handler: lock the pallet forks and up to 8 blocks snap into a neat stack on the tines
+    * AQUAJET HJ40 water cannon: a remote hydrodemolition robot whose jet blasts blocks out of walls from 14 m away; aim it into the mixer to add water
   * Road and site machines:
     * TORVA CR64 tandem vibratory roller
     * VELOTA AP600 paver
@@ -69,7 +81,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
     * VELKA S650 V8 (big by default): metallic silver high-roof cab, chrome grille and roof light bar, polished rims, brushed aluminium half-pipe body
     * VELKA G370 (small by default): yellow cab with a square steel box body
     * Load them with any excavator or loader. Blocks ride along in the body (steering gets gentler at speed so the load doesn't slide out), then Z tips the body up on its front cylinder, the high-lift tailgate swings up and the load slides out the back. One R410 is parked in the yard by default.
-* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 26 with the arrows, then press **Spawn**.
+* **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 36 with the arrows, then press **Spawn**.
 * **Solid machines.** Machines stop at walls instead of passing through them. Keep driving or pressing the arm, blade or bucket against a wall and the blocks it touches crack (they darken) and break loose; heavy machines and fast hits break them sooner. Arms and buckets can't sink into the ground.
 * **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device. Snapshots are compact binary (a falling block costs 15 bytes), each player gets the blocks around them first, and a host with a slow link sends less instead of building up lag.
 * **Menu and launcher exit.** The ☰ button in the game has Resume, New world and Main menu (back to the title screen). The launcher has an Exit button.

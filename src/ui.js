@@ -8,7 +8,7 @@ import { MAX_CHARGES } from './fun.js';
 import { paintOf } from './mx-vehicles.js';
 
 const $ = (id) => document.getElementById(id);
-const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings'];
+const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings', 'menu'];
 const hex = (c) => '#' + c.getHexString();
 const THUMB = (id) => `thumbs/m_${id}.webp`;
 const TOOL = { brickclamp: 'Rotating brick clamp', grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
@@ -39,10 +39,11 @@ export class UI {
     $('spawnBtn').addEventListener('click', () => this.toggle('spawn'));
     $('multiBtn').addEventListener('click', () => this.toggle('multi'));
     $('saveBtn').addEventListener('click', () => this.toggle('save'));
+    $('menuBtn').addEventListener('click', () => this.toggle('menu'));
     $('helpBtn').addEventListener('click', () => this.toggle('help'));
     $('settingsBtn').addEventListener('click', () => this.toggle('settings'));
     document.querySelectorAll('#spawn .tab').forEach((t) => t.addEventListener('click', () => { this.tab = t.dataset.tab; this.renderSpawn(); }));
-    for (const id of ['spawnBtn', 'multiBtn', 'saveBtn', 'helpBtn', 'settingsBtn']) $(id).addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    for (const id of ['spawnBtn', 'multiBtn', 'saveBtn', 'menuBtn', 'helpBtn', 'settingsBtn']) $(id).addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     this.cache = {};
     fillIcons();
     this.setupShowroom();
@@ -68,6 +69,7 @@ export class UI {
     if (id === 'spawn') this.renderSpawn();
     if (id === 'multi') this.renderMulti();
     if (id === 'save') this.renderSave();
+    if (id === 'menu') this.renderMenu();
     if (id === 'mixerPanel') this.renderMixer();
   }
   refreshOpen() { for (const id of ['spawn', 'multi', 'save', 'mixerPanel']) if (!$(id).classList.contains('hidden')) this.refreshPanel(id); }
@@ -194,6 +196,15 @@ export class UI {
   }
 
   // ------------------------------------------------------------------ save slots
+  renderMenu() {
+    const g = this.game, body = $('menuBody'); body.innerHTML = '';
+    const row = document.createElement('div'); row.className = 'btn-row'; row.style.flexDirection = 'column';
+    row.appendChild(this.btn('▶ Resume', '', () => this.close('menu')));
+    row.appendChild(this.btn('🔄 New world', 'red', () => { if (confirm('Start a fresh world? (unsaved progress is lost)')) { g.act('newWorld', {}); this.close('menu'); } }, g.net.isClient));
+    row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
+    body.appendChild(row);
+    if (g.net.isClient) { const n = document.createElement('div'); n.className = 'dim'; n.style.marginTop = '8px'; n.textContent = 'Only the host can start a new world.'; body.appendChild(n); }
+  }
   renderSave() {
     const g = this.game, body = $('saveBody');
     body.innerHTML = '';

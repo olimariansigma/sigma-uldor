@@ -102,6 +102,7 @@ ipcMain.handle('releases', async () => {
 ipcMain.handle('download', (e, version, url) => download(e.sender, version, url));
 ipcMain.handle('remove', (_e, version) => { fs.rmSync(versionDir(version), { recursive: true, force: true }); });
 ipcMain.handle('play', (_e, version) => play(version));
+ipcMain.handle('quit', () => app.quit());
 ipcMain.handle('open', (_e, url) => { if (typeof url === 'string' && url.startsWith('https://github.com/')) shell.openExternal(url); });
 
 if (!app.requestSingleInstanceLock()) app.quit();

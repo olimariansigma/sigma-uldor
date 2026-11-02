@@ -71,6 +71,7 @@ The Windows exe is not code-signed, so SmartScreen may warn you the first time. 
 * **3D showroom.** The spawn menu shows a rendered picture of every machine. Tap one to inspect it on a turntable in full 3D (drag to turn, pinch or scroll to zoom), flip through all 26 with the arrows, then press **Spawn**.
 * **Solid machines.** Machines stop at walls instead of passing through them. Keep driving or pressing the arm, blade or bucket against a wall and the blocks it touches crack (they darken) and break loose; heavy machines and fast hits break them sooner. Arms and buckets can't sink into the ground.
 * **Multiplayer.** Press **Online → Host a game** and share the 6-letter code. Friends on PC or phone type the code to join. Anyone can save the shared world to their own device. Snapshots are compact binary (a falling block costs 15 bytes), each player gets the blocks around them first, and a host with a slow link sends less instead of building up lag.
+* **Menu and launcher exit.** The ☰ button in the game has Resume, New world and Main menu (back to the title screen). The launcher has an Exit button.
 * **Save slots.** There are five save slots plus an autosave. A save contains every block, machine, the dust pile, the mixer and the road.
 
 ## Controls

@@ -30,7 +30,7 @@
       <div id="titleMsg" class="title-msg"></div>
     </div>
   </div>
-  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v4.3.2</span></div>
+  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v4.3.3</span></div>
 </div>
 
 <!-- HUD -->
@@ -51,6 +51,7 @@
     <button class="hud-btn" id="spawnBtn" title="Spawn (B)"><i data-ic="spawn"></i><span>Spawn</span></button>
     <button class="hud-btn" id="multiBtn" title="Play together (M)"><i data-ic="globe"></i><span>Online</span></button>
     <button class="hud-btn" id="saveBtn" title="Save / load"><i data-ic="save"></i><span>Save</span></button>
+    <button class="hud-btn sq" id="menuBtn" title="Menu"><i data-ic="menu"></i></button>
     <button class="hud-btn sq" id="helpBtn" title="Controls (H)"><i data-ic="help"></i></button>
     <button class="hud-btn sq" id="settingsBtn" title="Settings"><i data-ic="gear"></i></button>
   </div>
@@ -199,6 +200,12 @@
       </ul>
     </div>
   </div>
+</div>
+
+<!-- Menu -->
+<div id="menu" class="panel hidden">
+  <div class="panel-head"><h2>Menu</h2><button class="close" data-close="menu"><i data-ic="close"></i></button></div>
+  <div class="panel-body" id="menuBody"></div>
 </div>
 
 <!-- Settings -->

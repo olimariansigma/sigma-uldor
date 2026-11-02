@@ -149,6 +149,8 @@ public class MainActivity extends Activity {
             ui.post(new Runnable() { @Override public void run() { inGame = true; web.loadUrl("file://" + index.getAbsolutePath()); } });
         }
 
+        @JavascriptInterface public void quit() { ui.post(new Runnable() { @Override public void run() { finish(); } }); }
+
         @JavascriptInterface public void openUrl(String url) { if (url != null && url.startsWith("https://github.com/")) openExternal(url); }
     }
 

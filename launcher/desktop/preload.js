@@ -10,4 +10,5 @@ contextBridge.exposeInMainWorld('wyNative', {
   remove: (version) => ipcRenderer.invoke('remove', version),
   play: (version) => ipcRenderer.invoke('play', version),
   open: (url) => ipcRenderer.invoke('open', url),
+  quit: () => ipcRenderer.invoke('quit'),
 });

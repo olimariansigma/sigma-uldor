@@ -22,6 +22,7 @@
       remove: async (v) => A.remove(v),
       play: (v) => A.play(v),
       open: (u) => A.openUrl(u),
+      quit: () => A.quit(),
     };
   }
   // plain browser (for testing the page): pretend-installs into localStorage
@@ -35,6 +36,7 @@
       remove: async (v) => localStorage.setItem(key, JSON.stringify(get().filter((x) => x !== v))),
       play: (v) => alert('Would start version ' + v),
       open: (u) => window.open(u, '_blank'),
+      quit: () => window.close(),
     };
   }
   const N = window.wyNative || (window.WYAndroid ? androidNative(window.WYAndroid) : browserNative());
@@ -143,6 +145,7 @@
     else if (act === 'notes') { st.open.has(v) ? st.open.delete(v) : st.open.add(v); render(); }
   });
   $('checkBtn').addEventListener('click', check);
+  $('exitBtn').addEventListener('click', () => N.quit());
   $('ghLink').addEventListener('click', (e) => { e.preventDefault(); N.open(`https://github.com/${REPO}/releases`); });
   window.wyRefresh = async () => { await refreshInstalled(); render(); };
 

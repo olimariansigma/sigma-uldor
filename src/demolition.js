@@ -32,7 +32,6 @@ export class Demolition {
     this.dirty = new Set();
     this.boundsDirty = new Set(); this.boundsT = 0;
     this.changes = [];         // [id, state, holder] since last network flush (authority)
-    this.rr = 0;               // round-robin cursor for snapshots
   }
 
   // ---------------------------------------------------------------- buildings
@@ -498,25 +497,41 @@ export class Demolition {
   // ---------------------------------------------------------------- network (host side)
   takeChanges() { const c = this.changes; this.changes = []; return c; }
 
-  // pack loose pieces that moved since they were last sent: [id, px,py,pz, qx,qy,qz,qw]*
-  packMoving(max = 260) {
-    const out = [];
-    const n = this.pieces.length;
-    let count = 0;
-    for (let k = 0; k < n && count < max; k++) {
-      const i = (this.rr + k) % n;
-      const p = this.pieces[i];
+  // Which loose pieces one client should hear about this snapshot. Each client has its own record of what it was
+  // last told; pieces are ranked by how far they have drifted from that, weighted towards the client's own
+  // surroundings, and the best `budget` are sent. Settled pieces cost nothing, far-away tumbling ones wait their turn.
+  pickUpdates(key, focus, budget) {
+    const sent = this.sentFor(key), out = [];
+    if (budget <= 0) return out;
+    const cand = this._cand || (this._cand = []);
+    cand.length = 0;
+    for (const p of this.pieces) {
       if (p.state !== LOOSE) continue;
-      const s = p.sent;
-      if (s && Math.abs(s[0] - p.pos.x) + Math.abs(s[1] - p.pos.y) + Math.abs(s[2] - p.pos.z) < 0.002 &&
-          Math.abs(s[3] - p.quat.x) + Math.abs(s[4] - p.quat.y) + Math.abs(s[5] - p.quat.z) + Math.abs(s[6] - p.quat.w) < 0.002) continue;
-      p.sent = [p.pos.x, p.pos.y, p.pos.z, p.quat.x, p.quat.y, p.quat.z, p.quat.w];
-      out.push(p.id, ...p.sent);
-      count++;
-      if (count >= max) this.rr = (i + 1) % n;
+      const o = p.id * 7;
+      let e = 1;
+      if (sent[o] === sent[o]) { // NaN = never sent
+        e = Math.abs(sent[o] - p.pos.x) + Math.abs(sent[o + 1] - p.pos.y) + Math.abs(sent[o + 2] - p.pos.z)
+          + Math.abs(sent[o + 3] - p.quat.x) + Math.abs(sent[o + 4] - p.quat.y) + Math.abs(sent[o + 5] - p.quat.z) + Math.abs(sent[o + 6] - p.quat.w);
+        if (e < 0.003) continue;
+      }
+      const dx = p.pos.x - focus.x, dz = p.pos.z - focus.z;
+      p.prio = e / (1 + (dx * dx + dz * dz) / 900);
+      cand.push(p);
     }
+    if (cand.length > budget) { cand.sort((a, b) => b.prio - a.prio); cand.length = budget; }
+    for (const p of cand) { this.markOne(sent, p); out.push(p); }
     return out;
   }
+  sentFor(key) {
+    if (!this.sentBy) this.sentBy = new Map();
+    let s = this.sentBy.get(key);
+    if (!s || s.length < this.pieces.length * 7) { const n = new Float32Array(this.pieces.length * 7).fill(NaN); if (s) n.set(s); s = n; this.sentBy.set(key, s); }
+    return s;
+  }
+  markOne(sent, p) { const o = p.id * 7; sent[o] = p.pos.x; sent[o + 1] = p.pos.y; sent[o + 2] = p.pos.z; sent[o + 3] = p.quat.x; sent[o + 4] = p.quat.y; sent[o + 5] = p.quat.z; sent[o + 6] = p.quat.w; }
+  // the client just received the whole world: it knows every piece as it is now
+  markAllSent(key) { const s = this.sentFor(key); for (const p of this.pieces) if (p.state === LOOSE) this.markOne(s, p); }
+  forgetClient(key) { if (this.sentBy) this.sentBy.delete(key); }
 
   // ---------------------------------------------------------------- network (client side)
   applyChange(id, state, holder, extra) {

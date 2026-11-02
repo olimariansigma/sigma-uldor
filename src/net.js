@@ -2,7 +2,7 @@
 // phone can join by typing the code. JSON messages for events, Float32Array buffers for fast snapshots.
 import { Peer } from 'peerjs';
 
-const PREFIX = 'wreckingyard-v37-'; // bumped when old clients could not understand the world (v3.6: truck sizes, intake line)
+const PREFIX = 'wreckingyard-v40-'; // bumped when old clients could not understand the world (v4.0: binary snapshots)
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CHUNK = 48000;
 const ICE = {
@@ -76,22 +76,24 @@ export class Net {
     for (let i = 0; i < n; i++) out.push(JSON.stringify({ t: '#', id, i, n, d: s.slice(i * CHUNK, (i + 1) * CHUNK) }));
     return out;
   }
+  sendTo(conn, data) { if (conn) this.sendRaw(conn, data); }
   // host -> one / all clients ; client -> host
   send(obj, peerId = null) {
     const parts = this.pack(obj);
     if (this.isClient) { for (const p of parts) this.sendRaw(this.host, p); return; }
     if (!this.isHost) return;
-    if (peerId) { for (const p of parts) this.sendRaw(this.conns.get(peerId), p); return; }
-    for (const c of this.conns.values()) for (const p of parts) this.sendRaw(c, p);
+    if (peerId) { for (const p of parts) this.sendTo(this.conns.get(peerId), p); return; }
+    for (const c of this.conns.values()) for (const p of parts) this.sendTo(c, p);
   }
-  sendBin(floats, peerId = null) {
-    const buf = new Float32Array(floats).buffer;
+  // binary snapshots / poses (see netcodec.js)
+  sendBuf(buf, peerId = null) {
     if (this.isClient) { this.sendRaw(this.host, buf); return; }
     if (!this.isHost) return;
-    if (peerId) { this.sendRaw(this.conns.get(peerId), buf); return; }
-    for (const c of this.conns.values()) this.sendRaw(c, buf);
+    const one = (c) => { if (c) this.sendRaw(c, buf); };
+    if (peerId) one(this.conns.get(peerId)); else for (const c of this.conns.values()) one(c);
   }
-
+  // bytes waiting in a connection's send buffer (a backed-up link gets lighter snapshots)
+  backlogOf(peerId) { const c = this.conns.get(peerId); const dc = c && (c.dataChannel || c._dc); return dc ? dc.bufferedAmount || 0 : 0; }
   receive(from, d) {
     if (window.__netdebug) console.log('[net] recv from', from, typeof d, d && (d.byteLength || d.length), d && d.constructor && d.constructor.name);
     if (typeof d === 'string') {
@@ -105,7 +107,7 @@ export class Net {
       this.emit('msg', from, m);
     } else {
       const buf = d instanceof ArrayBuffer ? d : d.buffer ? d.buffer.slice(d.byteOffset, d.byteOffset + d.byteLength) : null;
-      if (buf) this.emit('bin', from, new Float32Array(buf));
+      if (buf) this.emit('bin', from, buf);
     }
   }
 }

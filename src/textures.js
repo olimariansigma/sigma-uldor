@@ -358,7 +358,7 @@ export function gravelTextures() {
     const h = new Float32Array(S * S);
     ctx.fillStyle = '#6d675f'; ctx.fillRect(0, 0, S, S);
     const r = rng(55);
-    const hc = canvas(S, S), hctx = hc.getContext('2d');
+    const hc = canvas(S, S), hctx = hc.getContext('2d', { willReadFrequently: true });
     hctx.fillStyle = '#000'; hctx.fillRect(0, 0, S, S);
     for (let k = 0; k < 5200; k++) {
       const x = r() * S, y = r() * S, rad = 2 + r() * 6;
@@ -417,7 +417,7 @@ export function treadPlateTextures() {
   return cached('tread', () => {
     const S = 256;
     const c = canvas(S, S), ctx = c.getContext('2d');
-    const hc = canvas(S, S), hctx = hc.getContext('2d');
+    const hc = canvas(S, S), hctx = hc.getContext('2d', { willReadFrequently: true });
     ctx.fillStyle = '#8a8d90'; ctx.fillRect(0, 0, S, S);
     hctx.fillStyle = '#000'; hctx.fillRect(0, 0, S, S);
     const step = 32;
@@ -575,7 +575,7 @@ export function faceTexture() {
 // Torso texture laid out as a strip: [front | right | back | left] -> used with custom UVs
 export function shirtTexture(shirt = '#2f6db5', jacket = '#141416') {
   return cached('shirt' + shirt + jacket, () => {
-    const W = 512, H = 256, c = canvas(W, H), x = c.getContext('2d');
+    const W = 512, H = 256, c = canvas(W, H), x = c.getContext('2d', { willReadFrequently: true }); // CPU canvas: reading pixels back from a GPU canvas stalls
     const r = rng(shirt.length * 7);
     // front
     x.fillStyle = shirt; x.fillRect(0, 0, 256, 256);

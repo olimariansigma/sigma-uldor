@@ -6,6 +6,7 @@ import { materials } from './materials.js';
 import { TypeRegistry } from './pieces.js';
 import { buildWorld } from './world.js';
 import { DayNight, CYCLES, MORNING } from './daynight.js';
+import { encodeFloats, decodeFloats, encodeSnapshot, decodeSnapshot, kindOf, PLAYER_F, MACHINE_F } from './netcodec.js';
 import { SITE, inWater, lakeDist, terrainHeight } from './site.js';
 import { Demolition, INTACT, LOOSE, HELD, CARRIED, GONE , RUBBLE } from './demolition.js';
 import { BUILDINGS } from './buildings.js';
@@ -33,7 +34,7 @@ const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r,
 const clamp = THREE.MathUtils.clamp;
 const BUCKET = 50;
 const TROWEL = 1150; // cement the trowel holds (simulation units, 10 kg in game weight)
-const NET_HZ = 15;
+const NET_HZ = 20;
 const v3 = (a) => new THREE.Vector3(a[0], a[1], a[2]);
 
 function progress(p, text) { $('loadfill').style.width = (p * 100) + '%'; if (text) $('loadtext').textContent = text; }
@@ -792,10 +793,10 @@ class Game {
     const net = this.net;
     const safe = (fn) => (...a) => { try { fn(...a); } catch (e) { console.error('[net handler]', e && e.message, e && e.stack); } };
     net.on('msg', safe((from, m) => (net.isHost ? this.hostMsg(from, m) : this.clientMsg(m))));
-    net.on('bin', safe((from, a) => (net.isHost ? this.hostBin(from, a) : this.clientBin(a))));
+    net.on('bin', safe((from, buf) => { const k = kindOf(buf); if (net.isHost) { if (k === 1 || k === 2) this.hostBin(from, decodeFloats(buf)); } else if (k === 3) this.clientBin(decodeSnapshot(buf)); }));
     net.on('leave', (peer) => {
       for (const p of this.players.values()) if (p.peer === peer) {
-        this.dropCarried(p.id);
+        this.dropCarried(p.id); this.demo.forgetClient(p.id);
         for (const m of this.machines.values()) if (m.driver === p.id) { m.driver = -1; this.events.push(['drv', m.id, -1]); }
         this.events.push(['pl-', p.id]);
         this.ui.toast(`👋 ${p.name} left`);
@@ -858,7 +859,10 @@ class Game {
     this.ui.renderMulti();
   }
   kick(pid) { const p = this.players.get(pid); if (p && p.peer) this.net.kick(p.peer); }
-  broadcastWorld() { for (const p of this.players.values()) if (!p.local && p.peer) this.net.send({ t: 'world', w: this.serializeWorld(false) }, p.peer); }
+  broadcastWorld() {
+    const w = this.serializeWorld(false);
+    for (const p of this.players.values()) if (!p.local && p.peer) { this.net.send({ t: 'world', w }, p.peer); this.demo.markAllSent(p.id); }
+  }
 
   // ---- host side
   hostMsg(from, m) {
@@ -868,6 +872,7 @@ class Game {
       e.peer = from;
       this.flushNet(true);
       this.net.send({ t: 'welcome', you: id, w: this.serializeWorld(false) }, from);
+      this.demo.markAllSent(id);
       this.events.push(['pl+', id, e.name, e.shirt]);
       this.ui.toast(`🙋 ${e.name} joined`, true);
       this.ui.refreshOpen();
@@ -900,7 +905,10 @@ class Game {
       const p = this.demo.pieces[id];
       const e = ['ps', id, st, holder];
       if (st === HELD && p.holdLocal) e.push({ local: p.holdLocal.toArray().map((v) => Math.round(v * 1e4) / 1e4) });
-      else if (st === LOOSE && p.pos) e.push(p.pool ? { pos: p.pos.toArray(), quat: p.quat.toArray(), col: p.color.getHex(), kg: Math.round(p.kg) } : { pos: p.pos.toArray(), quat: p.quat.toArray() });
+      else if (st === LOOSE && p.pos) {
+        const pos = p.pos.toArray().map((v) => Math.round(v * 1000) / 1000), quat = p.quat.toArray().map((v) => Math.round(v * 1e4) / 1e4);
+        e.push(p.pool ? { pos, quat, col: p.color.getHex(), kg: Math.round(p.kg) } : { pos, quat });
+      }
       list.push(e);
     }
     if (this.mixerDirty) { this.mixerDirty = false; this.events.push(['mix', this.mixer.serialize()]); }
@@ -908,18 +916,25 @@ class Game {
     list.push(...this.events); this.events = [];
     if (list.length && this.net.conns.size) this.net.send({ t: 'ev', l: list });
   }
+  // one snapshot per client: everyone's pose and every machine, plus the loose blocks that matter most to that
+  // client (nearest and most out of date first). A client whose link is backing up gets fewer blocks, or none.
   sendSnapshot() {
-    const a = [3, this.players.size];
+    const head = [];
     for (const p of this.players.values()) {
       const pos = p.local ? this.player.pos : p.pos;
       const yaw = p.local ? this.player.bodyYaw : p.yaw;
-      a.push(p.id, pos.x, pos.y, pos.z, yaw, p.local ? Math.hypot(this.player.vel.x, this.player.vel.z) : p.speed, p.local ? (this.player.grounded ? 1 : 0) : (p.grounded ? 1 : 0), p.local ? this.player.swingT : p.swingT, p.local ? (this.driving ? this.driving.id : -1) : p.driving);
+      head.push(p.id, pos.x, pos.y, pos.z, yaw, p.local ? Math.hypot(this.player.vel.x, this.player.vel.z) : p.speed, p.local ? (this.player.grounded ? 1 : 0) : (p.grounded ? 1 : 0), p.local ? this.player.swingT : p.swingT, p.local ? (this.driving ? this.driving.id : -1) : p.driving);
     }
-    a.push(this.machines.size);
-    for (const m of this.machines.values()) a.push(...m.packPose());
-    const moving = this.demo.packMoving(220);
-    a.push(moving.length / 8, ...moving);
-    this.net.sendBin(a);
+    for (const m of this.machines.values()) head.push(...m.packPose());
+    for (const pl of this.players.values()) {
+      if (pl.local || !pl.peer) continue;
+      const queued = this.net.backlogOf(pl.peer);
+      if (queued > 600000) continue;                              // badly backed up: let it drain
+      const budget = queued > 200000 ? 0 : queued > 64000 ? 30 : 110;
+      const dm = pl.driving >= 0 ? this.machines.get(pl.driving) : null;
+      const pieces = this.demo.pickUpdates(pl.id, dm ? dm.pos : pl.pos, budget);
+      this.net.sendBuf(encodeSnapshot(this.players.size, this.machines.size, head, pieces), pl.peer);
+    }
   }
 
   // ---- client side
@@ -1000,11 +1015,11 @@ class Game {
       case 'pl-': { const p = this.players.get(e[1]); if (p && !p.local) { this.ui.toast(`👋 ${p.name} left`); this.removePlayerEntry(e[1]); } this.ui.refreshOpen(); break; }
     }
   }
-  clientBin(a) {
-    if (a[0] !== 3) return;
-    let i = 1;
-    const np = a[i++];
-    for (let k = 0; k < np; k++, i += 9) {
+  clientBin(snap) {
+    const a = snap.head;
+    let i = 0;
+    const np = snap.np;
+    for (let k = 0; k < np; k++, i += PLAYER_F) {
       const id = a[i];
       if (id === this.myId) continue;
       let pl = this.players.get(id);
@@ -1012,19 +1027,17 @@ class Game {
       this.applyPlayerPose(pl, a, i + 1);
       pl.driving = a[i + 8];
     }
-    const nm = a[i++];
-    for (let k = 0; k < nm; k++, i += 14) {
+    for (let k = 0; k < snap.nm; k++, i += MACHINE_F) {
       const m = this.machines.get(a[i]);
       if (!m || m === this.driving) continue;
       m.applyPose(a, i);
     }
-    const npc = a[i++];
-    this.demo.applyTransforms(a.subarray(i, i + npc * 8));
+    this.demo.applyTransforms(snap.pieces);
   }
   sendMyPose() {
     const p = this.player;
-    this.net.sendBin([1, p.pos.x, p.pos.y, p.pos.z, p.bodyYaw, Math.hypot(p.vel.x, p.vel.z), p.grounded ? 1 : 0, p.swingT]);
-    if (this.driving) this.net.sendBin([2, ...this.driving.packPose()]);
+    this.net.sendBuf(encodeFloats(1, [p.pos.x, p.pos.y, p.pos.z, p.bodyYaw, Math.hypot(p.vel.x, p.vel.z), p.grounded ? 1 : 0, p.swingT]));
+    if (this.driving) this.net.sendBuf(encodeFloats(2, this.driving.packPose()));
   }
 
   // ======================================================================= camera

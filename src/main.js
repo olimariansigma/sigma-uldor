@@ -183,14 +183,16 @@ class Game {
       this.ui.setMode('foot', this.input.touch);
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
       // once per version: point at what is new
-      if (this.prefs.seenTips && this.prefs.news !== '4.2') {
-        this.ui.toast('🧱 New: the <b>brick press</b> next to the dust pile makes blocks. Build your own house on the slab across the road (tool <b>4</b>, mortar with the trowel first)', true, 8000);
-        setTimeout(() => this.ui.toast('🎨 New: the <b>LP20 road painter</b> paints repaired potholes. It is parked by the gate', true, 6000), 8200);
+      if (this.prefs.seenTips && this.prefs.news !== '4.3') {
+        const old = this.prefs.news !== '4.2';
+        this.ui.toast('🚗 New: <b>street traffic</b> bumps through every pothole you leave open, and the <b>weather</b> changes: rain and thunderstorms. Settings can fix the weather or switch traffic off', true, 8000);
+        if (!touch) setTimeout(() => this.ui.toast('📷 <b>P</b> photo mode now frees the camera: fly with <b>WASD</b> + mouse, <b>Space</b> / <b>C</b> up and down', true, 6000), 8200);
+        if (old) setTimeout(() => this.ui.toast('🧱 The <b>brick press</b> next to the dust pile makes blocks. Build your own house on the slab across the road (tool <b>4</b>, mortar with the trowel first)', true, 8000), 14500);
       }
-      this.prefs.news = '4.2'; this.savePrefs();
+      this.prefs.news = '4.3'; this.savePrefs();
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
-        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 22 machines or new buildings', false, 6000), 6200);
+        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 26 machines or new buildings', false, 6000), 6200);
         setTimeout(() => this.ui.toast('🌐 <b>Multiplayer</b>: host a game and share the code with friends', true, 6000), 12500);
         this.prefs.seenTips = true; this.savePrefs();
       }

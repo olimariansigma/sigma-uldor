@@ -26,19 +26,24 @@ export class Weather {
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('seed', new THREE.BufferAttribute(seed, 4)); g.setAttribute('end', new THREE.BufferAttribute(end, 1));
-    this.uni = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uAmount: { value: 0 }, uWind: { value: new THREE.Vector2(1.2, 0.5) }, uBright: { value: 1 } };
+    this.uni = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uAmount: { value: 0 }, uWind: { value: new THREE.Vector2(1.2, 0.5) }, uBright: { value: 1 }, uNear: { value: 0 } };
     this.mat = new THREE.ShaderMaterial({
       uniforms: this.uni, transparent: true, depthWrite: false,
-      vertexShader: `attribute vec4 seed; attribute float end; uniform float uTime; uniform vec3 uCam; uniform float uAmount; uniform vec2 uWind; varying float vA;
+      // every streak has a fixed place in the world and wraps around the camera, so rain streams past as you move
+      vertexShader: `attribute vec4 seed; attribute float end; uniform float uTime; uniform vec3 uCam; uniform float uAmount; uniform vec2 uWind; uniform float uNear; varying float vA;
         void main() {
           const vec3 box = vec3(56.0, 28.0, 56.0);
           float speed = 16.0 + seed.w * 6.0;
-          float y = mod(seed.y * box.y - uTime * speed, box.y) - box.y * 0.35;
-          vec3 w = vec3(uCam.x + (seed.x - 0.5) * box.x, uCam.y + y, uCam.z + (seed.z - 0.5) * box.z);
-          w.xz += uWind * (y / speed);
+          float fall = uTime * speed;
+          vec3 w;
+          w.y = uCam.y - box.y * 0.35 + mod(seed.y * box.y - fall - uCam.y, box.y);
+          vec2 drift = uWind * (fall / speed);
+          w.x = uCam.x - box.x * 0.5 + mod(seed.x * box.x + drift.x - uCam.x, box.x);
+          w.z = uCam.z - box.z * 0.5 + mod(seed.z * box.z + drift.y - uCam.z, box.z);
           float len = 0.55 + seed.w * 0.35;
           w.y += end * len; w.xz -= end * uWind * len / speed;
-          if (seed.w > uAmount) w = vec3(0.0, -1000.0, 0.0);
+          // none falling inside the cab you are sitting in
+          if (seed.w > uAmount || distance(w, uCam) < uNear) w = vec3(0.0, -1000.0, 0.0);
           vA = (1.0 - end * 0.7);
           gl_Position = projectionMatrix * viewMatrix * vec4(w, 1.0);
         }`,
@@ -75,6 +80,7 @@ export class Weather {
     if (this.rain.visible) {
       this.uni.uTime.value += dt; this.uni.uCam.value.copy(camera.position); this.uni.uAmount.value = this.amount;
       this.uni.uBright.value = g.dn ? 0.35 + 0.65 * Math.max(g.dn.day, 0.15) : 1;
+      this.uni.uNear.value = g.mode !== 'foot' && g.cam && g.cam.cab ? 2.6 : 0;
     }
     if (g.dn) g.dn.overcast = SS(this.amount, 0, 0.6);
     if (g.audio) g.audio.setRain(this.amount);

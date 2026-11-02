@@ -201,7 +201,9 @@ export class Audio {
       src.connect(hp); hp.connect(lp); lp.connect(g); g.connect(this.master); src.start();
       this.rainG = g;
     }
-    this.rainG.gain.setTargetAtTime(Math.min(1, level) * 0.22, this.ctx.currentTime, 0.4);
+    const l = Math.round(Math.min(1, level) * 100) / 100;
+    if (l === this.rainL) return;
+    this.rainL = l; this.rainG.gain.setTargetAtTime(l * 0.22, this.ctx.currentTime, 0.4);
   }
   thunder(delay = 1, s = 1) {
     if (!this.ctx) return;

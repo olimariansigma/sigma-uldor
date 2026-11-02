@@ -53,6 +53,8 @@ for (const b of MACHINES.filter((x) => x.family === 'truck')) {
     MACHINES.push({ ...b, id: b.id + k, size: k, variantOf: b.id, tons: Math.round(b.tons + d * 9), speed: +(b.speed - d * 0.5).toFixed(1) });
   }
 }
+// every vehicle is 3 km/h faster than its base figure above
+for (const m of MACHINES) m.speed = +(m.speed + 3 / 3.6).toFixed(3);
 export const truckVariants = (id) => { const base = MACHINES.find((x) => x.id === id); const root = base.variantOf || base.id; return MACHINES.filter((x) => x.id === root || x.variantOf === root).sort((a, b) => 'sml'.indexOf(a.size) - 'sml'.indexOf(b.size)); };
 export const BASE_MACHINES = MACHINES.filter((x) => !x.variantOf);
 export { TRUCK_SIZES };

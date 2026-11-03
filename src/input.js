@@ -1,4 +1,4 @@
-// Unified keyboard / mouse / touch input.
+// Unified keyboard / mouse / touch / gamepad input.
 export class Input {
   constructor(canvas) {
     this.canvas = canvas;
@@ -12,6 +12,9 @@ export class Input {
     this.enabled = true;
     this.sensitivity = 1; this.invertY = false;
     this.wheel = 0;
+    // gamepad (standard layout: Xbox, PlayStation, Switch Pro, most Bluetooth pads)
+    this.pad = null; this.padHeld = new Set(); this.padPressed = new Set(); this.padRaw = [];
+    this.padL = { x: 0, y: 0 }; this.padR = { x: 0, y: 0 }; this.padLook = { x: 0, y: 0 }; this.padArm = false;
 
     const map = {
       KeyW: 'fwd', ArrowUp: 'up', KeyS: 'back', ArrowDown: 'down', KeyA: 'left', ArrowLeft: 'sleft', KeyD: 'right', ArrowRight: 'sright',
@@ -96,11 +99,12 @@ export class Input {
 
   held(a) {
     if (!this.enabled) return false;
+    if (this.padHeld.has(a)) return true;
     switch (a) {
       case 'hammer': return this.mouse.has('lmb') || this.tbtn.has('hammer');
       case 'pickup': return this.keys.has('pickup') || this.mouse.has('rmb') || this.tbtn.has('pickup');
       case 'throw': return this.keys.has('throw') || this.tbtn.has('throw');
-      case 'sprint': return this.keys.has('sprint') || (this.touch && Math.hypot(this.sticks.L.x, this.sticks.L.y) > 0.95);
+      case 'sprint': return this.keys.has('sprint') || (this.touch && Math.hypot(this.sticks.L.x, this.sticks.L.y) > 0.95) || (!this.padArm && Math.hypot(this.padL.x, this.padL.y) > 0.97);
       case 'stickOut': return this.keys.has('stickOut') || this.tbtn.has('stickOut');
       case 'stickIn': return this.keys.has('stickIn') || this.tbtn.has('stickIn');
       case 'curlIn': return this.keys.has('curlIn') || this.tbtn.has('curlIn');
@@ -110,18 +114,64 @@ export class Input {
   }
   pressed(a) {
     if (!this.enabled) return false;
-    const alias = { jump: ['jump', 't_jump'], use: ['use', 't_use'], cam: ['cam', 't_cam'], grab: ['lmb', 'jump', 't_grab'], shop: ['shop'], help: ['help'], esc: ['esc'] }[a] || [a];
+    const alias = { jump: ['jump', 't_jump'], use: ['use', 't_use'], cam: ['cam', 't_cam'], grab: ['lmb', 'jump', 't_grab', 'p_grab'], shop: ['shop'], help: ['help'], esc: ['esc'] }[a] || [a];
     return alias.some((x) => this.pressedSet.has(x));
   }
-  get moveX() { return (this.keys.has('right') ? 1 : 0) - (this.keys.has('left') ? 1 : 0) + this.sticks.L.x; }
-  get moveY() { return (this.keys.has('fwd') ? 1 : 0) - (this.keys.has('back') ? 1 : 0) + this.sticks.L.y; }
-  get armX() { return (this.keys.has('sright') ? 1 : 0) - (this.keys.has('sleft') ? 1 : 0) + this.sticks.R.x; }
-  get armY() { return (this.keys.has('up') ? 1 : 0) - (this.keys.has('down') ? 1 : 0) + this.sticks.R.y; }
+  get moveX() { return (this.keys.has('right') ? 1 : 0) - (this.keys.has('left') ? 1 : 0) + this.sticks.L.x + this.padL.x; }
+  get moveY() { return (this.keys.has('fwd') ? 1 : 0) - (this.keys.has('back') ? 1 : 0) + this.sticks.L.y + this.padL.y; }
+  get armX() { return (this.keys.has('sright') ? 1 : 0) - (this.keys.has('sleft') ? 1 : 0) + this.sticks.R.x + (this.padArm ? this.padR.x : 0); }
+  get armY() { return (this.keys.has('up') ? 1 : 0) - (this.keys.has('down') ? 1 : 0) + this.sticks.R.y + (this.padArm ? this.padR.y : 0); }
   consumeLook() {
     const s = 0.0024 * this.sensitivity;
-    const r = { x: this.lookX * s, y: this.lookY * s * (this.invertY ? -1 : 1) };
-    this.lookX = 0; this.lookY = 0;
+    const r = { x: (this.lookX + this.padLook.x) * s, y: (this.lookY + this.padLook.y) * s * (this.invertY ? -1 : 1) };
+    this.lookX = 0; this.lookY = 0; this.padLook.x = 0; this.padLook.y = 0;
     return r;
+  }
+
+  // ---- gamepad: polled once a frame. On foot: left stick walk, right stick look, A jump, B use, X pick up,
+  // Y throw, RT hammer / tool, LT pick up, LB / RB change tool, L3 sprint, D-pad up shop, D-pad down contracts.
+  // In a machine: left stick drive, right stick swing / boom, RB / LB arm out / in, RT / LT curl / dump, A tool,
+  // B climb out, X / Y extra control (T / Y keys), D-pad left / right turn the camera, D-pad up cab camera,
+  // D-pad down horn. Start: menu, Back / Select: help. In menus: D-pad moves, A presses, B goes back.
+  pollPad(dt, inMachine) {
+    this.padPressed = new Set();
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    let p = null;
+    for (const q of pads) if (q && q.connected && q.mapping === 'standard') { p = q; break; }
+    if (!p) for (const q of pads) if (q && q.connected) { p = q; break; }
+    if (!p) {
+      if (this.pad) { this.pad = null; this.padHeld.clear(); this.padRaw = []; this.padL = { x: 0, y: 0 }; this.padR = { x: 0, y: 0 }; if (this.onPad) this.onPad(null); }
+      return;
+    }
+    if (this.pad !== p.id) { this.pad = p.id; if (this.onPad) this.onPad(p.id); }
+    this.padArm = inMachine;
+    const dz = (v) => (Math.abs(v) < 0.16 ? 0 : (v - Math.sign(v) * 0.16) / 0.84);
+    const ax = p.axes || [];
+    this.padL = { x: dz(ax[0] || 0), y: -dz(ax[1] || 0) };
+    this.padR = { x: dz(ax[2] || 0), y: -dz(ax[3] || 0) };
+    const now = [];
+    for (let i = 0; i < 17; i++) { const b = p.buttons[i]; now[i] = !!b && (b.pressed || b.value > 0.4); }
+    const MAP = inMachine
+      ? { 0: 'p_grab', 1: 'use', 2: 'rotL', 3: 'rotR', 4: 'stickIn', 5: 'stickOut', 6: 'curlOut', 7: 'curlIn', 12: 'cam', 13: 'horn', 8: 'help', 9: 'menu' }
+      : { 0: 'jump', 1: 'use', 2: 'pickup', 3: 'throw', 4: 'toolPrev', 5: 'toolNext', 6: 'pickup', 7: 'hammer', 10: 'sprint', 12: 'shop', 13: 'jobs', 8: 'help', 9: 'menu' };
+    const NAV = { 0: 'navA', 1: 'navB', 12: 'navU', 13: 'navD', 14: 'navL', 15: 'navR', 9: 'menu', 4: 'navTabL', 5: 'navTabR' };
+    this.padHeld.clear();
+    for (let i = 0; i < 17; i++) {
+      const edge = now[i] && !this.padRaw[i];
+      if (edge && NAV[i]) this.padPressed.add(NAV[i]);
+      const a = MAP[i]; if (!a) continue;
+      if (now[i]) this.padHeld.add(a);
+      if (edge) { this.padPressed.add(a); if (this.enabled) this.pressedSet.add(a); }
+    }
+    // left stick flicks also move through menus
+    const fl = this.padFlick || 0, sy = this.padL.y, sx = this.padL.x;
+    const dir = sy > 0.7 ? 'navU' : sy < -0.7 ? 'navD' : sx > 0.7 ? 'navR' : sx < -0.7 ? 'navL' : null;
+    if (dir && fl <= 0) { this.padPressed.add(dir); this.padFlick = 0.28; } else if (!dir) this.padFlick = 0; else this.padFlick = fl - dt;
+    this.padRaw = now;
+    // camera: right stick looks around on foot; in a machine the D-pad turns it (the right stick works the arm)
+    const k = 1150 * dt;
+    if (inMachine) { this.padLook.x += ((now[15] ? 1 : 0) - (now[14] ? 1 : 0)) * k * 0.8; }
+    else { this.padLook.x += this.padR.x * k; this.padLook.y += -this.padR.y * k * 0.75; }
   }
   endFrame() { this.pressedSet.clear(); this.wheel = 0; }
   releaseLock() { if (document.exitPointerLock && this.locked) document.exitPointerLock(); }

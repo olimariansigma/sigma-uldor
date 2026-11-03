@@ -273,7 +273,7 @@ kbd { font-family: var(--fd); font-size: .82em; background: var(--y); color: var
 #tbtns-exc .tb .ic { width: 26px; height: 26px; }
 #tbtns-exc .tb-big { grid-column: span 2; width: 146px; border-radius: 34px; }
 .tb-use { position: absolute; width: auto; height: 48px; padding: 0 20px; border-radius: 24px; font-family: var(--fd); font-size: 15px; letter-spacing: 1px; background: linear-gradient(180deg, var(--y2), var(--y)); color: var(--ink); border-color: #fff; }
-#tbtns-rot { position: absolute; right: calc(176px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+#tbtns-rot { position: absolute; right: calc(176px + env(safe-area-inset-right)); bottom: calc(178px + env(safe-area-inset-bottom)); display: flex; flex-direction: row-reverse; gap: 8px; pointer-events: auto; }
 #tbtns-rot .tb { width: 54px; height: 54px; }
 #tbtns-rot .tb .ic { width: 22px; height: 22px; }
 .tb-cam { position: absolute; right: calc(16px + env(safe-area-inset-right)); top: 72px; width: 52px; height: 52px; }
@@ -399,3 +399,6 @@ body.prog #multiBtn, body.prog .dust-sub span:nth-child(3) { display: none; }
 .help-qa { grid-column: 1 / -1; }
 .help-qa ol { margin: 6px 0 0 18px; padding: 0; }
 .help-qa li { margin: 5px 0; }
+
+/* gamepad: the focused button in menus gets a clear ring */
+body.pad button:focus, body.pad .mcard:focus, body.pad input:focus { outline: 3px solid var(--y); outline-offset: 2px; }

@@ -140,6 +140,7 @@ class Game {
     this.input.sensitivity = this.prefs.sens; this.input.invertY = this.prefs.invert;
     this.ui = new UI(this);
     this.contracts = new Contracts(this);
+    this.input.onPad = (id) => { document.body.classList.toggle('pad', !!id); if (id) this.ui.toast('🎮 Controller connected. <b>Start</b> menu · <b>Back</b> help (controls are listed there)', true, 5000); else this.ui.toast('🎮 Controller disconnected'); };
     this.showroom = new Showroom(this);
     this.newWorld();
     this.mode = 'foot'; this.driving = null;
@@ -159,9 +160,13 @@ class Game {
     if (this.thumbMode) return;
     this.titleLive = true;
     const t0 = performance.now();
+    let lastT = 0;
     const loop = (t) => {
       if (!this.titleLive) return;
       requestAnimationFrame(loop);
+      this.input.pollPad(Math.min(0.05, (t - (lastT || t)) / 1000), false); lastT = t;
+      if (this.input.padPressed.size) this.ui.padNav(this.input.padPressed, $('titleMenu'));
+      this.input.pressedSet.clear(); // pad presses on the title must not fire in-game actions when play starts
       const k = (t - t0) / 1000, a = 0.35 + Math.sin(k * 0.03) * 0.55;
       this.camera.position.set(-6 + Math.sin(a) * 62, 13 + Math.sin(k * 0.11) * 3, -84 + Math.cos(a) * 62);
       this.camera.lookAt(-8, 5, -84);
@@ -1324,8 +1329,18 @@ class Game {
       } else {
         cam.layers.enable(EXTERIOR);
         c.exYaw -= look.x; c.exPitch = clamp(c.exPitch - look.y, -1.3, 0.35);
+        if (this.frontCamT > 0) {
+          // ease round to a front-quarter view of the loader bucket (manual looking cancels it)
+          this.frontCamT = Math.abs(look.x) + Math.abs(look.y) > 0.002 ? 0 : this.frontCamT - dt;
+          const fm = m.frontMouth.getWorldPosition(this._fm || (this._fm = new THREE.Vector3()));
+          let d = (Math.atan2(fm.x - m.root.position.x, fm.z - m.root.position.z) + 0.6) - c.exYaw; d = Math.atan2(Math.sin(d), Math.cos(d));
+          const k = 1 - Math.exp(-dt * 3.5);
+          c.exYaw += d * k; c.exPitch += (-0.32 - c.exPitch) * k;
+          c.exDist += (Math.max(c.exDist, 11) - c.exDist) * k;
+        }
         if (this.input) c.exDist = clamp(c.exDist + this.input.wheel * 0.8, 5, 34);
         const target = m.root.position.clone().add(new THREE.Vector3(0, 2.6 * Math.max(0.6, m.s), 0));
+        if (this.frontCamT > 0 && this._fm) target.lerp(this._fm.clone().setY(target.y - 0.6), 0.45); // frame the front bucket
         const off = new THREE.Vector3(Math.sin(c.exYaw) * Math.cos(c.exPitch), -Math.sin(c.exPitch), Math.cos(c.exYaw) * Math.cos(c.exPitch));
         let dist = c.exDist;
         const own = new Set(m.bodies.map((b) => b.body.handle));
@@ -1449,6 +1464,8 @@ class Game {
     requestAnimationFrame((tt) => this.loop(tt));
     const dt = Math.min(0.05, (t - this.last) / 1000);
     this.last = t;
+    this.input.pollPad(dt, this.mode === 'machine');
+    this.padUi();
     // one bad frame must never freeze the game: keep rendering and say what went wrong (once)
     try { this.tick(dt); } catch (e) {
       console.error(e);
@@ -1458,6 +1475,23 @@ class Game {
     if (this.debugCam) { this.camera.position.set(...this.debugCam[0]); this.camera.lookAt(...this.debugCam[1]); }
     this.renderer.render(this.scene, this.camera);
     this.input.endFrame();
+  }
+
+  // gamepad: Start opens the menu, and while a panel or the showroom is open the pad drives the UI
+  padUi() {
+    const P = this.input.padPressed; if (!P.size) return;
+    const ui = this.ui, open = ui.isOpen();
+    if (P.has('menu')) { if (open) ui.padBack(); else ui.open('menu'); return; }
+    if (open) ui.padNav(P);
+    else {
+      if (P.has('toolPrev') || P.has('toolNext')) this.cycleTool(P.has('toolNext') ? 1 : -1);
+    }
+  }
+  cycleTool(d) {
+    const order = ['hammer', 'trowel', 'charges', 'build'], me = this.players.get(this.myId);
+    const ok = (t) => (!this.prog || this.prog.has(t)) && (t !== 'trowel' || (me && me.cement.kg > 0));
+    let i = order.indexOf(this.tool);
+    for (let n = 0; n < 4; n++) { i = (i + d + 4) % 4; if (ok(order[i])) { if (order[i] !== this.tool) this.selectTool(order[i]); return; } }
   }
 
   // build-time asset generation (scripts/thumbs.cjs): transparent machine renders + 3D logo
@@ -1560,6 +1594,11 @@ class Game {
         grabToggle: input.pressed('grab'),
       };
       m.drive(dt, ctl, machList);
+      // backhoe: using the front loader turns the camera round to the front so you can see the bucket
+      if (m.frontFrame && (ctl.grabToggle || ctl.rot) && !this.cam.cab) {
+        this.frontCamT = 2.5;
+        if (!this.frontTold) { this.frontTold = true; this.ui.toast('🪣 Front bucket: lower it (' + (input.touch ? 'LOADER ↓' : '<b>T</b>') + '), drive into loose rubble to fill it, raise it (' + (input.touch ? 'LOADER ↑' : '<b>Y</b>') + ') and tip it (' + (input.touch ? 'FRONT' : '<b>Click</b>') + ')', true, 7000); }
+      }
       if (input.pressed('cam')) { this.cam.cab = !this.cam.cab; this.cam.cabYaw = 0; this.cam.cabPitch = -0.12; }
       const honk = input.held('horn');
       if (honk !== !!this.honking) { this.honking = honk; this.act('horn', { id: m.id, on: honk ? 1 : 0 }); }

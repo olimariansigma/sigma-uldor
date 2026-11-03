@@ -71,6 +71,42 @@ export class UI {
     this.game.input.releaseLock();
     this.game.audio.click();
   }
+  // gamepad: B goes back, D-pad / stick moves between buttons, A presses, LB / RB switch tabs
+  padBack() {
+    if (this.game.showroom && this.game.showroom.active) { this.closeShowroom(); this.open('spawn'); return; }
+    for (const o of PANELS) if (!$(o).classList.contains('hidden')) this.close(o);
+  }
+  padScope() {
+    if (this.game.showroom && this.game.showroom.active) return $('showroomUI');
+    for (const o of PANELS) if (!$(o).classList.contains('hidden')) return $(o);
+    return null;
+  }
+  padNav(P, scope = this.padScope()) {
+    if (!scope) return;
+    if (P.has('navB') && scope.id !== 'titleMenu') { this.padBack(); return; }
+    const tabs = [...scope.querySelectorAll('.tab')];
+    if (tabs.length && (P.has('navTabL') || P.has('navTabR'))) {
+      const i = Math.max(0, tabs.findIndex((t) => t.classList.contains('active')));
+      tabs[(i + (P.has('navTabR') ? 1 : -1) + tabs.length) % tabs.length].click(); return;
+    }
+    const items = [...scope.querySelectorAll('button, input, select, .mcard')].filter((e) => !e.disabled && e.offsetParent !== null && !e.closest('.hidden'));
+    if (!items.length) return;
+    let cur = document.activeElement; if (!items.includes(cur)) cur = null;
+    if (P.has('navA')) { if (cur) cur.click(); else items[0].focus(); return; }
+    const dir = P.has('navU') ? [0, -1] : P.has('navD') ? [0, 1] : P.has('navL') ? [-1, 0] : P.has('navR') ? [1, 0] : null;
+    if (!dir) return;
+    if (!cur) { items.forEach((e) => { if (!e.tabIndex || e.tabIndex < 0) e.tabIndex = 0; }); items[0].focus(); items[0].scrollIntoView({ block: 'nearest' }); return; }
+    const r0 = cur.getBoundingClientRect(), c0 = [r0.left + r0.width / 2, r0.top + r0.height / 2];
+    let best = null, bd = Infinity;
+    for (const e of items) {
+      if (e === cur) continue;
+      const r = e.getBoundingClientRect(), dx = r.left + r.width / 2 - c0[0], dy = r.top + r.height / 2 - c0[1];
+      const along = dx * dir[0] + dy * dir[1]; if (along <= 4) continue;
+      const across = Math.abs(dx * dir[1] - dy * dir[0]);
+      const d = along + across * 2.2; if (d < bd) { bd = d; best = e; }
+    }
+    if (best) { if (!best.tabIndex || best.tabIndex < 0) best.tabIndex = 0; best.focus(); best.scrollIntoView({ block: 'nearest' }); }
+  }
   close(id) { $(id).classList.add('hidden'); this.syncOpen(); this.game.audio.click(); }
   refreshPanel(id) {
     if (id === 'spawn') this.renderSpawn();
@@ -450,7 +486,7 @@ export class UI {
       this.machineHint = ctl.hint;
       $('vhName').textContent = machine.spec.brand + ' ' + machine.spec.model;
       $('vhImg').src = THUMB(machine.spec.id);
-      $('vhToolLbl').textContent = { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher', brickclamp: 'Clamp', magnet: 'Magnet', xball: 'Chain', blaster: 'Vacuum', cutter: 'Drums', saw: 'Saw', auger: 'Drill', plate: 'Plate', forks: 'Forks', jet: 'Jet' }[machine.spec.attach]
+      $('vhToolLbl').textContent = machine.frontFrame ? 'Front bucket' : { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher', brickclamp: 'Clamp', magnet: 'Magnet', xball: 'Chain', blaster: 'Vacuum', cutter: 'Drums', saw: 'Saw', auger: 'Drill', plate: 'Plate', forks: 'Forks', jet: 'Jet' }[machine.spec.attach]
         || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball', truck: 'Body', painter: 'Paint' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
@@ -473,7 +509,7 @@ export class UI {
     const st = { breaker: on ? 'ON' : 'OFF', crusher: on ? 'CRUSHING' : 'OFF', roller: on ? 'VIBRATING' : 'OFF', paver: on ? 'PAVING' : 'OFF', skip: m.open > 0.5 ? 'OPEN' : 'CLOSED',
       scoop: m.payload.kg ? m.payload.kind : m.held.length ? 'loaded' : 'empty', blade: 'ready',
       magnet: on ? 'ON' : 'OFF', xball: on ? 'LONG CHAIN' : 'SHORT CHAIN', blaster: on ? 'SUCKING' : 'OFF', cutter: on ? 'CUTTING' : 'OFF', saw: on ? 'SPINNING' : 'OFF', auger: on ? 'DRILLING' : 'OFF', plate: on ? 'VIBRATING' : 'OFF', forks: on ? 'LOCKED' : 'FREE', jet: on ? 'SPRAYING' : 'OFF', bed: 'ready', paint: (on ? 'SPRAYING ' : '') + paintOf(m)[0], ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
-    $('vhGrab').textContent = st ?? (m.open > 0.5 ? 'OPEN' : 'CLOSED');
+    $('vhGrab').textContent = m.frontFrame ? (m.openTarget > 0.5 ? 'TIPPED' : 'READY') + ' · ' + (m.rot > 0.45 ? 'UP' : 'DOWN') : st ?? (m.open > 0.5 ? 'OPEN' : 'CLOSED');
     if (a.cap || m.magSlots) {
       const n = m.magSlots ? (m.held2 || []).length : m.held.length, c = m.magSlots ? m.magSlots.length : a.cap;
       $('vhLoad').textContent = `${n} / ${c} blocks`; $('vhFill').style.width = Math.min(100, n / c * 100) + '%'; $('vhFill').style.background = '#7fd0ff';

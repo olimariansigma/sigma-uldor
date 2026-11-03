@@ -371,7 +371,7 @@ export class UI {
     if (g.prog) for (const id of Object.keys(TOOLS)) {
       const locked = !g.prog.has(id), b = document.querySelector(`#hotbar [data-tool="${id}"]`);
       b.classList.toggle('locked', locked);
-      if (locked) $({ trowel: 'trowelAmt', charges: 'chargeAmt', build: 'buildAmt' }[id]).textContent = '🔒 ' + money(TOOLS[id].price);
+      if (locked) $({ trowel: 'trowelAmt', charges: 'chargeAmt', build: 'buildAmt' }[id]).textContent = '🔒' + money(TOOLS[id].price);
     }
     const big = document.querySelector('#tbtns-foot [data-act="hammer"]');
     if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : g.tool === 'build' ? 'brick' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH', brick: 'BUILD' }[want]}</small>`; } }

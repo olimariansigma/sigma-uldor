@@ -385,8 +385,13 @@ body.touch .hud-btn span { display: none; }
 .mcard .price.poor { background: rgba(60, 20, 20, .85); border-color: #a04040; color: #ffb4a8; }
 .shop-row .ico.big { font-size: 26px; display: flex; align-items: center; justify-content: center; }
 .shop-row .owned { font-weight: 800; color: #7ef0a4; padding: 0 10px; white-space: nowrap; }
-#hotbar .hb.locked { filter: grayscale(1); opacity: .55; }
-#hotbar .hb.locked .amt { color: #ffd23c; }
+#hotbar .hb.locked { opacity: .7; }
+#hotbar .hb.locked .ic { filter: grayscale(1); opacity: .45; }
+#hotbar .hb.locked .k, #hotbar .hb.locked .sw, #hotbar .hb.empty .sw { display: none; }
+#hotbar .hb.locked .amt { left: 0; right: 0; top: 4px; text-align: center; white-space: nowrap; color: #ffd23c; font-size: 10px; }
+.hb .amt { white-space: nowrap; }
+/* disabled buttons stay readable whatever their colour (blue / red buttons used to keep their background) */
+.buy.alt:disabled, .buy.red:disabled, .buy:disabled { background: #3a3f47; box-shadow: 0 3px 0 #23262c; color: #c3c8d0; cursor: default; }
 #srSpawn.poor { filter: saturate(.4) brightness(.8); }
 .mtick { position: fixed; z-index: 30; pointer-events: none; font-family: var(--fd); font-size: 18px; color: #7ef0a4; text-shadow: 0 2px 4px rgba(0, 0, 0, .8); animation: mtick 1.5s ease-out forwards; }
 @keyframes mtick { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-26px); } }

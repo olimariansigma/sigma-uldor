@@ -22,7 +22,8 @@ import { Crusher, fmtKg, KG } from './crusher.js';
 import { IntakeLine } from './intake.js';
 import { Mixer } from './mixer.js';
 import { Road } from './road.js';
-import { Machine, MACHINES, controlsFor } from './machines.js';
+import { Machine, MACHINES, BASE_MACHINES, controlsFor } from './machines.js';
+import { Contracts } from './contracts.js';
 import { machineInteract, releaseAll, heldWorld } from './machineLogic.js';
 import { Showroom } from './showroom.js';
 import { Slabs, SLAB, SLAB_KG } from './slabs.js';
@@ -136,6 +137,7 @@ class Game {
     this.input = new Input(renderer.domElement);
     this.input.sensitivity = this.prefs.sens; this.input.invertY = this.prefs.invert;
     this.ui = new UI(this);
+    this.contracts = new Contracts(this);
     this.showroom = new Showroom(this);
     this.newWorld();
     this.mode = 'foot'; this.driving = null;
@@ -183,11 +185,11 @@ class Game {
       this.ui.setMode('foot', this.input.touch);
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
       // once per version: point at what is new
-      if (this.prefs.seenTips && this.prefs.news !== '4.4') {
-        this.ui.toast('🚜 New: <b>10 special excavators</b> in Spawn: a backhoe loader, a scrap magnet, a wrecking ball on a chain, a block blaster, a drum cutter, a rock saw, an auger, a plate compactor, pallet forks and a water cannon', true, 9000);
-        setTimeout(() => this.ui.toast('💥 Bring lots of blocks down at once for a <b>destruction combo</b>. Your biggest smash is your record', true, 6000), 9200);
+      if (this.prefs.seenTips && this.prefs.news !== '5.0') {
+        this.ui.toast('📋 New in 5.0: <b>Contracts</b>! Paid jobs, cash and promotions. Press <b>J</b> or tap the cash box top left', true, 9000);
+        setTimeout(() => this.ui.toast('🏗️ The brick press got rebuilt, and a cement silo and water tank now stand by the mixer', true, 6000), 9200);
       }
-      this.prefs.news = '4.4'; this.savePrefs();
+      this.prefs.news = '5.0'; this.savePrefs();
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
         setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 36 machines or new buildings', false, 6000), 6200);
@@ -356,6 +358,7 @@ class Game {
   get authority() { return !this.net.isClient; }
   inWater(x, y, z) { return inWater(x, y, z); }
   spawnPoint() { return SITE.playerSpawn.clone(); }
+  machineSpecs() { return BASE_MACHINES; }
   playerName(id) { const p = this.players.get(id); return p ? p.name : '?'; }
   plotName(i) { const b = this.plots[i] != null ? this.demo.buildings[this.plots[i]] : null; return b && !b.removed ? (BUILDINGS.find((d) => d.id === b.def) || {}).name : 'empty'; }
   // blocks a player carries. Asked many times a frame, so the scan over every block is redone only after some
@@ -1302,14 +1305,12 @@ class Game {
     if (fell > 0) { c.n += fell; c.quiet = 0; } else if (c.n) c.quiet += 0.25;
     if (c.n && (c.quiet >= 1.6 || c.n > 400)) {
       const n = c.n; c.n = 0; c.quiet = 0;
+      this.contracts.onCombo(n);
       if (n < 10) return;
       const best = this.prefs.bestCombo || 0, rec = n > best && n >= 15;
       if (rec) { this.prefs.bestCombo = n; this.savePrefs(); }
       const word = n >= 120 ? 'APOCALYPSE!' : n >= 70 ? 'MEGA SMASH!' : n >= 40 ? 'HUGE SMASH!' : n >= 20 ? 'BIG SMASH!' : 'SMASH!';
-      const el = $('combo');
-      el.innerHTML = `<b>💥 ${n} BLOCKS</b><small>${rec ? '🏆 NEW RECORD! ' : ''}${word}${!rec && best ? ` · best ${best}` : ''}</small>`;
-      el.classList.toggle('rec', rec);
-      el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+      this.ui.bigPop(`<b>💥 ${n} BLOCKS</b><small>${rec ? '🏆 NEW RECORD! ' : ''}${word}${!rec && best ? ` · best ${best}` : ''}</small>`, rec ? 'rec' : '');
       if (rec && n >= 40) this.audio.firework(cam.clone().add(new THREE.Vector3(0, 8, 0)), 0.1);
     }
   }
@@ -1437,6 +1438,7 @@ class Game {
     if (input.pressed('shop')) this.ui.toggle('spawn');
     if (input.pressed('multi')) this.ui.toggle('multi');
     if (input.pressed('help')) this.ui.toggle('help');
+    if (input.pressed('jobs')) this.ui.toggle('contracts');
     const machList = [...this.machines.values()];
 
     // ---- local control
@@ -1624,6 +1626,8 @@ class Game {
     this.charges.update(dt, auth);
     this.traffic.update(dt);
     this.comboUpdate(dt);
+    this.contracts.update(dt);
+    this.careerT = (this.careerT || 0) - dt; if (this.careerT <= 0) { this.careerT = 0.5; this.ui.setCareer(); }
     this.builder.update(dt);
     if (auth) {
       this.glueT = (this.glueT || 0) - dt;

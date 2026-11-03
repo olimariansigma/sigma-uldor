@@ -6,10 +6,12 @@ import { fmtKg, fmtL, KG } from './crusher.js';
 import { ic, iconize, fillIcons } from './icons.js';
 import { MAX_CHARGES } from './fun.js';
 import { paintOf } from './mx-vehicles.js';
+import { RANKS, money } from './contracts.js';
 
 const $ = (id) => document.getElementById(id);
-const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings', 'menu'];
+const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings', 'menu', 'contracts'];
 const hex = (c) => '#' + c.getHexString();
+const fmtT = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
 const THUMB = (id) => `thumbs/m_${id}.webp`;
 const TOOL = { brickclamp: 'Rotating brick clamp', grapple: 'Sorting grapple', shear: 'Demolition shear', claw: 'Log claw', bucket: 'Digging bucket', bigbucket: 'Rock bucket', minibucket: 'Mini bucket', crusher: 'Crusher bucket',
   breaker: 'Hydraulic breaker', orangepeel: 'Orange-peel grab', pulverizer: 'Pulverizer', tank: 'Water tank', skip: 'Concrete skip',
@@ -41,6 +43,8 @@ export class UI {
     $('multiBtn').addEventListener('click', () => this.toggle('multi'));
     $('saveBtn').addEventListener('click', () => this.toggle('save'));
     $('menuBtn').addEventListener('click', () => this.toggle('menu'));
+    $('career').addEventListener('click', () => this.toggle('contracts'));
+    $('career').addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
     $('helpBtn').addEventListener('click', () => this.toggle('help'));
     $('settingsBtn').addEventListener('click', () => this.toggle('settings'));
     document.querySelectorAll('#spawn .tab').forEach((t) => t.addEventListener('click', () => { this.tab = t.dataset.tab; this.renderSpawn(); }));
@@ -71,6 +75,7 @@ export class UI {
     if (id === 'multi') this.renderMulti();
     if (id === 'save') this.renderSave();
     if (id === 'menu') this.renderMenu();
+    if (id === 'contracts') this.renderContracts();
     if (id === 'mixerPanel') this.renderMixer();
   }
   refreshOpen() { for (const id of ['spawn', 'multi', 'save', 'mixerPanel']) if (!$(id).classList.contains('hidden')) this.refreshPanel(id); }
@@ -197,10 +202,50 @@ export class UI {
   }
 
   // ------------------------------------------------------------------ save slots
+  // big centre-screen popup (destruction combos, finished contracts, promotions)
+  bigPop(html, cls = '') {
+    const el = $('combo');
+    el.innerHTML = html; el.className = cls;
+    void el.offsetWidth; el.classList.add('pop');
+  }
+
+  // ------------------------------------------------------------------ contracts / career
+  setCareer() {
+    const c = this.game.contracts; if (!c) return;
+    const r = c.rank, next = RANKS[r + 1];
+    const key = `${Math.round(c.cash)}|${r}|${c.jobs.map((j) => j.id + ':' + Math.floor(Math.min(1, j.progress / j.target) * 40) + ':' + Math.ceil(j.bonusT / 10)).join(',')}`;
+    if (this.cache.career === key) return;
+    this.cache.career = key;
+    $('cash').textContent = money(c.cash);
+    $('rankName').textContent = RANKS[r][1];
+    $('rankBar').firstChild.style.width = (next ? Math.min(100, (c.earned - RANKS[r][0]) / (next[0] - RANKS[r][0]) * 100) : 100) + '%';
+    $('jobsMini').innerHTML = c.jobs.map((j) => {
+      const f = Math.min(1, j.progress / j.target);
+      return `<div class="jm"><span class="ji">${j.icon}</span><span class="jt">${j.title}</span><span class="jp"><i style="width:${(f * 100).toFixed(0)}%"></i></span>${j.bonusT > 0 ? `<span class="jb">⏱${fmtT(j.bonusT)}</span>` : ''}</div>`;
+    }).join('');
+    if (!$('contracts').classList.contains('hidden')) this.renderContracts();
+  }
+  renderContracts() {
+    const c = this.game.contracts, body = $('contractsBody'); if (!c) return;
+    const r = c.rank, next = RANKS[r + 1];
+    const head = `<div class="car-head"><div><div class="dim">Company cash</div><b class="big">${money(c.cash)}</b></div><div><div class="dim">Rank</div><b>${RANKS[r][1]}</b>${next ? `<div class="dim small">${money(next[0] - c.earned)} more to ${next[1]}</div>` : '<div class="dim small">Top rank!</div>'}</div><div><div class="dim">Jobs done</div><b>${c.done}</b></div></div>`;
+    body.innerHTML = head + '<div class="jobs"></div><p class="dim small">Finish a contract inside its ⏱ time for a 50% speed bonus. Your career is saved on this device and counts in any world, alone or with a crew. <kbd>J</kbd> opens this board.</p>';
+    const list = body.querySelector('.jobs');
+    for (const j of c.jobs) {
+      const f = Math.min(1, j.progress / j.target), card = document.createElement('div'); card.className = 'job';
+      const amount = j.type === 'demolish' ? `${Math.round(f * 100)}%` : j.type === 'crush' || j.type === 'cement' ? `${Math.round(j.progress * 4 / 459).toLocaleString('en-US')} / ${Math.round(j.target * 4 / 459).toLocaleString('en-US')} kg` : `${Math.floor(j.progress)} / ${j.target}`;
+      card.innerHTML = `<div class="job-ico">${j.icon}</div><div class="job-main"><b>${j.title}</b><div class="dim small">${j.desc}</div><div class="job-bar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="job-meta"><span>${amount}</span><span class="pay">${money(j.reward)}${j.bonusT > 0 ? ` <em>+50% in ⏱${fmtT(j.bonusT)}</em>` : ''}</span></div></div>`;
+      const sk = this.btn(c.skipT > 0 ? `Skip ${Math.ceil(c.skipT)}s` : 'Skip', 'alt', () => { if (c.skip(j.id)) { this.renderContracts(); this.setCareer(); } }, c.skipT > 0);
+      sk.classList.add('job-skip'); card.appendChild(sk);
+      list.appendChild(card);
+    }
+  }
+
   renderMenu() {
     const g = this.game, body = $('menuBody'); body.innerHTML = '';
     const row = document.createElement('div'); row.className = 'btn-row'; row.style.flexDirection = 'column';
     row.appendChild(this.btn('▶ Resume', '', () => this.close('menu')));
+    row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
     row.appendChild(this.btn('🔄 New world', 'red', () => { if (confirm('Start a fresh world? (unsaved progress is lost)')) { g.act('newWorld', {}); this.close('menu'); } }, g.net.isClient));
     row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
     body.appendChild(row);

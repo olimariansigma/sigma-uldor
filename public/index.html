@@ -45,6 +45,7 @@
         <span><i data-ic="road"></i><b id="roadFix">0/0</b></span>
       </div>
     </div>
+    <div id="career" class="g-card" title="Contracts (J)"><div class="car-top"><b id="cash">$0</b><span id="rankName">Rookie</span></div><div id="rankBar"><i></i></div><div id="jobsMini"></div></div>
     <div id="netBadge" class="hidden"></div>
   </div>
   <div id="topRight">
@@ -172,6 +173,7 @@
         <li><kbd>3</kbd> demolition charges: click blocks to stick up to 8 charges, then <kbd>E</kbd> to blow them (stand back!)</li>
         <li><kbd>4</kbd> build: carry pressed blocks, trowel a splash of mortar (one per click) on the slab across the road or on a block, then click to lay a block on it. <kbd>R</kbd> turns the block. Blocks laid on mortar stick; without it they are only stacked.</li>
         <li><kbd>P</kbd> photo mode: hides the HUD and frees the camera. Fly with <kbd>W A S D</kbd> + <kbd>Mouse</kbd>, <kbd>Space</kbd> / <kbd>C</kbd> up / down, <kbd>Shift</kbd> faster</li>
+        <li><kbd>J</kbd> <b>contracts</b>: three paid jobs at a time (flatten a building, crush rubble, fix potholes, smash big, use a given machine...). Finish them for cash and promotions, inside the ⏱ time for +50%. Your cash and rank show top left</li>
         <li><kbd>B</kbd> spawn menu · <kbd>M</kbd> online · <kbd>H</kbd> help</li>
       </ul>
     </div>
@@ -202,6 +204,12 @@
       </ul>
     </div>
   </div>
+</div>
+
+<!-- Contracts -->
+<div id="contracts" class="panel hidden">
+  <div class="panel-head"><h2>Contracts</h2><button class="close" data-close="contracts"><i data-ic="close"></i></button></div>
+  <div class="panel-body" id="contractsBody"></div>
 </div>
 
 <!-- Menu -->

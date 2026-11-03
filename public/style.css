@@ -338,3 +338,38 @@ body.photo #hud { visibility: hidden; }
 @keyframes comboPop { 0% { opacity: 0; transform: translateX(-50%) scale(.4) rotate(-6deg); } 12% { opacity: 1; transform: translateX(-50%) scale(1.15) rotate(2deg); } 22% { transform: translateX(-50%) scale(1) rotate(0); } 75% { opacity: 1; } 100% { opacity: 0; transform: translateX(-50%) translateY(-30px) scale(.95); } }
 body.touch #combo b { font-size: 38px; }
 body.photo #combo { display: none; }
+
+/* career chip + contract tracker (top left, under the dust box) */
+#career { padding: 8px 12px 8px; border-left: 4px solid #4ad07a; border-radius: 12px; cursor: pointer; pointer-events: auto; max-width: 300px; }
+#career .car-top { display: flex; align-items: baseline; gap: 10px; }
+#career #cash { font-family: var(--fd); font-size: 20px; color: #7ef0a4; }
+#career #rankName { font-size: 12px; font-weight: 800; color: #cfd6de; text-transform: uppercase; letter-spacing: .5px; }
+#rankBar { height: 3px; background: rgba(255,255,255,.12); border-radius: 2px; margin: 5px 0 4px; overflow: hidden; }
+#rankBar i { display: block; height: 100%; width: 0; background: #4ad07a; }
+#jobsMini .jm { display: flex; align-items: center; gap: 6px; font-size: 11.5px; line-height: 1.25; margin-top: 3px; }
+#jobsMini .ji { width: 16px; text-align: center; }
+#jobsMini .jt { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #e9edf2; }
+#jobsMini .jp { width: 44px; height: 5px; background: rgba(255,255,255,.14); border-radius: 3px; overflow: hidden; flex: none; }
+#jobsMini .jp i { display: block; height: 100%; background: var(--y); }
+#jobsMini .jb { font-size: 10px; color: #ffd25a; flex: none; }
+body.touch #jobsMini { display: none; }
+body.touch #career { padding: 5px 9px; }
+body.touch #career #cash { font-size: 16px; }
+/* contracts panel */
+#contracts .car-head { display: flex; gap: 22px; padding: 4px 2px 12px; border-bottom: 1px solid var(--line); margin-bottom: 10px; flex-wrap: wrap; }
+#contracts .car-head b { font-size: 16px; }
+#contracts .car-head b.big { font-family: var(--fd); font-size: 24px; color: #7ef0a4; }
+#contracts .small { font-size: 12px; }
+#contracts .jobs { display: flex; flex-direction: column; gap: 10px; }
+#contracts .job { display: flex; gap: 12px; align-items: flex-start; background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; position: relative; }
+#contracts .job-ico { font-size: 28px; line-height: 1; padding-top: 2px; }
+#contracts .job-main { flex: 1; min-width: 0; }
+#contracts .job-bar { height: 7px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; margin: 8px 0 5px; }
+#contracts .job-bar i { display: block; height: 100%; background: linear-gradient(90deg, #4ad07a, #b6f37a); }
+#contracts .job-meta { display: flex; justify-content: space-between; font-size: 12.5px; gap: 8px; flex-wrap: wrap; }
+#contracts .job-meta .pay { color: #7ef0a4; font-weight: 800; }
+#contracts .job-meta em { color: #ffd25a; font-style: normal; font-weight: 700; }
+#contracts .job-skip { align-self: center; }
+#combo.job b { color: #7ef0a4; text-shadow: 0 4px 0 #1d6b3a, 0 0 24px rgba(80, 240, 140, .7), 0 8px 18px rgba(0, 0, 0, .55); }
+#combo.rank b { color: #ffd25a; }
+body.photo #career { display: none; }

@@ -32,7 +32,7 @@ export class Builder {
     this.ghost = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0x5cf2a8, transparent: true, opacity: 0.32, depthWrite: false }));
     this.ghost.add(new THREE.LineSegments(new THREE.EdgesGeometry(this.ghost.geometry), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 })));
     this.ghost.visible = false; this.ghost.renderOrder = 4; game.scene.add(this.ghost);
-    this.splashGhost = new THREE.Mesh(new THREE.CircleGeometry(0.22, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }));
+    this.splashGhost = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.24, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide }));
     this.splashGhost.visible = false; this.splashGhost.renderOrder = 4; game.scene.add(this.splashGhost);
     this._m = new THREE.Matrix4(); this._q = new THREE.Quaternion(); this._s = new THREE.Vector3(1, 1, 1); this._c = new THREE.Color();
   }
@@ -53,9 +53,24 @@ export class Builder {
     const slab = !piece && Math.abs(point.y - P.top) < 0.06 && Math.abs(point.x - P.x) < P.w / 2 && Math.abs(point.z - P.z) < P.d / 2;
     return { point, normal: n, piece, slab, ground: !piece && !slab && point.y < 0.12 };
   }
-  // mortar goes on the house slab and on pressed blocks; anywhere else the trowel keeps laying paving tiles and
-  // filling potholes (so aiming at rubble lying in the yard does not waste cement)
-  mortarTarget(hit) { return hit && (hit.slab || (hit.piece && hit.piece.brick && (hit.piece.state === INTACT || hit.piece.state === LOOSE))) ? hit : null; }
+  // the trowel puts a small circle of mortar exactly where you aim: on the ground, the house slab, a paving tile or
+  // a pressed block (not on loose rubble, so aiming at junk in the yard does not waste cement)
+  mortarTarget(hit) { return hit && (hit.slab || hit.ground || (hit.piece && hit.piece.brick && (hit.piece.state === INTACT || hit.piece.state === LOOSE))) ? hit : null; }
+  // remove tool: the mortar splash nearest the aim point, or the laid block aimed at
+  scrapeTarget(hit) {
+    if (!hit) return null;
+    let best = null, bd = 0.42;
+    for (const s of this.splashes) { const d = s.pos.distanceTo(hit.point); if (d < bd) { bd = d; best = s; } }
+    if (best) return { splash: best, point: best.pos, normal: best.n };
+    if (hit.piece && hit.piece.brick && hit.piece.state === INTACT) return { piece: hit.piece, point: hit.point, normal: hit.normal };
+    return null;
+  }
+  removeSplashNear(point) {
+    let best = null, bd = 0.45;
+    for (const s of this.splashes) { const d = s.pos.distanceTo(point); if (d < bd) { bd = d; best = s; } }
+    if (best) this.take([best]);
+    return !!best;
+  }
 
   extents(rot) { return rot ? { x: 0.6, z: 1.2 } : { x: 1.2, z: 0.6 }; }
   snap(v) { return Math.round(v / G) * G; }
@@ -151,6 +166,7 @@ export class Builder {
   showSplashGhost(hit, color) {
     this.splashGhost.visible = !!hit;
     if (!hit) return;
+    this.splashGhost.scale.setScalar(1);
     this.splashGhost.position.copy(hit.point).addScaledVector(hit.normal, 0.02);
     this.splashGhost.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), hit.normal);
     this.splashGhost.material.color.copy(color);

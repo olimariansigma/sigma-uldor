@@ -7,7 +7,6 @@ export const PER_KG = 3;                       // $ per kg crushed
 export const PER_BLOCK_LAID = 30;              // $ per new block laid in your house
 export const BUILDING_PRICE = 2500;            // a new building to demolish
 export const TOOLS = {
-  trowel: { name: 'Cement trowel', price: 400, icon: '🪣', what: 'Lays mortar (and cement): needed to stick blocks in your house' },
   build: { name: 'Build kit', price: 600, icon: '🧱', what: 'Lay pressed blocks on the slab across the road (tool 4)' },
   charges: { name: 'Demolition charges', price: 3000, icon: '🧨', what: 'Stick up to 8 charges on a wall and blow it (tool 3)' },
 };
@@ -39,6 +38,7 @@ export class Progression {
     s = s || {};
     this.money = s.money ?? 150; this.tools = s.tools || {}; this.laidMax = s.laidMax || 0; this.milestone = s.milestone || 0;
     this.earned = s.earned || 0; this.crushedKg = s.crushedKg || 0;
+    if (this.tools.trowel) { delete this.tools.trowel; this.money += 400; } // the trowel is free now: refund it
     this.up = Object.assign({ hammer: 0, carry: 0, crusher: 0 }, s.up || {});
     this.snap = null; this.t = 0; this.saveT = 0;
   }
@@ -48,7 +48,7 @@ export class Progression {
   }
   static reset() { try { localStorage.removeItem(PROG_KEY); } catch (e) { /* ignore */ } }
 
-  has(tool) { return tool === 'hammer' || !!this.tools[tool]; }
+  has(tool) { return tool === 'hammer' || tool === 'trowel' || tool === 'scrape' || !!this.tools[tool]; }
   canAfford(n) { return this.money >= n; }
   spend(n, what) {
     if (this.money < n) { this.g.ui.toast(`💸 Not enough money: ${what} costs ${money(n)}, you have ${money(this.money)}. Crush more blocks!`); this.g.audio.denied(); return false; }

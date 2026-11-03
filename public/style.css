@@ -80,6 +80,11 @@ kbd { font-family: var(--fd); font-size: .82em; background: var(--y); color: var
   .join-row .g-btn { height: 42px; padding: 8px 14px; }
   .field span { font-size: 10px; }
   .title-foot { display: none; }
+  #titleMenu { display: grid; grid-template-columns: 1fr 1fr; }
+  #titleMenu > :not(#playBtn):not(#progBtn) { grid-column: 1 / -1; }
+  #titleMenu .g-xl { font-size: 17px; padding: 10px 12px; }
+  .prog-btn small { display: none; }
+  .logo-img { max-height: 30vh; width: auto; align-self: flex-start; }
 }
 
 /* ---------- HUD ---------- */

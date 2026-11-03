@@ -728,6 +728,19 @@ class Game {
         this.events.push(['mortar', this.builder.pack()]);
         break;
       }
+      case 'scrape': {
+        // remove tool: take a splash of mortar away, or knock a laid block loose (pick it up or crush it after)
+        if (!pl || !Array.isArray(d.point)) return;
+        const pt = v3(d.point), seen = pid === this.myId ? this.player.pos : (pl.target || pl.pos);
+        if (pt.distanceTo(seen) > 8) return;
+        const p = typeof d.piece === 'number' && d.piece >= 0 ? demo.pieces[d.piece] : null;
+        if (p && p.brick && p.state === INTACT) {
+          demo.detach(p);
+          this.builder.tidy(); this.events.push(['mortar', this.builder.pack()]);
+          this.audio.clank(pt, 0.3);
+        } else if (this.builder.removeSplashNear(pt)) { this.events.push(['mortar', this.builder.pack()]); this.sfx.splash(pt, 0.2); }
+        break;
+      }
       case 'placeBrick': {
         // lay a carried block: it sticks if it touches mortar, otherwise it is only stacked
         const p = demo.pieces[d.id];
@@ -922,9 +935,10 @@ class Game {
     this.ui.setHotbar();
   }
   selectTool(t) {
-    if (this.prog && !this.prog.has(t)) { const T = TOOLS[t]; this.ui.toast('🔒 The ' + T.name + ' is in the Shop (' + (this.input.touch ? 'Spawn button' : 'B') + ') for ' + fmtMoney(T.price)); this.audio.denied(); return; }
+    if (this.prog && !this.prog.has(t)) { const T = TOOLS[t]; if (!T) return; this.ui.toast('🔒 The ' + T.name + ' is in the Shop (' + (this.input.touch ? 'Spawn button' : 'B') + ') for ' + fmtMoney(T.price)); this.audio.denied(); return; }
     if (t === 'build' && this.tool === 'build') { this.builder.rot ^= 1; return; } // tap again to turn the block
     if (t === 'build' && this.tool !== 'build' && !this.carriedBy(this.myId).some((p) => p.brick)) this.ui.toast('🧱 Build: carry pressed blocks (<b>Q</b> at the brick press pallet), trowel a splash of mortar on the slab across the road, then click to lay a block on it. <b>R</b> turns it.', true, 7000);
+    if (t === 'scrape' && this.tool !== 'scrape') this.ui.toast('🗑️ Remove: aim at a splash of mortar to scrape it off, or at a block you laid to knock it loose', true, 5000);
     if (t === 'trowel' && !(this.players.get(this.myId).cement.kg > 0)) { this.ui.toast('🪣 No cement on the trowel. Take some from the mixer first.'); return; }
     this.tool = t;
     this.player.avatar.setTool(t);
@@ -1488,10 +1502,10 @@ class Game {
     }
   }
   cycleTool(d) {
-    const order = ['hammer', 'trowel', 'charges', 'build'], me = this.players.get(this.myId);
+    const order = ['hammer', 'trowel', 'charges', 'build', 'scrape'], me = this.players.get(this.myId);
     const ok = (t) => (!this.prog || this.prog.has(t)) && (t !== 'trowel' || (me && me.cement.kg > 0));
     let i = order.indexOf(this.tool);
-    for (let n = 0; n < 4; n++) { i = (i + d + 4) % 4; if (ok(order[i])) { if (order[i] !== this.tool) this.selectTool(order[i]); return; } }
+    for (let n = 0; n < 5; n++) { i = (i + d + 5) % 5; if (ok(order[i])) { if (order[i] !== this.tool) this.selectTool(order[i]); return; } }
   }
 
   // build-time asset generation (scripts/thumbs.cjs): transparent machine renders + 3D logo
@@ -1533,6 +1547,7 @@ class Game {
       if (input.pressed('tool2')) this.selectTool('trowel');
       if (input.pressed('tool3')) this.selectTool('charges');
       if (input.pressed('tool4')) this.selectTool('build');
+      if (input.pressed('tool5')) this.selectTool('scrape');
       // charge tool: click a block to stick a charge on it (E sets them all off)
       const fire = input.held('hammer') && !uiOpen;
       if (this.tool === 'charges' && fire && !this.chargeDown) {
@@ -1546,19 +1561,30 @@ class Game {
       this.trowelT = (this.trowelT || 0) - dt;
       const me = this.players.get(this.myId);
       // trowel on a block or the build slab: one splash of mortar per click
-      const bhit = (this.tool === 'trowel' && me.cement.kg > 0) || this.tool === 'build' ? this.builder.aim() : null;
-      const mhit = this.tool === 'trowel' && me.cement.kg > 0 ? this.builder.mortarTarget(bhit) : null;
-      this.builder.showSplashGhost(mhit, me.cement.color);
+      const bhit = (this.tool === 'trowel' && me.cement.kg > 0) || this.tool === 'build' || this.tool === 'scrape' ? this.builder.aim() : null;
+      let holeI = -1;
+      if (this.tool === 'trowel' && me.cement.kg > 0) { const tt = this.trowelTarget(); holeI = this.road.nearest({ x: tt.x, y: 0, z: tt.z }, 1.4); if (holeI >= 0 && this.road.holes[holeI].filled >= this.road.holes[holeI].need) holeI = -1; }
+      const m0 = this.tool === 'trowel' && me.cement.kg > 0 ? this.builder.mortarTarget(bhit) : null;
+      const mhit = m0 && (holeI < 0 || m0.piece) ? m0 : null;
+      // remove tool: scrape off a splash of mortar, or knock a laid block loose
+      const shit = this.tool === 'scrape' ? this.builder.scrapeTarget(bhit) : null;
+      if (shit) { this.builder.showSplashGhost(shit, new THREE.Color(0xff4a3a)); if (shit.piece) this.builder.splashGhost.scale.setScalar(2.4); }
+      else this.builder.showSplashGhost(mhit, me.cement.color);
       const click = input.held('hammer') && !uiOpen, clicked = click && !this.clickDown; this.clickDown = click;
-      if (mhit) {
+      if (this.tool === 'scrape') {
+        this.slabGhost.visible = false;
+        if (clicked) {
+          if (!shit) this.ui.toast('🗑️ Aim at a splash of mortar or a block you laid to remove it');
+          else { this.player.swingT = -1; this.act('scrape', { point: shit.point.toArray().map((v) => Math.round(v * 1000) / 1000), piece: shit.piece ? shit.piece.id : -1 }); this.audio.click(); }
+        }
+      } else if (mhit) {
         this.slabGhost.visible = false;
         if (clicked) { this.player.swingT = -1; this.act('mortar', { point: mhit.point.toArray().map((v) => Math.round(v * 1000) / 1000), normal: mhit.normal.toArray(), piece: mhit.piece ? mhit.piece.id : -1 }); this.audio.click(); }
-      } else if (this.tool === 'trowel' && me.cement.kg > 0) {
-        const t = this.trowelTarget(), [ix, iz] = Slabs.cellOf(t.x, t.z);
-        const gx = ix * SLAB, gz = iz * SLAB, hole = this.road.nearest({ x: t.x, y: 0, z: t.z }, 1.4);
+      } else if (this.tool === 'trowel' && me.cement.kg > 0 && holeI >= 0) {
+        // aiming at a pothole: the trowel fills it
+        const t = this.trowelTarget(), h = this.road.holes[holeI];
         this.slabGhost.visible = true;
-        if (hole >= 0) { const h = this.road.holes[hole]; this.slabGhost.position.set(h.x, 0.08, h.z); this.slabGhost.scale.set(h.r * 1.9, 1, h.r * 1.9); }
-        else { this.slabGhost.position.set(gx, this.groundAt(gx, gz) + 0.09, gz); this.slabGhost.scale.set(1, 1, 1); }
+        this.slabGhost.position.set(h.x, 0.08, h.z); this.slabGhost.scale.set(h.r * 1.9, 1, h.r * 1.9);
         this.slabGhost.material.color.copy(me.cement.color);
         if (input.held('hammer') && this.trowelT <= 0 && !uiOpen) { this.trowelT = 0.22; this.player.swingT = -1; this.act('layCement', t); this.audio.click(); }
       } else this.slabGhost.visible = false;

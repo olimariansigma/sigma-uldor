@@ -501,7 +501,14 @@ export class Crusher {
   }
 
   serialize() {
-    return { layers: this.layers.map((l) => [Math.round(l.kg * 10) / 10, +l.c.r.toFixed(4), +l.c.g.toFixed(4), +l.c.b.toFixed(4)]), totalKg: this.totalKg, count: this.crushedCount, tally: [...this.tally.entries()] };
+    // dust still riding the conveyor (or falling off it) is saved as if it had already landed on the pile
+    const layers = this.layers.map((l) => ({ kg: l.kg, c: l.c }));
+    for (const b of this.belt) {
+      const top = layers[layers.length - 1];
+      if (top && Math.abs(top.c.r - b.base.r) + Math.abs(top.c.g - b.base.g) + Math.abs(top.c.b - b.base.b) < 0.04) top.kg += b.kg;
+      else layers.push({ kg: b.kg, c: b.base });
+    }
+    return { layers: layers.map((l) => [Math.round(l.kg * 10) / 10, +l.c.r.toFixed(4), +l.c.g.toFixed(4), +l.c.b.toFixed(4)]), totalKg: this.totalKg, count: this.crushedCount, tally: [...this.tally.entries()] };
   }
   restore(d) {
     this.layers = d.layers.map(([kg, r, g, b]) => ({ kg, c: new THREE.Color(r, g, b) }));

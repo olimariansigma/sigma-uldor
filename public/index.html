@@ -31,7 +31,7 @@
       <div id="titleMsg" class="title-msg"></div>
     </div>
   </div>
-  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v5.2.0</span></div>
+  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v5.3.0</span></div>
 </div>
 
 <!-- HUD -->
@@ -63,6 +63,7 @@
     <button class="hb empty" data-tool="trowel"><span class="k">2</span><i data-ic="trowel"></i><small>TROWEL</small><b class="amt" id="trowelAmt">empty</b><i class="sw" id="trowelSw"></i></button>
     <button class="hb" data-tool="charges"><span class="k">3</span><i data-ic="bomb"></i><small>CHARGES</small><b class="amt" id="chargeAmt">8 left</b></button>
     <button class="hb" data-tool="build"><span class="k">4</span><i data-ic="brick"></i><small>BUILD</small><b class="amt" id="buildAmt">0</b></button>
+    <button class="hb" data-tool="scrape"><span class="k">5</span><i data-ic="trash"></i><small>REMOVE</small></button>
   </div>
   <div id="carry" class="hidden"><span id="carryIcon"></span><span id="carryVal">0/3</span></div>
   <div id="bucketHud" class="hidden"><span id="bucketSw"></span><span id="bucketVal"></span></div>
@@ -170,9 +171,10 @@
         <li><kbd>Q</kbd> / <kbd>Right click</kbd> pick up blocks (hold)</li>
         <li><kbd>G</kbd> throw (auto-aims into the crusher hopper)</li>
         <li><kbd>E</kbd> use: drive a machine, fill / pour your bucket, open the mixer</li>
-        <li><kbd>1</kbd> hammer · <kbd>2</kbd> cement trowel: click on the ground to lay cement</li>
+        <li><kbd>1</kbd> hammer · <kbd>2</kbd> cement trowel: click to put a small circle of mortar where you aim, or aim at a pothole to fill it</li>
         <li><kbd>3</kbd> demolition charges: click blocks to stick up to 8 charges, then <kbd>E</kbd> to blow them (stand back!)</li>
-        <li><kbd>4</kbd> build: carry pressed blocks, trowel a splash of mortar (one per click) on the slab across the road or on a block, then click to lay a block on it. <kbd>R</kbd> turns the block. Blocks laid on mortar stick; without it they are only stacked.</li>
+        <li><kbd>5</kbd> remove: scrape off a splash of mortar, or knock a block you laid loose again</li>
+        <li><kbd>4</kbd> build: carry pressed blocks, trowel a splash of mortar (one small circle per click, wherever you aim: the slab, the ground or the top of a block), then click to lay a block on it. <kbd>R</kbd> turns the block. Blocks laid on mortar stick; without it they are only stacked.</li>
         <li><kbd>P</kbd> photo mode: hides the HUD and frees the camera. Fly with <kbd>W A S D</kbd> + <kbd>Mouse</kbd>, <kbd>Space</kbd> / <kbd>C</kbd> up / down, <kbd>Shift</kbd> faster</li>
         <li><kbd>J</kbd> <b>contracts</b>: three paid jobs at a time (flatten a building, crush rubble, fix potholes, smash big, use a given machine...). Finish them for cash and promotions, inside the ⏱ time for +50%. Your cash and rank show top left</li>
         <li><kbd>B</kbd> spawn menu · <kbd>M</kbd> online · <kbd>H</kbd> help</li>
@@ -215,7 +217,7 @@
       <h3>Progression mode</h3>
       <ul>
         <li>You start with only the <b>hammer</b> and $150. Smash the bungalow, pick blocks up (<kbd>Q</kbd>) and throw them (<kbd>G</kbd>) into the crusher hopper: <b>every kg crushed pays $3</b>.</li>
-        <li>Open the <b>Shop</b> (<kbd>B</kbd>): buy the cement trowel, the build kit and charges, upgrade your hammer, carry capacity and crusher, buy excavators and trucks (sell them back for half), and buy new buildings to knock down.</li>
+        <li>Open the <b>Shop</b> (<kbd>B</kbd>): the cement trowel is yours from the start; buy the build kit and charges, upgrade your hammer, carry capacity and crusher, buy excavators and trucks (sell them back for half), and buy new buildings to knock down.</li>
         <li><b>Every block you lay in your house pays $30</b>, and house milestones pay bonuses: 20, 50, 100, 180 and 300 blocks. Contracts pay into the same wallet. There are no potholes in this mode, and it saves itself.</li>
       </ul>
       <h3>Q&amp;A: how do I build a house?</h3>
@@ -224,7 +226,7 @@
         <li><b>Press blocks.</b> Walk to the brick press next to the dust pile and switch its feeder belt on at the panel (<kbd>E</kbd>), or tip dust into its hopper. Pressed blocks come out on the pallet in the dust's colour.</li>
         <li><b>Make mortar.</b> Open the mixer (<kbd>E</kbd> at the tub): add 25 kg dust from the pile, add water, and wait for the paddles to mix cement. Then <b>Take cement on my trowel</b>.</li>
         <li><b>Pick up blocks.</b> Hold <kbd>Q</kbd> at the press pallet to carry blocks (more with the carry upgrade).</li>
-        <li><b>Mortar down.</b> Walk to the concrete slab across the road. Tool <kbd>2</kbd> (trowel): each click puts down one splash of mortar on the slab or on top of a block.</li>
+        <li><b>Mortar down.</b> Tool <kbd>2</kbd> (trowel): each click puts a small circle of mortar exactly where you aim, on the slab across the road, the ground or on top of a block. Mistake? Tool <kbd>5</kbd> (remove) scrapes it off.</li>
         <li><b>Lay it.</b> Tool <kbd>4</kbd> (build): aim at the mortar and click to set a block there. <kbd>R</kbd> turns the block. On mortar it sticks; without mortar it is only stacked and will not count.</li>
         <li><b>Go up.</b> Splash mortar on top of the blocks you laid and keep going, row by row. Leave gaps for doors and windows.</li>
         <li><b>Use machines.</b> An excavator or the BG90 clamp can set pressed blocks onto mortar too: put them down upright and they stick.</li>

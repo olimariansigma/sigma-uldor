@@ -1,7 +1,7 @@
 {
   "name": "brickbreaker-demolition",
   "productName": "Wrecking Yard",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "Wrecking Yard - a 3D demolition and crushing game",
   "main": "electron/main.js",
   "author": "Wrecking Yard",

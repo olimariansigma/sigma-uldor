@@ -136,7 +136,8 @@ export class UI {
       const head = document.createElement('div'); head.className = 'sect'; head.textContent = prog ? `Your machines ${n} / 20 · tap one to look at it in 3D and buy it` : `Machines on site ${n} / 20 · tap one to inspect it in 3D`;
       body.appendChild(head);
       let lastFam = null, grid = null;
-      const list = prog ? BASE_MACHINES.filter(forSale) : BASE_MACHINES;
+      const FAM = { excavator: 0, truck: 1 };
+      const list = prog ? BASE_MACHINES.filter(forSale).sort((a, b) => ((FAM[a.family] ?? 2) - (FAM[b.family] ?? 2)) || machinePrice(a) - machinePrice(b)) : BASE_MACHINES; // cheapest first in each group
       for (const sp of list) {
         const famOf = (x) => x.family === 'excavator' ? 'Excavators' : x.family === 'truck' ? 'Tipper trucks' : 'Road & site machines';
         const fam = famOf(sp);
@@ -407,10 +408,10 @@ export class UI {
     if (g.prog) for (const id of Object.keys(TOOLS)) {
       const locked = !g.prog.has(id), b = document.querySelector(`#hotbar [data-tool="${id}"]`);
       b.classList.toggle('locked', locked);
-      if (locked) $({ trowel: 'trowelAmt', charges: 'chargeAmt', build: 'buildAmt' }[id]).textContent = '🔒' + money(TOOLS[id].price);
+      if (locked) $({ charges: 'chargeAmt', build: 'buildAmt' }[id]).textContent = '🔒' + money(TOOLS[id].price);
     }
     const big = document.querySelector('#tbtns-foot [data-act="hammer"]');
-    if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : g.tool === 'build' ? 'brick' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH', brick: 'BUILD' }[want]}</small>`; } }
+    if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : g.tool === 'build' ? 'brick' : g.tool === 'scrape' ? 'trash' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH', brick: 'BUILD', trash: 'REMOVE' }[want]}</small>`; } }
     if (g.player && g.player.avatar) g.player.avatar.setTool(g.tool, me && me.cement.kg > 0 ? me.cement.color : null);
   }
 

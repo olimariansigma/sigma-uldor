@@ -5,6 +5,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
 import { tube, fmtKg, fmtL } from './crusher.js';
+import { mergeG, rbox, bx, cy, tubeAB, hose, boltCircle, label, weathered, restPositions, V } from './detail.js';
 
 const R_TUB = 1.3, FLOOR = 1.42, DEPTH = 0.95;
 const WATER = new THREE.Color(0x4a7d8c);
@@ -127,10 +128,66 @@ export class Mixer {
     sign.position.set(-1.98, deckY + 1.5, 0); sign.rotation.y = -Math.PI / 2;
     const signPosts = merge([box(0.05, 0.6, 0.05, -1.98, deckY + 1.2, -1.1), box(0.05, 0.6, 0.05, -1.98, deckY + 1.2, 1.1)]);
     this.add(signPosts, M.paintYellow); this.root.add(sign);
+    this.buildPlant();
     this.root.updateMatrixWorld(true);
     this.panelPoint = this.root.localToWorld(new THREE.Vector3(-2.9, 0, -1.0));
     this.tubCenter = this.root.localToWorld(new THREE.Vector3(0, FLOOR + DEPTH, 0));
     this.chuteEnd = this.root.localToWorld(new THREE.Vector3(0, FLOOR - 0.6, R_TUB + 1.3));
+  }
+
+  // the batching plant around the mixer: a cement silo on legs with a caged ladder, top railing and filter, a screw
+  // conveyor from its cone into the tub, and a water tank (IBC) piped to the water inlet
+  buildPlant() {
+    const M = this.M, base = { value: 0 };
+    const siloPaint = weathered(0xd9dcd8, { base, rough: 0.45 }), legPaint = weathered(0x1d5aa6, { base, rough: 0.5 }), yellow = weathered(0xf2b705, { base, rough: 0.5 });
+    const SX = 1.3, SZ = -4.4, R = 1.0, Y0 = 3.3, Y1 = 9.0;
+    // body, cone, roof, seams
+    const cone = new THREE.CylinderGeometry(R, 0.18, 1.7, 32, 1, false); cone.translate(SX, Y0 - 0.85, SZ);
+    const roof = new THREE.CylinderGeometry(0.25, R + 0.04, 0.35, 32, 1, false); roof.translate(SX, Y1 + 0.17, SZ);
+    const seams = []; for (let y = Y0 + 1.1; y < Y1; y += 1.15) seams.push(new THREE.TorusGeometry(R + 0.006, 0.018, 6, 40).rotateX(Math.PI / 2).translate(SX, y, SZ));
+    this.add(mergeG([cy(R, R, Y1 - Y0, 40, SX, (Y0 + Y1) / 2, SZ), cone, roof]), siloPaint);
+    this.add(mergeG([...seams, cy(0.2, 0.2, 0.25, 16, SX, Y0 - 1.75, SZ), cy(0.28, 0.28, 0.5, 16, SX - 0.3, Y1 + 0.55, SZ), boltCircle(V(SX - 0.3, Y1 + 0.81, SZ), 0.22, 10, V(0, 1, 0), 0.015)]), M.darkSteel);
+    const band = label('CEMENT', 1.6, 0.42, '#ffffff', '#1d5aa6'); band.position.set(SX + R + 0.01, Y0 + 3.4, SZ); band.rotation.y = Math.PI / 2; this.root.add(band);
+    // legs (H-section) with a ring beam and X-bracing
+    const lg = [];
+    for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]]) {
+      const x = SX + dx, z = SZ + dz;
+      lg.push(bx(0.16, Y0 + 0.4, 0.02, x, (Y0 + 0.4) / 2, z - 0.07), bx(0.16, Y0 + 0.4, 0.02, x, (Y0 + 0.4) / 2, z + 0.07), bx(0.02, Y0 + 0.4, 0.12, x, (Y0 + 0.4) / 2, z), bx(0.34, 0.03, 0.34, x, 0.015, z));
+    }
+    for (const s of [-0.8, 0.8]) {
+      lg.push(bx(1.76, 0.16, 0.12, SX, Y0 + 0.2, SZ + s), bx(0.12, 0.16, 1.76, SX + s, Y0 + 0.2, SZ));
+      lg.push(tubeAB(V(SX - 0.8, 0.4, SZ + s), V(SX + 0.8, 2.6, SZ + s), 0.03), tubeAB(V(SX + 0.8, 0.4, SZ + s), V(SX - 0.8, 2.6, SZ + s), 0.03));
+      lg.push(tubeAB(V(SX + s, 0.4, SZ - 0.8), V(SX + s, 2.6, SZ + 0.8), 0.03), tubeAB(V(SX + s, 0.4, SZ + 0.8), V(SX + s, 2.6, SZ - 0.8), 0.03));
+    }
+    this.add(mergeG(lg), legPaint);
+    // caged ladder up the east side to a railed walkway round the roof
+    const LX = SX + R + 0.22, ld = [];
+    for (const dz of [-0.22, 0.22]) ld.push(tubeAB(V(LX, 0.2, SZ + dz), V(LX, Y1 + 1.1, SZ + dz), 0.025));
+    for (let y = 0.45; y < Y1 + 0.3; y += 0.3) ld.push(tubeAB(V(LX, y, SZ - 0.22), V(LX, y, SZ + 0.22), 0.016));
+    for (let y = 2.4; y < Y1 + 0.5; y += 0.9) { const hoop = new THREE.TorusGeometry(0.38, 0.016, 5, 16, Math.PI); hoop.rotateZ(-Math.PI / 2); hoop.rotateY(Math.PI / 2); hoop.rotateX(Math.PI / 2); ld.push(hoop.translate(LX + 0.05, y, SZ)); }
+    for (const a of [-0.3, 0, 0.3]) ld.push(tubeAB(V(LX + 0.05 + Math.cos(a) * 0.38, 2.4, SZ + Math.sin(a) * 0.38), V(LX + 0.05 + Math.cos(a) * 0.38, Y1 + 0.3, SZ + Math.sin(a) * 0.38), 0.012));
+    const rail = [new THREE.TorusGeometry(R + 0.12, 0.022, 6, 40).rotateX(Math.PI / 2).translate(SX, Y1 + 1.1, SZ), new THREE.TorusGeometry(R + 0.12, 0.018, 6, 40).rotateX(Math.PI / 2).translate(SX, Y1 + 0.75, SZ)];
+    for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; rail.push(tubeAB(V(SX + Math.cos(a) * (R + 0.12), Y1 + 0.3, SZ + Math.sin(a) * (R + 0.12)), V(SX + Math.cos(a) * (R + 0.12), Y1 + 1.1, SZ + Math.sin(a) * (R + 0.12)), 0.02)); }
+    this.add(mergeG([...ld, ...rail]), yellow);
+    // fill pipe down the side with its truck coupling
+    this.add(mergeG([cy(0.06, 0.06, Y1 - 0.6, 12, SX - R - 0.1, (Y1 + 0.6) / 2, SZ), cy(0.09, 0.09, 0.15, 12, SX - R - 0.1, 0.62, SZ), tubeAB(V(SX - R - 0.1, Y1, SZ), V(SX - 0.4, Y1 + 0.3, SZ), 0.06)]), M.galvanized);
+    // screw conveyor from the cone outlet up over the north rim of the tub, with flanges and a drive motor
+    const A = V(SX, Y0 - 1.75, SZ), B = V(0.45, FLOOR + DEPTH + 0.45, -1.45), dir = B.clone().sub(A), len = dir.length();
+    const fl = []; for (let t = 0.1; t < 1; t += 0.2) fl.push(new THREE.TorusGeometry(0.16, 0.025, 6, 18).lookAt(dir).translate(...A.clone().addScaledVector(dir, t).toArray()));
+    const scr = new THREE.CylinderGeometry(0.13, 0.13, len, 18); scr.translate(0, len / 2, 0); scr.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.clone().normalize())); scr.translate(A.x, A.y, A.z);
+    this.add(mergeG([scr]), siloPaint);
+    this.add(mergeG([...fl.map((g) => { g.computeVertexNormals(); return g; }), cy(0.15, 0.15, 0.4, 14, B.x, B.y - 0.25, B.z)]), M.darkSteel);
+    this.add(mergeG([rbox(0.3, 0.3, 0.42, 0.03, A.x + dir.x / len * -0.3, A.y + 0.05, A.z + dir.z / len * -0.3), cy(0.14, 0.14, 0.36, 16, A.x - 0.3, A.y + 0.05, A.z - 0.3, Math.PI / 2)]), legPaint);
+    // water tank (IBC on its pallet, in a galvanised cage) piped to the inlet
+    const WX = -1.7, WZ = -4.0, ibc = [];
+    for (const x of [-0.55, 0, 0.55]) ibc.push(bx(0.12, 0.12, 1.0, WX + x, 0.06, WZ));
+    for (const y of [0.25, 0.65, 1.05, 1.32]) { ibc.push(bx(1.12, 0.03, 0.03, WX, y, WZ - 0.52), bx(1.12, 0.03, 0.03, WX, y, WZ + 0.52), bx(0.03, 0.03, 1.02, WX - 0.56, y, WZ), bx(0.03, 0.03, 1.02, WX + 0.56, y, WZ)); }
+    for (const x of [-0.56, -0.19, 0.19, 0.56]) for (const z of [-0.52, 0.52]) ibc.push(bx(0.03, 1.2, 0.03, WX + x, 0.72, WZ + z));
+    this.add(mergeG(ibc), M.galvanized);
+    this.add(mergeG([rbox(1.06, 1.08, 0.98, 0.08, WX, 0.78, WZ), cy(0.12, 0.12, 0.08, 14, WX, 1.36, WZ)]), new THREE.MeshPhysicalMaterial({ color: 0xe8ecef, roughness: 0.35, transmission: 0, clearcoat: 0.3 }));
+    this.add(mergeG([cy(0.06, 0.06, 0.16, 12, WX, 0.3, WZ + 0.58, Math.PI / 2), hose([V(WX, 0.3, WZ + 0.66), V(WX - 0.1, 1.2, -2.6), V(-1.42, FLOOR + DEPTH + 0.2, -1.6)], 0.045, 28)]), M.blackPaint);
+    this.col(SX, 1.7, SZ, 2.0, 3.4, 2.0); this.col(SX, 6.2, SZ, 2.2, 6.0, 2.2); this.col(WX, 0.7, WZ, 1.2, 1.4, 1.1);
+    this.root.updateMatrixWorld(true); restPositions(this.root);
   }
 
   contentMaterial() {

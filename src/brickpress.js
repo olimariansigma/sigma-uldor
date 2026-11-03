@@ -7,6 +7,8 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
 import { tube } from './crusher.js';
+import { mergeG, rbox, bx, cy, tubeAB, hose, bolts, boltCircle, grille, weathered, restPositions, V } from './detail.js';
+import { sidePlate } from './attachments.js';
 
 export const BRICK_KG = 459;            // one block's worth of dust (what crushing a block gives back)
 const CAP = 60 * BRICK_KG;              // hopper capacity
@@ -39,38 +41,79 @@ export class BrickPress {
 
   build() {
     const M = this.M;
-    const paint = new THREE.MeshPhysicalMaterial({ color: 0x1f8a6e, roughness: 0.45, metalness: 0.25, clearcoat: 0.35 });
-    const steel = M.darkSteel, galv = M.galvanized;
-    // skids and base frame
-    this.add(merge([box(4.2, 0.18, 0.22, 0.6, 0.09, -0.9), box(4.2, 0.18, 0.22, 0.6, 0.09, 0.9), ...[-1.2, 0, 1.2, 2.4].map((x) => box(0.18, 0.14, 2.0, x, 0.2, 0))]), steel);
-    // main frame: four columns, top ring, cross braces
-    const fr = [];
-    for (const [x, z] of [[0.1, -0.75], [0.1, 0.75], [1.9, -0.75], [1.9, 0.75]]) fr.push(box(0.16, 2.5, 0.16, x, 1.45, z));
-    fr.push(box(2.0, 0.16, 0.16, 1.0, 2.75, -0.75), box(2.0, 0.16, 0.16, 1.0, 2.75, 0.75), box(0.16, 0.16, 1.6, 0.1, 2.75, 0), box(0.16, 0.16, 1.6, 1.9, 2.75, 0));
-    fr.push(tube(new THREE.Vector3(0.1, 0.3, 0.75), new THREE.Vector3(1.9, 2.6, 0.75), 0.04), tube(new THREE.Vector3(0.1, 0.3, -0.75), new THREE.Vector3(1.9, 2.6, -0.75), 0.04));
-    this.add(merge(fr), paint);
+    const base = { value: 0 };
+    const paint = weathered(0x1f8a6e, { base, rough: 0.5 }), paint2 = weathered(0x176b55, { base, rough: 0.55 });
+    const steel = M.darkSteel, galv = M.galvanized, black = M.blackPaint;
+    const yellow = weathered(0xf2b705, { base, rough: 0.5 });
+    // H-beam skids with cross members and lifting eyes
+    const sk = [];
+    for (const z of [-0.9, 0.9]) sk.push(bx(4.4, 0.03, 0.2, 0.5, 0.215, z), bx(4.4, 0.17, 0.03, 0.5, 0.115, z), bx(4.4, 0.03, 0.2, 0.5, 0.015, z));
+    for (const x of [-1.2, 0, 1.2, 2.4]) sk.push(bx(0.14, 0.14, 1.66, x, 0.16, 0));
+    for (const x of [-1.6, 2.6]) for (const z of [-0.9, 0.9]) sk.push(new THREE.TorusGeometry(0.07, 0.02, 6, 12).translate(x, 0.3, z));
+    this.add(mergeG(sk), steel);
+    // four H-section columns on bolted base plates, top ring beams with corner gussets, diagonal braces
+    const fr = [], fb = [];
+    for (const [x, z] of [[0.1, -0.75], [0.1, 0.75], [1.9, -0.75], [1.9, 0.75]]) {
+      fr.push(bx(0.16, 2.5, 0.025, x, 1.45, z - 0.07), bx(0.16, 2.5, 0.025, x, 1.45, z + 0.07), bx(0.02, 2.5, 0.12, x, 1.45, z));
+      fr.push(bx(0.3, 0.03, 0.3, x, 0.245, z), sidePlate([[0, 0], [0.22, 0], [0, 0.22]], 0.02, x - 0.01).translate(0, 2.45, z + (z > 0 ? -0.3 : 0.08)));
+      fb.push(bolts([V(x - 0.11, 0.265, z - 0.11), V(x + 0.11, 0.265, z - 0.11), V(x - 0.11, 0.265, z + 0.11), V(x + 0.11, 0.265, z + 0.11)], V(0, 1, 0), 0.018, 0.016));
+    }
+    fr.push(rbox(2.0, 0.2, 0.18, 0.02, 1.0, 2.75, -0.75), rbox(2.0, 0.2, 0.18, 0.02, 1.0, 2.75, 0.75), rbox(0.18, 0.2, 1.6, 0.02, 0.1, 2.75, 0), rbox(0.18, 0.2, 1.6, 0.02, 1.9, 2.75, 0));
+    fr.push(tubeAB(V(0.1, 0.3, 0.75), V(1.9, 2.6, 0.75), 0.04), tubeAB(V(0.1, 0.3, -0.75), V(1.9, 2.6, -0.75), 0.04));
+    this.add(mergeG(fr), paint); this.add(mergeG(fb), steel);
     this.col(1.0, 1.5, 0, 2.0, 3.0, 1.7);
-    // hopper (open top) with its dust level
+    // hopper (open top) with an outer stiffening band, rim angles and a bar grate; its dust level
     const hop = new THREE.CylinderGeometry(1.15, 0.45, 0.95, 4, 1, true); hop.rotateY(Math.PI / 4); hop.translate(1.0, 3.3, 0);
     this.add(hop, new THREE.MeshPhysicalMaterial({ color: 0x1f8a6e, roughness: 0.5, metalness: 0.25, side: THREE.DoubleSide }));
-    this.add(merge([box(1.7, 0.06, 0.06, 1.0, 3.78, 0.81), box(1.7, 0.06, 0.06, 1.0, 3.78, -0.81), box(0.06, 0.06, 1.7, 0.19, 3.78, 0), box(0.06, 0.06, 1.7, 1.81, 3.78, 0)]), steel);
+    const band = new THREE.CylinderGeometry(0.98, 0.93, 0.08, 4, 1, true); band.rotateY(Math.PI / 4); band.translate(1.0, 3.45, 0);
+    const grate = []; for (let i = 0; i < 6; i++) grate.push(bx(0.03, 0.03, 1.62, 0.3 + i * 0.28, 3.8, 0));
+    this.add(mergeG([band, bx(1.7, 0.06, 0.06, 1.0, 3.78, 0.81), bx(1.7, 0.06, 0.06, 1.0, 3.78, -0.81), bx(0.06, 0.06, 1.7, 0.19, 3.78, 0), bx(0.06, 0.06, 1.7, 1.81, 3.78, 0), ...grate]), steel);
     this.fill = this.add(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x888888, roughness: 1 }), this.root, false);
     this.fill.position.set(1.0, 2.95, 0); this.fill.visible = false;
-    // mould box, ram plate on a hydraulic cylinder
-    this.add(merge([box(1.5, 0.55, 1.0, 1.0, 1.15, 0), box(1.6, 0.08, 1.1, 1.0, 0.86, 0)]), steel);
+    // mould: ribbed box with two block cavities, on a vibration table with rubber mounts and two vibrator motors
+    this.add(mergeG([rbox(1.5, 0.55, 1.0, 0.03, 1.0, 1.15, 0), ...[-0.5, 0, 0.5].map((x) => bx(0.05, 0.45, 1.06, 1.0 + x, 1.12, 0)), rbox(1.62, 0.08, 1.12, 0.02, 1.0, 0.86, 0)]), steel);
+    this.add(mergeG([bx(0.62, 0.02, 0.5, 0.67, 1.43, 0), bx(0.62, 0.02, 0.5, 1.33, 1.43, 0)]), black, this.root, false);
+    this.add(mergeG([-1, 1].flatMap((sx) => [-1, 1].map((sz) => cy(0.06, 0.07, 0.1, 12, 1.0 + sx * 0.65, 0.77, sz * 0.42)))), M.blackPaint);
+    const vib = [];
+    for (const sz of [-1, 1]) { vib.push(cy(0.13, 0.13, 0.3, 18, 1.0, 1.0, sz * 0.66, Math.PI / 2)); for (let i = 0; i < 5; i++) vib.push(cy(0.15, 0.15, 0.015, 18, 1.0, 1.0, sz * (0.55 + i * 0.05), Math.PI / 2)); }
+    this.add(mergeG(vib), paint2);
+    // feed drawer between the hopper and the mould, pushed by its own small cylinder
+    this.add(mergeG([rbox(0.8, 0.32, 0.92, 0.03, 1.55, 1.62, 0), bx(0.82, 0.04, 0.94, 1.55, 1.8, 0)]), steel);
+    this.add(mergeG([cy(0.06, 0.06, 0.55, 12, 2.2, 1.62, 0, 0, 0, Math.PI / 2), cy(0.03, 0.03, 0.3, 10, 1.98, 1.62, 0, 0, 0, Math.PI / 2)]), black);
+    // guide rods for the ram head; the main cylinder on its top beam
+    this.add(mergeG([cy(0.035, 0.035, 1.85, 12, 0.55, 1.8, 0), cy(0.035, 0.035, 1.85, 12, 1.45, 1.8, 0)]), M.chrome);
+    this.add(mergeG([rbox(1.84, 0.14, 0.3, 0.02, 1.0, 2.75, 0), cy(0.17, 0.17, 0.8, 22, 1.0, 2.35, 0), cy(0.21, 0.21, 0.08, 22, 1.0, 2.75, 0), cy(0.2, 0.2, 0.06, 22, 1.0, 1.98, 0)]), black);
+    this.add(mergeG([boltCircle(V(1.0, 2.795, 0), 0.16, 8, V(0, 1, 0), 0.016), cy(0.03, 0.03, 0.08, 8, 1.12, 2.62, 0.15, Math.PI / 2), cy(0.03, 0.03, 0.08, 8, 1.12, 2.15, 0.15, Math.PI / 2)]), steel);
     this.ram = new THREE.Group(); this.ram.position.set(1.0, 2.0, 0); this.root.add(this.ram);
-    this.add(merge([box(1.3, 0.12, 0.8, 0, -0.42, 0)]), steel, this.ram);
-    this.add(cyl(0.07, 0.07, 0.75, 14, 0, -0.03, 0), M.chrome, this.ram);
-    this.add(merge([cyl(0.16, 0.16, 0.8, 18, 1.0, 2.35, 0), cyl(0.2, 0.2, 0.08, 18, 1.0, 2.75, 0)]), paint);
-    // hydraulic power pack: tank, motor, hoses
-    this.add(merge([box(0.9, 0.6, 0.7, 2.75, 0.6, -0.35), cyl(0.18, 0.18, 0.55, 16, 2.75, 1.1, 0.35, null, 0, 0, Math.PI / 2)]), paint);
-    this.add(merge([tube(new THREE.Vector3(2.4, 0.9, -0.3), new THREE.Vector3(1.4, 2.4, -0.2), 0.03), tube(new THREE.Vector3(2.4, 0.8, -0.1), new THREE.Vector3(1.2, 2.6, 0.1), 0.03)]), M.blackPaint);
+    this.add(mergeG([rbox(1.35, 0.12, 0.85, 0.02, 0, -0.42, 0), ...[-0.3, 0, 0.3].map((z) => bx(1.2, 0.12, 0.04, 0, -0.3, z)), cy(0.07, 0.07, 0.1, 14, -0.45, -0.32, 0), cy(0.07, 0.07, 0.1, 14, 0.45, -0.32, 0)]), steel, this.ram);
+    this.add(cy(0.07, 0.07, 0.75, 14, 0, -0.03, 0), M.chrome, this.ram);
+    this.add(rbox(0.22, 0.1, 0.22, 0.02, 0, -0.38, 0), black, this.ram);
+    // walkway along the back of the frame at hopper height, with handrails, kick plates and a ladder
+    const wk = [bx(2.2, 0.04, 0.62, 1.0, 2.4, -1.16), bx(2.2, 0.12, 0.02, 1.0, 2.48, -1.46)];
+    for (let i = 0; i < 9; i++) wk.push(bx(0.02, 0.03, 0.6, 0.0 + i * 0.25, 2.43, -1.16));
+    const rails = [tubeAB(V(-0.1, 3.4, -1.46), V(2.1, 3.4, -1.46), 0.025), tubeAB(V(-0.1, 2.9, -1.46), V(2.1, 2.9, -1.46), 0.02), tubeAB(V(-0.1, 3.4, -0.86), V(-0.1, 3.4, -1.46), 0.025)];
+    for (const x of [-0.1, 1.0, 2.1]) rails.push(tubeAB(V(x, 2.42, -1.46), V(x, 3.4, -1.46), 0.025));
+    for (const z of [-0.86, -1.46]) rails.push(tubeAB(V(2.2, 0.25, z + 0.1 * Math.sign(z + 1.16)), V(2.2, 3.35, z + 0.1 * Math.sign(z + 1.16)), 0.025));
+    for (let i = 0; i < 10; i++) rails.push(tubeAB(V(2.2, 0.45 + i * 0.3, -0.96), V(2.2, 0.45 + i * 0.3, -1.36), 0.018));
+    this.add(mergeG(wk), galv); this.add(mergeG(rails), yellow);
+    // hydraulic power pack: tank with sight glass and filler, electric motor with cooling fins and fan cowl, pump,
+    // filter, gauges and hoses up to the cylinders
+    this.add(mergeG([rbox(0.9, 0.6, 0.7, 0.04, 2.75, 0.6, -0.35), cy(0.07, 0.07, 0.08, 12, 2.55, 0.94, -0.5), cy(0.09, 0.09, 0.3, 14, 3.05, 1.02, -0.5)]), paint);
+    const mot = [cy(0.18, 0.18, 0.55, 20, 2.75, 1.1, 0.35, Math.PI / 2)];
+    for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; mot.push(bx(0.025, 0.05, 0.5, 2.75 + Math.cos(a) * 0.19, 1.1 + Math.sin(a) * 0.19, 0.35, 0, 0, a)); }
+    this.add(mergeG(mot), paint2);
+    this.add(mergeG([cy(0.2, 0.2, 0.12, 20, 2.75, 1.1, 0.68, Math.PI / 2), cy(0.11, 0.11, 0.22, 14, 2.75, 1.1, 0.0, Math.PI / 2), rbox(0.3, 0.2, 0.14, 0.02, 2.75, 1.0, -0.12)]), black);
+    grille(this.root, 0.32, 0.32, 2.75, 1.1, 0.745, 0, 10);
+    this.add(mergeG([cy(0.07, 0.07, 0.03, 16, 2.42, 0.75, -0.15, 0, 0, Math.PI / 2), cy(0.07, 0.07, 0.03, 16, 2.42, 0.6, -0.15, 0, 0, Math.PI / 2)]), M.chrome);
+    this.add(mergeG([cy(0.055, 0.055, 0.005, 16, 2.405, 0.75, -0.15, 0, 0, Math.PI / 2), cy(0.055, 0.055, 0.005, 16, 2.405, 0.6, -0.15, 0, 0, Math.PI / 2), bx(0.01, 0.1, 0.2, 2.3, 0.6, -0.55)]), new THREE.MeshStandardMaterial({ color: 0xf4f2ea, roughness: 0.4 }), this.root, false);
+    this.add(mergeG([hose([V(2.6, 1.0, -0.15), V(2.3, 2.2, -0.2), V(1.25, 2.62, 0.15)], 0.03, 28), hose([V(2.62, 1.0, -0.05), V(2.4, 1.9, 0.1), V(1.25, 2.15, 0.15)], 0.03, 28), hose([V(2.62, 0.9, 0.0), V(2.5, 1.4, 0.2), V(2.45, 1.62, 0)], 0.025, 20)]), black);
     this.col(2.75, 0.6, 0, 1.0, 1.2, 1.4);
     // roller table from the mould to the pallet (the block slides out along -x)
     const rt = [box(2.4, 0.08, 0.12, -0.95, 0.72, -0.42), box(2.4, 0.08, 0.12, -0.95, 0.72, 0.42)];
     for (let i = 0; i < 9; i++) rt.push(cyl(0.05, 0.05, 0.78, 10, -2.05 + i * 0.27, 0.74, 0, null, Math.PI / 2));
     for (const x of [-2.0, 0.1]) for (const z of [-0.42, 0.42]) rt.push(box(0.08, 0.72, 0.08, x, 0.36, z));
     this.add(merge(rt), galv);
+    this.add(mergeG([bx(2.4, 0.08, 0.02, -0.95, 0.95, -0.46), bx(2.4, 0.08, 0.02, -0.95, 0.95, 0.46), ...[-2.0, -0.95, 0.1].flatMap((x) => [bx(0.03, 0.2, 0.03, x, 0.86, -0.46), bx(0.03, 0.2, 0.03, x, 0.86, 0.46)])]), yellow);
     this.col(-0.95, 0.4, 0, 2.4, 0.8, 0.9);
     this.travel = this.add(box(1.2, 0.6, 0.6, 0, 0, 0), new THREE.MeshStandardMaterial({ color: 0x999999, roughness: 0.95 }), this.root, true);
     this.travel.visible = false;
@@ -80,10 +123,19 @@ export class BrickPress {
     for (let i = 0; i < 7; i++) pal.push(box(2.6, 0.03, 0.22, 0, 0.135, -0.95 + i * 0.317, 0xc19a68));
     for (const z of [-0.9, 0, 0.9]) pal.push(box(2.6, 0.12, 0.14, 0, 0.06, z, 0xa98456));
     const pm = this.add(merge(pal), M.vertex); pm.position.copy(this.palletAt);
+    // a stack of empty pallets waiting beside it
+    for (let k = 0; k < 3; k++) { const sp = this.add(merge(pal), M.vertex); sp.position.set(this.palletAt.x, k * 0.15, -2.3); }
+    this.col(this.palletAt.x, 0.23, -2.3, 2.6, 0.45, 2.0);
     this.col(this.palletAt.x, 0.075, 0, 2.6, 0.15, 2.0);
-    // control panel on a post: cabinet, buttons, screen
-    this.add(merge([box(0.08, 1.2, 0.08, 0.3, 0.6, 1.9), box(0.55, 0.65, 0.22, 0.3, 1.45, 1.9)]), paint);
-    this.add(merge([cyl(0.04, 0.04, 0.03, 12, 0.18, 1.3, 2.02, null, Math.PI / 2), cyl(0.04, 0.04, 0.03, 12, 0.42, 1.3, 2.02, null, Math.PI / 2)]), M.redLens);
+    // control cabinet on a post: door seam, handle, hinges, start / stop buttons, mushroom e-stop, key switch, beacon
+    this.add(mergeG([bx(0.08, 1.2, 0.08, 0.3, 0.6, 1.9), rbox(0.6, 0.75, 0.22, 0.02, 0.3, 1.45, 1.9), rbox(0.66, 0.05, 0.28, 0.01, 0.3, 1.85, 1.9)]), paint);
+    this.add(mergeG([bx(0.005, 0.68, 0.005, 0.02, 1.45, 2.012), bx(0.03, 0.12, 0.02, 0.53, 1.45, 2.02), bx(0.03, 0.08, 0.03, 0.0, 1.7, 2.0), bx(0.03, 0.08, 0.03, 0.0, 1.2, 2.0)]), steel);
+    this.add(mergeG([cy(0.035, 0.035, 0.03, 12, 0.14, 1.3, 2.025, Math.PI / 2)]), M.greenLens || new THREE.MeshStandardMaterial({ color: 0x2fbf4a, emissive: 0x1a7a2c, emissiveIntensity: 0.6 }));
+    this.add(mergeG([cy(0.035, 0.035, 0.03, 12, 0.26, 1.3, 2.025, Math.PI / 2), cy(0.06, 0.05, 0.04, 16, 0.44, 1.28, 2.04, Math.PI / 2)]), M.redLens);
+    this.add(mergeG([cy(0.075, 0.075, 0.015, 16, 0.44, 1.28, 2.015, Math.PI / 2), cy(0.03, 0.03, 0.02, 10, 0.44, 1.16, 2.02, Math.PI / 2)]), yellow);
+    this.beaconMat = new THREE.MeshStandardMaterial({ color: 0xffa316, emissive: 0xff8a00, emissiveIntensity: 0.15, transparent: true, opacity: 0.9 });
+    const bc = this.add(cy(0.06, 0.06, 0.12, 16, 0.3, 1.94, 1.9), this.beaconMat, this.root, false); bc.userData.keep = true;
+    this.add(cy(0.07, 0.07, 0.03, 16, 0.3, 1.875, 1.9), black);
     this.screenCanvas = document.createElement('canvas'); this.screenCanvas.width = 256; this.screenCanvas.height = 128;
     this.screenTex = new THREE.CanvasTexture(this.screenCanvas); this.screenTex.colorSpace = THREE.SRGBColorSpace;
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.22), new THREE.MeshBasicMaterial({ map: this.screenTex }));
@@ -110,6 +162,7 @@ export class BrickPress {
     this.col(a.x + d.x / 2, a.y + d.y / 2, 0, len, 0.4, 0.7, -ang);
     // drive motor at the head drum
     this.add(merge([box(0.3, 0.3, 0.3, 2.1, 3.4, 0.5)]), paint);
+    this.root.updateMatrixWorld(true); restPositions(this.root);
   }
 
   buildPhysics() {
@@ -189,6 +242,7 @@ export class BrickPress {
     }
     this.status = this.phase >= 0 ? 'Pressing a block' : this.dust >= BRICK_KG ? (this.blocked || 'Ready')
       : this.feeding ? ((this.beltLoaded || 0) > 0 ? 'Feeding dust from the stockpile' : 'Feeder on, but the stockpile is empty: crush some rubble') : 'Waiting for dust';
+    if (this.beaconMat) this.beaconMat.emissiveIntensity = this.phase >= 0 ? (Math.sin(performance.now() * 0.016) > 0 ? 3.2 : 0.3) : 0.15;
     this.screenT = (this.screenT || 0) - dt;
     if (this.screenT <= 0) { this.screenT = 0.5; this.drawScreen(); }
   }

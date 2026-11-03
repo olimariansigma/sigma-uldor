@@ -1762,5 +1762,5 @@ class Game {
 }
 
 const game = new Game();
-window.__game = game;
+window.__game = game; window.__RAPIER = RAPIER; // test hooks
 game.init().catch((e) => { console.error(e); progress(1, 'Error: ' + e.message); });

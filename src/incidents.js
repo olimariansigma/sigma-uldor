@@ -46,7 +46,7 @@ function wreckParts(kind, seed) {
     // gear collapsed, so it sits on its belly with the tail cocked up
     const W = 0xf2f2ee, S = [0xd8262b, 0x1f6fd0, 0xf2b200][Math.floor(r() * 3)], G = 0x7fb8d8, D = 0x2a2c30;
     out.push([0, 0.62, 0.05, 1.0, 0.9, 0.6, W]);                      // engine cowling, stuck in the wall
-    out.push([0.1, 0.62, -0.4, 0.1, 1.2, 0.14, D, 0, 0.45]);          // bent propeller
+    out.push([0.1, 0.62, -0.32, 0.1, 1.2, 0.14, D, 0, 0.45]);          // bent propeller
     for (const [z, c] of [[0.95, W], [2.15, W]]) out.push([0, 0.62, z, 1.12, 0.8, 1.2, c]);   // cabin, lower
     for (const z of [0.95, 2.15]) out.push([0, 1.3, z, 1.04, 0.56, 1.2, G]);                  // cabin windows
     for (const [z, w, h, y, c] of [[3.35, 1.0, 0.95, 0.75, S], [4.55, 0.86, 0.8, 0.85, W], [5.75, 0.72, 0.66, 0.97, S], [6.9, 0.56, 0.52, 1.1, W]]) out.push([0, y, z, w, h, 1.2, c]); // tapering tail cone
@@ -59,9 +59,9 @@ function wreckParts(kind, seed) {
     out.push([4.95, 1.64, 1.55, 1.15, 0.12, 1.3, S]);
     out.push([-5.6, 0.07, 2.6, 1.15, 0.12, 1.3, S, 0, 0.0, 0.35]);
     // wing struts from the belly to under the wing
-    for (const sg of [-1, 1]) out.push([sg * 1.32, 1.08, 1.75, 0.07, 1.25, 0.12, W, 0, sg * 0.82]);
+    for (const sg of [-1, 1]) out.push([sg * 1.3, 0.92, 1.75, 0.07, 1.8, 0.12, W, 0, -sg * 0.89]); // foot on the belly, top out under the wing
     // main gear: legs and spatted wheels; the nose wheel broke off
-    for (const sg of [-1, 1]) { out.push([sg * 1.05, 0.38, 2.45, 0.08, 0.5, 0.1, D, 0, sg * 0.6]); out.push([sg * 1.3, 0.2, 2.45, 0.2, 0.4, 0.62, W]); }
+    for (const sg of [-1, 1]) { out.push([sg * 0.88, 0.3, 2.45, 0.08, 0.7, 0.1, D, 0, sg * 1.45]); out.push([sg * 1.3, 0.2, 2.45, 0.2, 0.4, 0.62, W]); }
     out.push([0.9, 0.17, -0.6, 0.16, 0.34, 0.34, D]);
   } else {
     const C = CAR_COLORS[Math.floor(r() * CAR_COLORS.length)], G = 0x6a8fa6, D = 0x1e1f22, M = 0x9a9ea2;
@@ -70,7 +70,7 @@ function wreckParts(kind, seed) {
     for (const z of [0.95, 2.25, 3.55]) out.push([0, 0.55, z, 1.78, 0.62, 1.3, C]);
     out.push([0, 1.15, 1.9, 1.56, 0.55, 1.15, G]);                     // windscreen / side glass
     out.push([0, 1.15, 3.05, 1.56, 0.55, 1.15, C]);
-    out.push([0, 1.48, 2.45, 1.6, 0.1, 2.1, C]);                       // roof
+    out.push([0, 1.48, 2.475, 1.6, 0.1, 2.25, C]);                       // roof
     for (const s of [-1, 1]) for (const z of [1.0, 3.3]) out.push([s * 0.98, 0.32, z, 0.26, 0.62, 0.62, D]);
     out.push([0, 0.62, 4.3, 1.7, 0.42, 0.25, M]);                      // rear bumper / boot lid
   }

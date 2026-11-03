@@ -305,13 +305,13 @@ export function buildBackhoe(m, arm) {
   const hood = prismZY([[0.55, 0.95], [2.35, 0.95], [2.55, 1.15], [2.5, 1.55], [2.2, 1.72], [0.55, 1.78]], 1.05);
   add(U, hood, K.paint);
   add(U, mergeG([rbox(1.2, 0.3, 0.25, 0.05, 0, 0.72, 2.55), rbox(1.3, 0.12, 0.3, 0.03, 0, 0.92, 2.55)]), K.accent);
-  grille(U, 0.75, 0.35, 0, 1.3, 2.55, 0, 18);
-  for (const s of [-1, 1]) { add(U, rbox(0.2, 0.12, 0.05, 0.02, s * 0.38, 1.6, 2.24), K.lens, false); add(U, rbox(0.16, 0.08, 0.04, 0.02, s * 0.5, 0.82, 2.69), K.amber, false); }
+  grille(U, 0.75, 0.35, 0, 1.3, 2.575, 0, 18);
+  for (const s of [-1, 1]) { add(U, rbox(0.2, 0.12, 0.05, 0.02, s * 0.38, 1.6, 2.43), K.lens, false); add(U, rbox(0.16, 0.08, 0.04, 0.02, s * 0.5, 0.82, 2.69), K.amber, false); }
   add(U, mergeG([cy(0.06, 0.07, 0.6, 12, 0.3, 2.05, 1.55), cy(0.08, 0.08, 0.05, 12, 0.3, 2.36, 1.55)]), K.black); // exhaust stack
   // fenders: front mudguards and big rear arches that double as steps
   const arch = (z, y, r, w, x) => shell(curvePts([[z + r * 0.95, y + r * 0.2], [z + r * 0.6, y + r * 0.85], [z, y + r * 1.05], [z - r * 0.6, y + r * 0.85], [z - r * 0.95, y + r * 0.2]].map(([a, b]) => [a, b]), 16), 0.04, w).translate(x, 0, 0);
   add(U, mergeG([arch(ZR, RR, RR + 0.12, 0.6, -TR), arch(ZR, RR, RR + 0.12, 0.6, TR), arch(ZF, RF, RF + 0.1, 0.46, -TF), arch(ZF, RF, RF + 0.1, 0.46, TF)]), K.paint);
-  add(U, mergeG([rbox(0.4, 0.05, 0.3, 0.01, 1.25, 0.55, -0.1), rbox(0.4, 0.05, 0.3, 0.01, 1.25, 0.9, -0.1)]), K.dark); // steps
+  add(U, mergeG([rbox(0.4, 0.05, 0.3, 0.01, 0.95, 0.55, -0.1), rbox(0.4, 0.05, 0.3, 0.01, 0.95, 0.9, -0.1)]), K.dark); // steps
   // cab (the operator faces forward to drive)
   modernCab(m, U, 0, 1.0, -0.35, { w: 1.5, d: 1.75, h: 2.05, door: 1, roofMat: K.paint });
   m.door = m.anchor(U, 1.45, 0, -0.2);
@@ -329,7 +329,7 @@ export function buildBackhoe(m, arm) {
   m.frontFrame = FB;
   m.frontMouth = point(FB, 0, -0.15, 0.45);
   for (const s of [-1, 1]) {
-    cylinder(m, m.anchor(U, s * 0.62, 0.95, 0.95), m.anchor(LA, s * 0.88, -0.32, 1.45), 0.09, 0.055);
+    cylinder(m, m.anchor(U, s * 0.5, 0.95, 0.95), m.anchor(LA, s * 0.88, -0.32, 1.45), 0.09, 0.055);
     cylinder(m, m.anchor(LA, s * 0.6, -0.15, 1.9), m.anchor(FB, s * 0.6, 0.38, -0.1), 0.075, 0.045);
   }
 

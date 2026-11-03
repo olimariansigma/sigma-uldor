@@ -344,7 +344,7 @@ export function buildDozer(m) {
   for (const s of [-1, 1]) { const tu = buildTrackUnit(null, { length: 4.0, radius: 0.48, width: 0.62, rollers: 7, frameColor: K.under, mats: K, side: s }); tu.group.position.x = s * 1.25; U.add(tu.group); m.tracks.push(tu); }
   // main frame, track fenders with lamps, sloping engine hood, radiator guard, front pull hook
   add(U, mergeG([rbox(1.6, 0.5, 3.9, 0.05, 0, 0.98, -0.05), rbox(1.75, 0.3, 0.3, 0.04, 0, 0.95, 1.98), cy(0.05, 0.05, 0.3, 10, 0, 0.95, 2.16, 0, 0, Math.PI / 2)]), K.dark);
-  for (const s of [-1, 1]) { add(U, rbox(0.76, 0.07, 3.35, 0.02, s * 1.25, 1.24, -0.15), K.paint); workLight(U, K, s * 1.12, 1.42, 1.5, 0, 0.1, 0.9); }
+  for (const s of [-1, 1]) { add(U, rbox(0.8, 0.07, 3.35, 0.02, s * 1.2, 1.14, -0.15), K.paint); workLight(U, K, s * 1.12, 1.25, 1.5, 0, 0.1, 0.9); }
   add(U, prism(roundPoly([[0.24, 1.24, 0], [0.24, 2.3, 0.06], [1.3, 2.2, 0.3], [1.8, 1.9, 0.14], [1.84, 1.24, 0]]), 1.5), K.paint);
   grille(U, 1.18, 0.56, 0, 1.58, 1.855, 0, 16);
   add(U, mergeG([bx(1.45, 0.07, 0.08, 0, 1.92, 1.9), bx(1.45, 0.07, 0.08, 0, 1.27, 1.9), bx(0.07, 0.7, 0.08, 0.66, 1.6, 1.9), bx(0.07, 0.7, 0.08, -0.66, 1.6, 1.9), bx(0.05, 0.6, 0.05, 0.22, 1.6, 1.92), bx(0.05, 0.6, 0.05, -0.22, 1.6, 1.92),
@@ -406,7 +406,7 @@ export function buildDumper(m) {
   add(U, mergeG([cy(0.06, 0.06, 0.5, 12, 0.55, 2.05, 1.3), cy(0.07, 0.065, 0.05, 12, 0.55, 2.31, 1.3)]), K.black);
   add(U, mergeG([cy(0.55, 0.58, 0.12, 36, 0, 1.12, -0.35), boltCircle(V(0, 1.18, -0.35), 0.5, 16, V(0, 1, 0), 0.014)]), K.dark);
   // operator seat at the front with ROPS
-  const st = new THREE.Group(); st.position.set(0, 1.9, 1.15); U.add(st);
+  const st = new THREE.Group(); st.position.set(0, 1.72, 1.15); U.add(st);
   seat(K, st, 0, 0.2, -0.05, 0);
   add(st, mergeG([rbox(0.4, 0.4, 0.2, 0.04, 0, 0.3, 0.4)]), K.plastic, false);
   // two-post ROPS behind the seat with a guard screen towards the skip, roof reaching forward over the operator
@@ -653,10 +653,10 @@ export function buildPickup(m) {
   // mirrors
   for (const s of [-1, 1]) add(U, mergeG([rbox(0.06, 0.16, 0.24, 0.02, s * (W / 2 + 0.14), BELT + 0.12, CF - 0.2), bx(0.14, 0.03, 0.04, s * (W / 2 + 0.06), BELT + 0.05, CF - 0.15)]), K.black);
   // interior: two front seats, rear bench, dash and wheel (driver on the left)
-  seat(K, U, -0.4, SILL + 0.05, cz + 0.2); seat(K, U, 0.4, SILL + 0.05, cz + 0.2);
-  add(U, mergeG([rbox(1.5, 0.14, 0.5, 0.04, 0, SILL + 0.1, CB + 0.35), rbox(1.5, 0.55, 0.1, 0.04, 0, SILL + 0.4, CB + 0.1)]), K.plastic, false);
-  add(U, mergeG([rbox(W - 0.2, 0.25, 0.4, 0.05, 0, BELT - 0.02, CF - 0.25)]), K.plastic, false);
-  steeringWheel(K, U, -0.4, BELT + 0.05, CF - 0.5, 0.95);
+  seat(K, U, -0.4, BELT + 0.04, cz + 0.2); seat(K, U, 0.4, BELT + 0.04, cz + 0.2);
+  add(U, mergeG([rbox(1.5, 0.14, 0.5, 0.04, 0, BELT + 0.08, CB + 0.35), rbox(1.5, 0.5, 0.1, 0.04, 0, BELT + 0.35, CB + 0.1)]), K.plastic, false);
+  add(U, mergeG([rbox(W - 0.2, 0.25, 0.4, 0.05, 0, BELT + 0.12, CF - 0.25)]), K.plastic, false);
+  steeringWheel(K, U, -0.4, BELT + 0.38, CF - 0.55, 0.95);
   // light bar on the roof
   add(U, mergeG([rbox(1.2, 0.08, 0.2, 0.03, 0, ROOF + 0.09, cz + 0.4), ...[-1, 1].map((s) => bx(0.04, 0.08, 0.06, s * 0.5, ROOF + 0.04, cz + 0.4))]), K.black);
   m.beacon = add(U, mergeG([-0.4, -0.13, 0.13, 0.4].map((x) => cy(0.055, 0.055, 0.1, 12, x, ROOF + 0.17, cz + 0.4))), K.amber, false);
@@ -671,7 +671,7 @@ export function buildPickup(m) {
   // headache rack behind the cab
   add(U, mergeG([...[-1, 1].map((s) => cy(0.025, 0.025, 0.55, 8, s * 0.78, ROOF - 0.3, TZ0 - 0.06)), cy(0.025, 0.025, 1.56, 8, 0, ROOF - 0.05, TZ0 - 0.06, 0, 0, Math.PI / 2)]), K.black);
   for (const s of [-1, 1]) { const l = label(m.spec.brand, 0.75, 0.17, '#15171a'); l.position.set(s * (W / 2 + 0.01), FL + 0.24, tz); l.rotation.y = s * Math.PI / 2; U.add(l); }
-  m.seat = anchor(U, -0.4, BELT + 0.3, cz + 0.12);
+  m.seat = anchor(U, -0.4, BELT + 0.6, cz + 0.12);
   m.door = anchor(U, 1.25, 0, cz + 0.3);
   m.attach = U; m.att = attStub('car', { grab: anchor(U, 0, FL + 0.3, tz) }); m.grabPoint = m.att.grab;
   m.colliderSets.push({ obj: U, boxes: [[0, (SILL + BELT) / 2 + 0.04, (ZN + ZT) / 2, W, BELT - SILL + 0.12, ZN - ZT], [0, (BELT + ROOF) / 2, (CF - 0.3 + CB) / 2, W - 0.2, ROOF - BELT, CF - 0.3 - CB]], chassis: true });

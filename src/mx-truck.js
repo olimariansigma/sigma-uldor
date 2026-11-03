@@ -109,11 +109,11 @@ export function buildTruck(m) {
   add(U, mergeG([bx(0.52, 0.12, 0.01, 0, 0.98, RE - 0.08)]), m.ctx.M.paintWhite || K.grey, false);
   // fuel tank (polished aluminium, straps), AdBlue tank, battery box, air tanks, side guards
   const tz = Z.tank, az = Z.ad, rz = Z.air;
-  add(U, mergeG([rbox(0.55, 0.62, 1.35, 0.14, 0.88, 0.95, tz)]), K.galv);
-  add(U, mergeG([bx(0.6, 0.04, 0.06, 0.88, 0.95, tz + 0.55), bx(0.6, 0.04, 0.06, 0.88, 0.95, tz - 0.55), cy(0.06, 0.06, 0.06, 12, 0.88, 1.3, tz + 0.45)]), K.black);
-  add(U, mergeG([rbox(0.45, 0.42, 0.5, 0.08, 0.86, 0.9, az), cy(0.05, 0.05, 0.05, 10, 0.86, 1.13, az + 0.15)]), K.grey);
-  add(U, mergeG([rbox(0.5, 0.45, 0.9, 0.04, -0.85, 0.95, tz), bx(0.52, 0.04, 0.92, -0.85, 1.19, tz)]), K.black);
-  add(U, mergeG([cy(0.13, 0.13, 0.9, 16, -0.75, 0.75, rz, Math.PI / 2), cy(0.13, 0.13, 0.9, 16, 0.25, 0.75, rz - 0.2, Math.PI / 2)]), K.steel);
+  add(U, mergeG([rbox(0.55, 0.62, 1.35, 0.14, 0.775, 0.95, tz)]), K.galv);
+  add(U, mergeG([bx(0.6, 0.04, 0.06, 0.775, 0.95, tz + 0.55), bx(0.6, 0.04, 0.06, 0.775, 0.95, tz - 0.55), cy(0.06, 0.06, 0.06, 12, 0.775, 1.3, tz + 0.45)]), K.black);
+  add(U, mergeG([rbox(0.45, 0.42, 0.5, 0.08, 0.725, 0.9, az), cy(0.05, 0.05, 0.05, 10, 0.725, 1.13, az + 0.15)]), K.grey);
+  add(U, mergeG([rbox(0.5, 0.45, 0.9, 0.04, -0.75, 0.95, tz), bx(0.52, 0.04, 0.92, -0.75, 1.19, tz)]), K.black);
+  add(U, mergeG([cy(0.13, 0.13, 0.9, 16, -0.63, 0.75, rz, Math.PI / 2), cy(0.13, 0.13, 0.9, 16, 0.25, 0.75, rz - 0.2, Math.PI / 2)]), K.steel);
   { const [gz, gl] = Z.guard; for (const s of [-1, 1]) add(U, mergeG([bx(0.04, 0.06, gl, s * 1.18, 0.7, gz), bx(0.04, 0.06, gl, s * 1.18, 1.0, gz), bx(0.04, 0.38, 0.06, s * 1.18, 0.85, gz + gl / 2 - 0.05), bx(0.04, 0.38, 0.06, s * 1.18, 0.85, gz - gl / 2 + 0.05)]), K.galv); }
   // exhaust: silencer box under the right step, tail pipe
   add(U, mergeG([rbox(0.5, 0.4, 0.7, 0.06, -0.85, 0.8, 1.35), tubeAB(V(-1.1, 0.7, 1.1), V(-1.25, 0.62, 0.9), 0.05)]), K.steel);
@@ -259,7 +259,7 @@ export function buildTruck(m) {
   stick(tail, 'warn', 0.3, BW / 2 - 0.3, -GA - BH * 0.5, -0.09, Math.PI);
   m.tailgate = tail;
   // front telescopic tipping cylinder: chassis -> body underside near the headboard
-  cylinder(m, anchor(U, 0, 1.1, 1.25), anchor(body, 0, -0.05, L - 0.55), 0.13, 0.08);
+  cylinder(m, anchor(U, 0, 1.1, 0.9), anchor(body, 0, -0.05, L - 0.55), 0.13, 0.08);
   m.att = { group: body, jaws: [], probes: [], colliders: [], behaviour: 'bed', bulk: null, pieces: 0, grab: anchor(body, 0, 0.6, L / 2), wakeR: 4.6,
     dump: { from: 0.75, dir: new THREE.Vector3(0, 0, -1), box: [BW / 2 + 0.2, L + 0.3, BH + 1.2] } };
   m.grabPoint = m.att.grab;

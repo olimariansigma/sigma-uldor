@@ -37,7 +37,9 @@ export class Contracts {
     if (added) { this.dirty = true; this.g.ui.renderContracts && this.g.ui.renderContracts(); }
   }
   pickType() {
-    const have = new Set(this.jobs.map((j) => j.type)), pool = TYPES.filter(([t]) => !have.has(t) || t === 'drive');
+    // the press's block count only exists on the host: a joined player gets no press contracts
+    const have = new Set(this.jobs.map((j) => j.type)), client = this.g.net && this.g.net.isClient;
+    const pool = TYPES.filter(([t]) => (!have.has(t) || t === 'drive') && !(client && t === 'press'));
     let sum = pool.reduce((s, [, w]) => s + w, 0), r = Math.random() * sum;
     for (const [t, w] of pool) { r -= w; if (r <= 0) return t; }
     return pool[0][0];

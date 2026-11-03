@@ -373,3 +373,5 @@ body.touch #career #cash { font-size: 16px; }
 #combo.job b { color: #7ef0a4; text-shadow: 0 4px 0 #1d6b3a, 0 0 24px rgba(80, 240, 140, .7), 0 8px 18px rgba(0, 0, 0, .55); }
 #combo.rank b { color: #ffd25a; }
 body.photo #career { display: none; }
+body.touch.in-machine #career { display: none; }
+body.touch .hud-btn span { display: none; }

@@ -373,6 +373,7 @@ export class UI {
   }
   setCrosshair(active, visible = true) { const c = $('crosshair'); c.classList.toggle('target', active); c.style.display = visible ? '' : 'none'; }
   setMode(mode, touch, machine = null) {
+    document.body.classList.toggle('in-machine', mode === 'machine');
     $('vehicleHud').classList.toggle('hidden', mode !== 'machine');
     $('hotbar').classList.toggle('hidden', mode === 'machine');
     if (machine) {

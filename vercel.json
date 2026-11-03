@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "ELECTRON_SKIP_BINARY_DOWNLOAD=1 npm ci --no-audit --no-fund",
+  "buildCommand": "npm run build:site",
+  "outputDirectory": "site-dist",
+  "trailingSlash": true,
+  "headers": [
+    { "source": "/play/(tex|sfx|thumbs|img|fonts)/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }] }
+  ]
+}

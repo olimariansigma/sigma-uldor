@@ -14,3 +14,4 @@ launcher/desktop/icon.png
 launcher/desktop/out/
 launcher/desktop/node_modules/
 android/build-launcher/
+site-dist/

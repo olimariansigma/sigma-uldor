@@ -125,3 +125,19 @@ python3 tools/gen_textures.py   # regenerate the HD texture pack in public/tex (
 Sound recordings: [BigSoundBank](https://bigsoundbank.com) (Joseph Sardin), released as CC0 / public domain; cut into loops and one-shots by `tools/make_sfx.py`.
 
 All machines and brands in the game are fictional. Fonts: Russo One and Rubik (SIL Open Font License, see `public/fonts`).
+
+## Website (free hosting on Vercel)
+
+`npm run build:site` builds the website into `site-dist/`: the landing page (`site/index.html`) at `/` and the
+browser game at `/play/`, using the 1024 px web texture pack in `site/tex` (about 15 MB in total). It is fully
+static: no server code, no database, no API keys, so it fits the free Hobby plan.
+
+To publish it: on vercel.com choose **Add New → Project**, import this GitHub repository and press **Deploy**.
+`vercel.json` already holds the install command, build command and output folder. Every push then redeploys.
+
+## Progression mode
+
+PROGRESSION on the title screen starts a separate career: only the hammer and $150. Crushing pays $3 per kg,
+every new block laid in your house pays $30, and house milestones (20 / 50 / 100 / 180 / 300 blocks) pay bonuses.
+Spend it in the Shop (`B`) on tools, upgrades, machines and new buildings. No potholes in this mode. It saves
+itself; Start over is in the menu. The help panel (`H`) has a step-by-step "how do I build a house?" Q&A.

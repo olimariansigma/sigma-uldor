@@ -11,7 +11,8 @@
     "dev": "node scripts/build.mjs --serve",
     "exe": "node scripts/build.mjs && electron-builder --win portable --x64",
     "apk": "node scripts/build.mjs && bash scripts/build-apk.sh",
-    "art": "node scripts/build.mjs && node scripts/thumbs.cjs && node scripts/build.mjs"
+    "art": "node scripts/build.mjs && node scripts/thumbs.cjs && node scripts/build.mjs",
+    "build:site": "node scripts/build-site.mjs"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "^0.14.0",

@@ -42,16 +42,27 @@ const GAP = wallLayout().gap;
 function wreckParts(kind, seed) {
   const r = rng(seed * 7 + 3), out = [];
   if (kind === 'plane') {
+    // a high-wing light plane (Cessna-like: 8.3 m long, 11 m span, tricycle gear) nosed into the wall; the nose
+    // gear collapsed, so it sits on its belly with the tail cocked up
     const W = 0xf2f2ee, S = [0xd8262b, 0x1f6fd0, 0xf2b200][Math.floor(r() * 3)], G = 0x7fb8d8, D = 0x2a2c30;
-    out.push([0, 0.55, 0.05, 1.0, 1.0, 0.55, S]);                     // engine cowling, stuck in the wall
-    out.push([0, 0.55, -0.42, 0.14, 1.25, 0.14, D]);                  // bent propeller
-    for (const [z, c] of [[0.95, W], [2.25, S], [3.55, W], [4.85, W]]) out.push([0, 0.6, z, 1.1, 1.1, 1.25, c]);
-    out.push([0, 0.75, 6.05, 0.8, 0.8, 1.1, W]);                      // tail cone
-    out.push([0, 1.32, 2.1, 0.86, 0.42, 1.0, G]);                     // canopy glass
-    for (const s of [-1, 1]) for (const [x, c] of [[1.2, W], [2.5, S], [3.75, W]]) out.push([s * x, 0.82, 3.4, 1.25, 0.14, 1.2, c]);
-    out.push([0, 1.65, 6.15, 0.12, 1.0, 0.9, S]);                     // fin
-    for (const s of [-1, 1]) out.push([s * 0.9, 0.98, 6.25, 0.95, 0.1, 0.7, W]);
-    for (const s of [-1, 1]) out.push([s * 0.6, 0.18, 2.6, 0.16, 0.36, 0.36, D]); // gear wheels
+    out.push([0, 0.62, 0.05, 1.0, 0.9, 0.6, W]);                      // engine cowling, stuck in the wall
+    out.push([0.1, 0.62, -0.4, 0.1, 1.2, 0.14, D, 0, 0.45]);          // bent propeller
+    for (const [z, c] of [[0.95, W], [2.15, W]]) out.push([0, 0.62, z, 1.12, 0.8, 1.2, c]);   // cabin, lower
+    for (const z of [0.95, 2.15]) out.push([0, 1.3, z, 1.04, 0.56, 1.2, G]);                  // cabin windows
+    for (const [z, w, h, y, c] of [[3.35, 1.0, 0.95, 0.75, S], [4.55, 0.86, 0.8, 0.85, W], [5.75, 0.72, 0.66, 0.97, S], [6.9, 0.56, 0.52, 1.1, W]]) out.push([0, y, z, w, h, 1.2, c]); // tapering tail cone
+    out.push([0, 1.98, 7.15, 0.1, 1.25, 1.0, W]);                     // fin
+    out.push([0, 1.7, 7.75, 0.08, 0.9, 0.4, S]);                      // rudder
+    for (const sg of [-1, 1]) out.push([sg * 0.82, 1.18, 7.25, 1.3, 0.08, 0.72, W]);   // tailplanes
+    // high wing on top of the cabin, 1.3 m chord, red tips; the left tip snapped off and lies on the ground
+    out.push([0, 1.64, 1.55, 1.25, 0.12, 1.3, W]);
+    for (const sg of [-1, 1]) for (const [x, c] of [[1.25, W], [2.5, W], [3.75, S]]) out.push([sg * x, 1.64, 1.55, 1.25, 0.12, 1.3, c]);
+    out.push([4.95, 1.64, 1.55, 1.15, 0.12, 1.3, S]);
+    out.push([-5.6, 0.07, 2.6, 1.15, 0.12, 1.3, S, 0, 0.0, 0.35]);
+    // wing struts from the belly to under the wing
+    for (const sg of [-1, 1]) out.push([sg * 1.32, 1.08, 1.75, 0.07, 1.25, 0.12, W, 0, sg * 0.82]);
+    // main gear: legs and spatted wheels; the nose wheel broke off
+    for (const sg of [-1, 1]) { out.push([sg * 1.05, 0.38, 2.45, 0.08, 0.5, 0.1, D, 0, sg * 0.6]); out.push([sg * 1.3, 0.2, 2.45, 0.2, 0.4, 0.62, W]); }
+    out.push([0.9, 0.17, -0.6, 0.16, 0.34, 0.34, D]);
   } else {
     const C = CAR_COLORS[Math.floor(r() * CAR_COLORS.length)], G = 0x6a8fa6, D = 0x1e1f22, M = 0x9a9ea2;
     out.push([0, 0.42, 0.12, 1.8, 0.3, 0.3, M]);                       // bumper in the wall
@@ -122,8 +133,8 @@ export class Incidents {
       // two pillars at the ends
       for (const x of [-5.1, 5.1]) for (let c = 0; c < COURSES + 1; c++) out.push({ type: 'cmuHalf', pos: new THREE.Vector3(s.x + x, HB / 2 + c * HB, s.z), size: new THREE.Vector3(), quat: null, color: new THREE.Color(0x85847f) });
     } else {
-      for (const [x, y, z, sx, sy, sz, c, tilt] of wreckParts(kind, seed)) {
-        const q = tilt ? new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, 0, 0)) : null;
+      for (const [x, y, z, sx, sy, sz, c, tilt, tiltZ, tiltY] of wreckParts(kind, seed)) {
+        const q = tilt || tiltZ || tiltY ? new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt || 0, tiltY || 0, tiltZ || 0)) : null;
         out.push({ type: 'wreck', pos: new THREE.Vector3(s.x + x, y, s.z + z), size: new THREE.Vector3(sx, sy, sz), quat: q, color: new THREE.Color(c) });
       }
     }
@@ -155,6 +166,9 @@ export class Incidents {
     // bricks for the repair: the wall's own colour, on the tarp
     const col = new THREE.Color(WALL_COLORS[site % WALL_COLORS.length]);
     const need = GAP.length, cb = g.pressCb();
+    // leftover bricks from an earlier delivery here make room for the new ones
+    const tarp = this.local(site, -7.0, 0, 4.2);
+    for (const p of g.demo.pieces) if (p.brick && p.state === LOOSE && Math.abs(p.pos.x - tarp.x) < 3 && Math.abs(p.pos.z - tarp.z) < 2.4) g.demo.vanish(p, false);
     for (let i = 0; i < need + 2; i++) {
       const p = this.local(site, -8.2 + (i % 3) * 1.25, 0.31 + Math.floor(i / 9) * 0.62, 3.4 + (Math.floor(i / 3) % 3) * 0.66);
       cb.spawn(p, new THREE.Quaternion(), col.clone().multiplyScalar(0.92 + Math.random() * 0.12));

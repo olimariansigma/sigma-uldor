@@ -318,6 +318,7 @@ export class Demolition {
   // hanging costs metres / (how far that piece type can cantilever). Anything whose total exceeds 1 falls.
   recompute(b) {
     if (!b || (b.pool && !b.built)) return 0;
+    if (typeof b.def === 'string' && b.def.startsWith('__incx')) return 0; // a crashed wreck is one rigid tangle: parts only come off when hit
     const n = b.count, s0 = b.start;
     // big buildings: spans scale with the building, and bricks bond harder (STICK) so walls hold bigger holes
     // A block needs something under it, or a short bonded chain sideways to a supported block. A block

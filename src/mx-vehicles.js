@@ -370,7 +370,9 @@ export function buildDozer(m) {
   const bg = sidePlate([...prof, ...inner], bladeW, -bladeW / 2, 0.01);
   add(m.attach, bg, K.paint);
   const ribs = []; for (let i = 0; i < 7; i++) ribs.push(bx(0.06, 1.2, 0.25, -bladeW / 2 + 0.25 + i * (bladeW - 0.5) / 6, 0.3, -0.12));
-  add(m.attach, mergeG([...ribs, bx(bladeW, 0.12, 0.3, 0, 0.95, -0.05)]), K.paint);
+  add(m.attach, mergeG([...ribs, bx(bladeW, 0.12, 0.3, 0, 0.95, -0.05),
+    // semi-U blade: short side wings angled forward to carry the load
+    bx(0.08, 1.3, 0.62, bladeW / 2 - 0.08, 0.3, 0.32, 0, -0.38, 0), bx(0.08, 1.3, 0.62, -bladeW / 2 + 0.08, 0.3, 0.32, 0, 0.38, 0)]), K.paint);
   add(m.attach, mergeG([bx(bladeW + 0.05, 0.06, 0.12, 0, -0.45, 0.22, 0.3), bx(0.12, 0.6, 0.35, -bladeW / 2, -0.15, 0.1), bx(0.12, 0.6, 0.35, bladeW / 2, -0.15, 0.1), boltRow(V(-bladeW / 2 + 0.2, -0.4, 0.29), V(bladeW / 2 - 0.2, -0.4, 0.29), 18, V(0, 0.3, 1), 0.014, 0.01),
     ...[-1, 1].map((s) => tubeAB(V(s * 1.62, 0.03, -0.42), V(s * 1.22, 0.82, -0.17), 0.05, 10)), ...[-1, 1].map((s) => pinX(0.12, 0.24, s * 1.62, 0, -0.05, 16)), ...[-1, 1].map((s) => rbox(0.2, 0.3, 0.2, 0.03, s * 0.85, 0.7, -0.12))]), K.dark);
   // ripper at the back
@@ -494,7 +496,7 @@ export function buildCrane(m) {
   m.rope = new THREE.Mesh(cy(0.022, 0.022, 1, 6, 0, 0.5, 0), ropeMat); m.rope.userData.keep = true; m.ctx.scene.add(m.rope);
   m.ball = new THREE.Group(); m.ctx.scene.add(m.ball);
   const ballMat = K.dark;
-  add(m.ball, mergeG([new THREE.SphereGeometry(0.62, 32, 20), cy(0.16, 0.2, 0.3, 14, 0, 0.7, 0), new THREE.TorusGeometry(0.12, 0.04, 8, 16).translate(0, 0.92, 0), ...Array.from({ length: 8 }, (_, i) => { const r = bx(0.08, 0.04, 0.5, 0, 0, 0); r.rotateY((i / 8) * Math.PI); return r.translate(0, 0.6, 0); })]), ballMat);
+  add(m.ball, mergeG([new THREE.LatheGeometry([[0, -0.66], [0.3, -0.6], [0.52, -0.42], [0.62, -0.15], [0.6, 0.1], [0.5, 0.32], [0.36, 0.5], [0.24, 0.6], [0, 0.6]].map(([r, y]) => new THREE.Vector2(r, y)), 32), cy(0.16, 0.2, 0.3, 14, 0, 0.7, 0), new THREE.TorusGeometry(0.12, 0.04, 8, 16).translate(0, 0.92, 0), ...Array.from({ length: 8 }, (_, i) => { const r = bx(0.08, 0.04, 0.5, 0, 0, 0); r.rotateY((i / 8) * Math.PI); return r.translate(0, 0.6, 0); })]), ballMat);
   m.ballState = null;
   m.extraMeshes = [m.rope, m.ball, ...m.pendants.map((p) => p.r)];
   m.attach = m.boomG; m.grabPoint = m.tip;
@@ -594,12 +596,16 @@ export function buildPainter(m) {
 }
 
 // --------------------------------------------------------------------------- site pickup (the yard's car)
-// A double-wheel-arch utility pickup: bonnet, crew cab, open bed with side rails, amber light bar. Quick on the road:
-// it is how you get to accidents outside the yard.
+// A double-cab work pickup at real proportions (5.3 m long, 1.9 m tall, 3.05 m wheelbase, 0.86 m load floor):
+// raised 4x4 stance, flat bonnet with a centre crease, grille and headlamps in one surround, four-door cab with a
+// tapered glasshouse, low tray with a flat tailgate, roof light bar. Quick on the road: it is how you get to
+// accidents outside the yard.
 export function buildPickup(m) {
   const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
-  const R = 0.42, RR = 0.27, ZF = 1.55, ZR = -1.4, TX = 0.86;
-  const tg = tyreLathe(R, 0.3, RR, { lugs: 22, style: 'block' }), rw = wheelRim(RR, 0.28, { dish: 0.06, vents: 6 });
+  const R = 0.39, RR = 0.25, ZF = 1.6, ZR = -1.45, TX = 0.79;     // tyres 0.78 m, track 1.58 m
+  const ZN = 2.75, ZT = -2.55, W = 1.84;                          // nose / tail, body width
+  const SILL = 0.5, BELT = 1.12, ROOF = 1.8, CF = 1.05, CB = -0.85; // body heights, cab front / back
+  const tg = tyreLathe(R, 0.27, RR, { lugs: 24, style: 'block' }), rw = wheelRim(RR, 0.25, { dish: 0.07, vents: 6 });
   for (const z of [ZF, ZR]) for (const s of [-1, 1]) {
     const hub = new THREE.Group(); hub.position.set(s * TX, R, z); U.add(hub);
     const spin = new THREE.Group(); hub.add(spin);
@@ -607,29 +613,69 @@ export function buildPickup(m) {
     const rm = add(spin, rw.rim, K.grey, false), rv = add(spin, rw.vents, K.black, false);
     if (s < 0) { rm.rotation.y = Math.PI; rv.rotation.y = Math.PI; }
     m.wheels.push(spin); if (z > 0) m.steerWheels.push(hub);
-    add(U, fender(z, R, R + 0.08, 0.2, Math.PI - 0.2, 0.36, s * (TX + 0.06)), K.black);
+    // chunky black wheel-arch flares
+    add(U, fender(z, R, R + 0.1, 0.25, Math.PI - 0.25, 0.16, s * (W / 2 + 0.02), 0.05), K.black);
   }
-  // chassis, axles, lower body with sills
-  add(U, mergeG([rbox(0.9, 0.18, 4.6, 0.03, 0, 0.5, 0.05), pinX(0.06, 1.6, 0, R, ZF), pinX(0.07, 1.6, 0, R, ZR)]), K.under);
-  add(U, mergeG([rbox(1.86, 0.5, 4.9, 0.09, 0, 0.86, 0.05), rbox(1.9, 0.12, 2.0, 0.04, 0, 0.66, 0.1)]), K.paint);
-  // bonnet, grille, headlights, bumper
-  add(U, mergeG([rbox(1.8, 0.32, 1.3, 0.08, 0, 1.25, 1.75, -0.06)]), K.paint);
-  grille(U, 1.1, 0.3, 0, 1.0, 2.5, 0, 14);
-  for (const s of [-1, 1]) { add(U, rbox(0.34, 0.14, 0.06, 0.03, s * 0.66, 1.08, 2.49), K.black); add(U, bx(0.28, 0.1, 0.01, s * 0.66, 1.08, 2.525), K.lens, false).userData.keep = true; }
-  add(U, mergeG([rbox(1.96, 0.24, 0.26, 0.06, 0, 0.66, 2.48), rbox(1.96, 0.22, 0.24, 0.06, 0, 0.66, -2.4)]), K.dark);
-  add(U, mergeG([-1, 1].map((s) => rbox(0.16, 0.26, 0.05, 0.02, s * 0.84, 1.0, -2.42))), K.red, false);
-  // crew cab with glass, seat and wheel (the shared cab), roof light bar
-  modernCab(m, U, 0, 0.82, 0.48, { w: 1.82, d: 1.5, h: 1.45, door: 1 });
-  add(U, mergeG([rbox(1.2, 0.1, 0.22, 0.04, 0, 2.38, 0.6)]), K.black);
-  add(U, mergeG([-0.4, -0.13, 0.13, 0.4].map((x) => cy(0.06, 0.06, 0.12, 12, x, 2.46, 0.6))), K.amber, false);
-  // open bed: floor, sides, tailgate, headache rack
-  add(U, mergeG([rbox(1.78, 0.08, 2.1, 0.02, 0, 1.12, -1.3), ...[-1, 1].map((s) => rbox(0.08, 0.42, 2.1, 0.02, s * 0.86, 1.36, -1.3)), rbox(1.78, 0.42, 0.08, 0.02, 0, 1.36, -2.33)]), K.paint);
-  add(U, mergeG([...[-1, 1].map((s) => cy(0.03, 0.03, 0.7, 8, s * 0.8, 1.9, -0.28)), cy(0.03, 0.03, 1.6, 8, 0, 2.25, -0.28, 0, 0, Math.PI / 2)]), K.black);
-  for (const s of [-1, 1]) { const l = label(m.spec.brand, 0.9, 0.2, '#15171a'); l.position.set(s * 0.94, 0.95, -1.2); l.rotation.y = s * Math.PI / 2; U.add(l); }
-  m.door = anchor(U, 1.3, 0, 0.5);
-  m.attach = U; m.att = attStub('car', { grab: anchor(U, 0, 1.2, -1.3) }); m.grabPoint = m.att.grab;
-  m.colliderSets.push({ obj: U, boxes: [[0, 1.0, 0.05, 1.95, 1.1, 4.95], [0, 1.7, 0.48, 1.8, 0.9, 1.5]], chassis: true });
-  m.radius = 2.8;
+  // ladder chassis, axles, diff, fuel tank, exhaust (216 mm of ground clearance)
+  add(U, mergeG([...[-1, 1].map((s) => rbox(0.1, 0.16, 4.7, 0.02, s * 0.42, 0.42, 0.1)), pinX(0.05, 1.5, 0, R, ZF), pinX(0.06, 1.5, 0, R, ZR),
+    new THREE.SphereGeometry(0.17, 12, 8).scale(1, 0.85, 1).translate(0, R - 0.02, ZR), rbox(0.6, 0.28, 0.8, 0.03, -0.45, 0.48, -0.4)]), K.under);
+  add(U, mergeG([cy(0.035, 0.035, 2.6, 8, 0.32, 0.36, -1.0, Math.PI / 2)]), K.dark);
+  // lower body: front wings + doors + rear quarters as one painted tub between sill and belt line
+  add(U, mergeG([rbox(W, BELT - SILL, ZN - CB + 0.08, 0.08, 0, (SILL + BELT) / 2, (ZN + CB - 0.08) / 2)]), K.paint);
+  // bonnet: flat, slightly raised centre crease, sloping into the windscreen
+  add(U, mergeG([rbox(W - 0.04, 0.08, ZN - CF - 0.05, 0.04, 0, BELT + 0.03, (ZN + CF) / 2), rbox(0.5, 0.04, ZN - CF - 0.2, 0.02, 0, BELT + 0.09, (ZN + CF) / 2 - 0.05)]), K.paint);
+  // nose: grille and headlamps in one dark surround, chrome bar, big bumper with a skid plate
+  add(U, rbox(W - 0.06, 0.42, 0.06, 0.03, 0, 0.88, ZN + 0.01), K.black);
+  grille(U, 0.9, 0.3, 0, 0.86, ZN + 0.045, 0, 12);
+  add(U, mergeG([bx(0.95, 0.04, 0.02, 0, 1.03, ZN + 0.05)]), K.chrome, false);
+  for (const s of [-1, 1]) { const l = add(U, mergeG([rbox(0.34, 0.13, 0.04, 0.04, s * 0.66, 0.97, ZN + 0.04)]), K.lens, false); l.userData.keep = true; }
+  add(U, mergeG([rbox(W + 0.06, 0.26, 0.24, 0.06, 0, 0.56, ZN + 0.05), rbox(0.9, 0.06, 0.5, 0.02, 0, 0.36, ZN - 0.1)]), K.dark);
+  // four-door double cab: belt rail, door shut lines, handles, tapered glasshouse, roof
+  const cl = CF - CB, cz = (CF + CB) / 2, hw = W / 2 - 0.02, tw = W / 2 - 0.13;
+  add(U, mergeG([...[-1, 1].flatMap((s) => [bx(0.012, BELT - SILL - 0.1, 0.012, s * (W / 2 + 0.002), (SILL + BELT) / 2, cz + 0.02), bx(0.012, BELT - SILL - 0.1, 0.012, s * (W / 2 + 0.002), (SILL + BELT) / 2, CB + 0.02)])]), K.black, false);
+  add(U, mergeG([-1, 1].flatMap((s) => [rbox(0.03, 0.035, 0.16, 0.01, s * (W / 2 + 0.012), BELT - 0.12, cz + 0.32), rbox(0.03, 0.035, 0.16, 0.01, s * (W / 2 + 0.012), BELT - 0.12, CB + 0.3)])), K.chrome, false);
+  const P = (x, y, z) => V(x, y, z);
+  const fb = P(0, BELT, CF - 0.05), rt = ROOF - 0.04;
+  // pillars (A, B, C) and roof rails in body colour
+  const pil = [];
+  for (const s of [-1, 1]) {
+    pil.push(tubeAB(P(s * hw, BELT, CF - 0.05), P(s * tw, rt, CF - 0.55), 0.045, 8));   // raked A-pillar
+    pil.push(tubeAB(P(s * hw, BELT, cz + 0.02), P(s * tw, rt, cz + 0.02), 0.05, 8));     // B-pillar
+    pil.push(tubeAB(P(s * hw, BELT, CB + 0.03), P(s * tw, rt, CB + 0.08), 0.06, 8));     // C-pillar
+  }
+  add(U, mergeG(pil), K.paint);
+  add(U, mergeG([rbox(2 * tw + 0.08, 0.07, CF - 0.55 - CB + 0.02, 0.03, 0, ROOF, (CF - 0.55 + CB) / 2)]), K.paint);
+  // glass, hidden from the driver's own seat
+  const gl = [pane(P(-hw, BELT, CF - 0.05), P(hw, BELT, CF - 0.05), P(tw, rt, CF - 0.55), P(-tw, rt, CF - 0.55)),
+    pane(P(hw, BELT, CB + 0.03), P(-hw, BELT, CB + 0.03), P(-tw, rt, CB + 0.08), P(tw, rt, CB + 0.08))];
+  for (const s of [-1, 1]) gl.push(pane(P(s * hw, BELT, CF - 0.05), P(s * hw, BELT, CB + 0.03), P(s * tw, rt, CB + 0.08), P(s * tw, rt, CF - 0.55)));
+  U.add(exteriorOnly(new THREE.Mesh(mergeG(gl), K.glass)));
+  // mirrors
+  for (const s of [-1, 1]) add(U, mergeG([rbox(0.06, 0.16, 0.24, 0.02, s * (W / 2 + 0.14), BELT + 0.12, CF - 0.2), bx(0.14, 0.03, 0.04, s * (W / 2 + 0.06), BELT + 0.05, CF - 0.15)]), K.black);
+  // interior: two front seats, rear bench, dash and wheel (driver on the left)
+  seat(K, U, -0.4, SILL + 0.05, cz + 0.2); seat(K, U, 0.4, SILL + 0.05, cz + 0.2);
+  add(U, mergeG([rbox(1.5, 0.14, 0.5, 0.04, 0, SILL + 0.1, CB + 0.35), rbox(1.5, 0.55, 0.1, 0.04, 0, SILL + 0.4, CB + 0.1)]), K.plastic, false);
+  add(U, mergeG([rbox(W - 0.2, 0.25, 0.4, 0.05, 0, BELT - 0.02, CF - 0.25)]), K.plastic, false);
+  steeringWheel(K, U, -0.4, BELT + 0.05, CF - 0.5, 0.95);
+  // light bar on the roof
+  add(U, mergeG([rbox(1.2, 0.08, 0.2, 0.03, 0, ROOF + 0.09, cz + 0.4), ...[-1, 1].map((s) => bx(0.04, 0.08, 0.06, s * 0.5, ROOF + 0.04, cz + 0.4))]), K.black);
+  m.beacon = add(U, mergeG([-0.4, -0.13, 0.13, 0.4].map((x) => cy(0.055, 0.055, 0.1, 12, x, ROOF + 0.17, cz + 0.4))), K.amber, false);
+  m.beacon.userData.keep = true;
+  // tray: 0.86 m load floor, 0.48 m sides, flat tailgate with a latch, tail lamps in the rear quarters
+  const TZ0 = CB - 0.08, TL = TZ0 - ZT, tz = (TZ0 + ZT) / 2, FL = 0.86, SH = 0.48;
+  // rear quarters run from the sill up to the tray rail; the floor sits inside them at load height
+  add(U, mergeG([rbox(W - 0.1, 0.06, TL, 0.02, 0, FL, tz), ...[-1, 1].map((s) => rbox(0.08, FL + SH - SILL, TL, 0.03, s * (W / 2 - 0.04), (SILL + FL + SH) / 2, tz)),
+    rbox(W - 0.1, SH, 0.07, 0.02, 0, FL + SH / 2, TZ0), rbox(W - 0.1, FL + SH - SILL - 0.02, 0.07, 0.02, 0, (SILL + FL + SH) / 2, ZT + 0.04)]), K.paint);
+  add(U, mergeG([...[-1, 1].map((s) => rbox(0.09, 0.05, TL, 0.02, s * (W / 2 - 0.035), FL + SH + 0.02, tz)), rbox(0.3, 0.05, 0.03, 0.01, 0, FL + SH - 0.1, ZT + 0.0)]), K.black);
+  add(U, mergeG([-1, 1].map((s) => rbox(0.08, 0.32, 0.05, 0.02, s * (W / 2 - 0.03), FL + 0.2, ZT + 0.0))), K.red, false);
+  // headache rack behind the cab
+  add(U, mergeG([...[-1, 1].map((s) => cy(0.025, 0.025, 0.55, 8, s * 0.78, ROOF - 0.3, TZ0 - 0.06)), cy(0.025, 0.025, 1.56, 8, 0, ROOF - 0.05, TZ0 - 0.06, 0, 0, Math.PI / 2)]), K.black);
+  for (const s of [-1, 1]) { const l = label(m.spec.brand, 0.75, 0.17, '#15171a'); l.position.set(s * (W / 2 + 0.01), FL + 0.24, tz); l.rotation.y = s * Math.PI / 2; U.add(l); }
+  m.seat = anchor(U, -0.4, BELT + 0.3, cz + 0.12);
+  m.door = anchor(U, 1.25, 0, cz + 0.3);
+  m.attach = U; m.att = attStub('car', { grab: anchor(U, 0, FL + 0.3, tz) }); m.grabPoint = m.att.grab;
+  m.colliderSets.push({ obj: U, boxes: [[0, (SILL + BELT) / 2 + 0.04, (ZN + ZT) / 2, W, BELT - SILL + 0.12, ZN - ZT], [0, (BELT + ROOF) / 2, (CF - 0.3 + CB) / 2, W - 0.2, ROOF - BELT, CF - 0.3 - CB]], chassis: true });
+  m.radius = 2.9;
   m.bakeList.push(U);
   m.rig = { family: 'car', drive: 'car', wheelbase: ZF - ZR, accel: 6.5, brake: 10, maxLat: 7, swing: false, limits: {}, rates: {},
     apply(mm) { for (const h of mm.steerWheels) h.rotation.y = mm.steerVis; } };

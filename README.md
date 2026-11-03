@@ -141,3 +141,11 @@ PROGRESSION on the title screen starts a separate career: only the hammer and $1
 every new block laid in your house pays $30, and house milestones (20 / 50 / 100 / 180 / 300 blocks) pay bonuses.
 Spend it in the Shop (`B`) on tools, upgrades, machines and new buildings. No potholes in this mode. It saves
 itself; Start over is in the menu. The help panel (`H`) has a step-by-step "how do I build a house?" Q&A.
+
+## Accidents
+
+Every few minutes (sandbox and progression) a light plane or a car crashes through a garden wall at one of four
+sites outside the yard. Drive the yard pickup there following the GPS arrow and the red light beam, smash the wreck
+and load it onto the tipper truck parked on site, then rebuild the hole with the delivered bricks and the free
+mortar from the tub. Plane $6,000, car $3,500, +25% within 8 minutes. The menu can report one right away or hand
+the current one over.

@@ -160,7 +160,7 @@ export class UI {
         for (const m of g.machines.values()) {
           const row = document.createElement('div'); row.className = 'slot';
           row.innerHTML = `<img class="thumb" src="${THUMB(m.spec.id)}" alt=""><div class="info"><b>${m.spec.brand} ${m.spec.model}</b><br>${m.driver >= 0 ? ic('user', 'inl') + 'driven by ' + g.playerName(m.driver) : 'parked'}</div>`;
-          const sell = prog ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
+          const sell = prog && m.family !== 'car' && !m.siteTruck ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
           row.appendChild(this.btn(prog ? '💵 Sell ' + money(sell) : ic('trash', 'inl') + 'Remove', 'red', () => { if (prog && !confirm(`Sell the ${m.spec.brand} ${m.spec.model} for ${money(sell)}?`)) return; g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, m.driver >= 0 && m.driver !== g.myId));
           body.appendChild(row);
         }
@@ -327,6 +327,11 @@ export class UI {
     const row = document.createElement('div'); row.className = 'btn-row'; row.style.flexDirection = 'column';
     row.appendChild(this.btn('▶ Resume', '', () => this.close('menu')));
     row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
+    const inc = g.incidents;
+    if (!g.net.isClient) {
+      if (inc.state) row.appendChild(this.btn('🚨 Hand this accident to another crew', 'alt', () => { g.act('incident', { op: 'skip' }); this.close('menu'); }));
+      else row.appendChild(this.btn(`🚨 Report an accident now (next in ${Math.floor(inc.nextT / 60)}:${String(Math.floor(inc.nextT % 60)).padStart(2, '0')})`, 'alt', () => { g.act('incident', { op: 'start' }); this.close('menu'); }));
+    }
     if (g.prog) row.appendChild(this.btn('🔄 Start over', 'red', () => this.progReset()));
     else row.appendChild(this.btn('🔄 New world', 'red', () => { if (confirm('Start a fresh world? (unsaved progress is lost)')) { g.act('newWorld', {}); this.close('menu'); } }, g.net.isClient));
     row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (g.prog) { g.progSave(); location.reload(); } else if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
@@ -488,7 +493,7 @@ export class UI {
       $('vhName').textContent = machine.spec.brand + ' ' + machine.spec.model;
       $('vhImg').src = THUMB(machine.spec.id);
       $('vhToolLbl').textContent = machine.frontFrame ? 'Front bucket' : { grapple: 'Grapple', shear: 'Shear', orangepeel: 'Grab', pulverizer: 'Jaws', breaker: 'Hammer', skip: 'Gate', bucket: 'Bucket', bigbucket: 'Bucket', minibucket: 'Bucket', tank: 'Tank', claw: 'Claw', crusher: 'Crusher', brickclamp: 'Clamp', magnet: 'Magnet', xball: 'Chain', blaster: 'Vacuum', cutter: 'Drums', saw: 'Saw', auger: 'Drill', plate: 'Plate', forks: 'Forks', jet: 'Jet' }[machine.spec.attach]
-        || { roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball', truck: 'Body', painter: 'Paint' }[machine.family] || 'Tool';
+        || { car: 'Pickup', roller: 'Vibration', paver: 'Paving', loader: 'Bucket', dozer: 'Blade', dumper: 'Skip', crane: 'Wrecking ball', truck: 'Body', painter: 'Paint' }[machine.family] || 'Tool';
     }
     $('keyHints').innerHTML = mode === 'machine'
       ? '<kbd>W</kbd><kbd>S</kbd> drive · <kbd>A</kbd><kbd>D</kbd> steer<br>' + (this.machineHint || '') + '<br><kbd>C</kbd> camera · <kbd>E</kbd> exit'
@@ -509,7 +514,7 @@ export class UI {
     const a = m.att, b = a.behaviour, on = m.openTarget > 0.5;
     const st = { breaker: on ? 'ON' : 'OFF', crusher: on ? 'CRUSHING' : 'OFF', roller: on ? 'VIBRATING' : 'OFF', paver: on ? 'PAVING' : 'OFF', skip: m.open > 0.5 ? 'OPEN' : 'CLOSED',
       scoop: m.payload.kg ? m.payload.kind : m.held.length ? 'loaded' : 'empty', blade: 'ready',
-      magnet: on ? 'ON' : 'OFF', xball: on ? 'LONG CHAIN' : 'SHORT CHAIN', blaster: on ? 'SUCKING' : 'OFF', cutter: on ? 'CUTTING' : 'OFF', saw: on ? 'SPINNING' : 'OFF', auger: on ? 'DRILLING' : 'OFF', plate: on ? 'VIBRATING' : 'OFF', forks: on ? 'LOCKED' : 'FREE', jet: on ? 'SPRAYING' : 'OFF', bed: 'ready', paint: (on ? 'SPRAYING ' : '') + paintOf(m)[0], ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
+      magnet: on ? 'ON' : 'OFF', xball: on ? 'LONG CHAIN' : 'SHORT CHAIN', blaster: on ? 'SUCKING' : 'OFF', cutter: on ? 'CUTTING' : 'OFF', saw: on ? 'SPINNING' : 'OFF', auger: on ? 'DRILLING' : 'OFF', plate: on ? 'VIBRATING' : 'OFF', forks: on ? 'LOCKED' : 'FREE', jet: on ? 'SPRAYING' : 'OFF', bed: 'ready', car: 'ready', paint: (on ? 'SPRAYING ' : '') + paintOf(m)[0], ball: m.ballSt ? m.ballSt.v.length().toFixed(1) + ' m/s' : '—' }[b];
     $('vhGrab').textContent = m.frontFrame ? (m.openTarget > 0.5 ? 'TIPPED' : 'READY') + ' · ' + (m.rot > 0.45 ? 'UP' : 'DOWN') : st ?? (m.open > 0.5 ? 'OPEN' : 'CLOSED');
     if (a.cap || m.magSlots) {
       const n = m.magSlots ? (m.held2 || []).length : m.held.length, c = m.magSlots ? m.magSlots.length : a.cap;

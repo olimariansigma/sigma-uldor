@@ -436,6 +436,7 @@ function buildTrees(scene, M) {
     if (Math.abs(x + 128) < 9 && (Math.abs(z + 20) < 8 || Math.abs(z + 70) < 8)) continue;
     if (Math.abs(x - 116) < 9 && (Math.abs(z + 30) < 8 || Math.abs(z + 90) < 8)) continue;
     const bp = SITE.buildPlot; if (Math.abs(x - bp.x) < bp.w / 2 + 5 && Math.abs(z - bp.z) < bp.d / 2 + 5) continue; // keep the build plot clear
+    if (SITE.incidents.some((s) => Math.abs(x - s.x) < 18 && Math.abs(z - s.z) < 14)) continue; // and the accident sites
     spots.push([x, z, 0.8 + r() * 0.6, r() * Math.PI * 2, Math.floor(r() * 4)]);
   }
   variants.forEach((v, vi) => {

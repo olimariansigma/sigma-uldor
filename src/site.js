@@ -19,6 +19,14 @@ export const SITE = {
   playerSpawn: V(-2, 0.2, -30),
   machineYard: V(-26, 0, 6),
   terrainSize: 320, terrainSeg: 160,
+  // accident sites outside the yard: a garden wall along x, the crash comes from +z (the street side)
+  incidents: [
+    { x: 93, z: 57, name: 'Maple Close (east)' },
+    { x: -84, z: 57, name: 'Birch Lane (west)' },
+    { x: 134, z: 2, name: 'East Fields' },
+    { x: -140, z: 6, name: 'West Fields' },
+  ],
+  carSpawn: V(21.5, 0, 19.5),
 };
 
 // terrain height (0 everywhere except the lake bowl)

@@ -55,6 +55,8 @@ export class TypeRegistry {
     def('brickY', { parts: [{ geo: unit, mat: M.brickYellow }], tint: true, value: 2, hp: 2, hang: 0.75, dust: 0xb9a07a, chip: 0xc8a46a });
     def('block', { parts: [{ geo: unit, mat: M.block }], tint: true, value: 3, hp: 3, hang: 0.75, dust: 0x9a9890, chip: 0x8a8882 });
     def('plaster', { parts: [{ geo: unit, mat: plaster }], tint: true, value: 2, hp: 2, hang: 0.75, dust: 0xd8d4ca, chip: 0xe8e4da });
+    // crashed vehicle panels (planes, cars): light, painted, clang when hit
+    def('wreck', { parts: [{ geo: unit, mat: new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.42, metalness: 0.3 }) }], tint: true, kgm3: 160, value: 3, hp: 2, hang: 1.2, density: 0.6, sound: 'metal', dust: 0x9aa0a6, chip: 0xd0d4d8 });
     def('concrete', { parts: [{ geo: unit, mat: M.concrete }], kgm3: 2300, value: 3, hp: 3, hang: 1.0, dust: 0xaaa8a0, chip: 0x9a9890 });
     def('roof', { kgm3: 180, parts: [{ geo: unit, mat: [M.fascia, M.fascia, M.shingles, M.soffit, M.fascia, M.fascia] }], value: 2, hp: 1, hang: 3.2, stiff: 0.25, density: 0.9, sound: 'wood', dust: 0x6a6a6a, chip: 0x3a3c40 });
     def('metalroof', { kgm3: 90, parts: [{ geo: unit, mat: [M.galvanized, M.galvanized, M.metalRoof, M.timber, M.galvanized, M.galvanized] }], value: 3, hp: 1, hang: 3.6, stiff: 0.25, density: 0.8, sound: 'metal', dust: 0x9a9a9a, chip: 0xa0a8b0 });

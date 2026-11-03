@@ -17,7 +17,7 @@ export const UPGRADES = {
   carry: { name: 'Carry capacity', icon: '💪', max: 8, price: (l) => 250 + l * 200, label: (l) => (4 + l * 2) + ' blocks' },
   crusher: { name: 'Crusher speed', icon: '⚙️', max: 9, price: (l) => 400 + l * 300, label: (l) => (3 + l) + ' blocks/s' },
 };
-const NOT_SOLD = new Set(['lp20', 'ap600', 'cr64']); // road machines: no potholes in this mode
+const NOT_SOLD = new Set(['lp20', 'ap600', 'cr64', 'pk1']); // road machines: no potholes in this mode
 
 // a machine's price: by weight, special tools a bit dearer, trucks by size
 export function machinePrice(sp) {
@@ -82,7 +82,7 @@ export class Progression {
 
   // what you crush and lay, counted every quarter second
   counters() {
-    let laid = 0; for (const p of this.g.demo.pieces) if (p.brick && p.state === 0) laid++;
+    let laid = 0; const inc = this.g.incidents; for (const p of this.g.demo.pieces) if (p.brick && p.state === 0 && !(inc && inc.atSite(p.pos))) laid++;
     return { crushed: this.g.crusher.totalKg, laid };
   }
   resync() { this.snap = this.counters(); }

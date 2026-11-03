@@ -24,6 +24,7 @@ import { Mixer } from './mixer.js';
 import { Road } from './road.js';
 import { Machine, MACHINES, BASE_MACHINES, controlsFor } from './machines.js';
 import { Contracts } from './contracts.js';
+import { Incidents, CAR_SPEC } from './incidents.js';
 import { Progression, machinePrice, BUILDING_PRICE, TOOLS, PROG_KEY } from './progression.js';
 import { machineInteract, releaseAll, heldWorld } from './machineLogic.js';
 import { Showroom } from './showroom.js';
@@ -140,6 +141,7 @@ class Game {
     this.input.sensitivity = this.prefs.sens; this.input.invertY = this.prefs.invert;
     this.ui = new UI(this);
     this.contracts = new Contracts(this);
+    this.incidents = new Incidents(this);
     this.input.onPad = (id) => { document.body.classList.toggle('pad', !!id); if (id) this.ui.toast('🎮 Controller connected. <b>Start</b> menu · <b>Back</b> help (controls are listed there)', true, 5000); else this.ui.toast('🎮 Controller disconnected'); };
     this.showroom = new Showroom(this);
     this.newWorld();
@@ -400,6 +402,8 @@ class Game {
 
   // ======================================================================= world construction
   buildBuilding(defId, plot) {
+    // accident sites: a garden wall with a hole and the wreck in it (see incidents.js)
+    if (typeof defId === 'string' && defId.startsWith('__inc')) return this.demo.addBuilding(defId, -1, this.incidents.specs(defId), 0, 3);
     if (defId === RUBBLE) return this.demo.addRubblePool();
     if (defId === BRICKS) return this.demo.addBrickPool();
     const def = BUILDINGS.find((b) => b.id === defId);
@@ -517,6 +521,7 @@ class Game {
     this.buildBuilding('bungalow', 0);
     this.buildBuilding(RUBBLE, -1);
     this.buildBuilding(BRICKS, -1);
+    this.ensureCar();
     this.player.teleport(this.spawnPoint());
   }
   progIntro() {
@@ -548,7 +553,14 @@ class Game {
     add('cr64', 4, 21, Math.PI / 2);
     add('tk410', -10, -8, Math.PI / 2);
     add('lp20', 15, 19.5, Math.PI / 2);
+    this.ensureCar();
     this.player.teleport(this.spawnPoint());
+  }
+  // the yard pickup is always there (it is how you get to accidents)
+  ensureCar() {
+    if ([...this.machines.values()].some((m) => m.family === 'car')) return;
+    const m = this.createMachine(CAR_SPEC, this.nextMachineId, SITE.carSpawn.clone(), 0);
+    this.events.push(['mach+', m.serialize()]);
   }
 
   clearWorld() {
@@ -566,6 +578,7 @@ class Game {
     this.road.restore([]);
     this.slabs.clear();
     this.nextMachineId = 1;
+    if (this.incidents) this.incidents.clear();
     for (const p of this.players.values()) p.bucket.kind = null;
     this.bucket.kind = null; this.bucket.kg = 0;
   }
@@ -585,6 +598,7 @@ class Game {
       charges: forSave ? [] : this.charges.pack(),
       press: this.press.serialize(),
       splashes: this.builder.pack(),
+      incidents: this.incidents.serialize(),
     };
   }
 
@@ -625,6 +639,8 @@ class Game {
     this.crusher.rate = this.settings.crusher;
     this.press.restore(w.press);
     this.builder.restore(w.splashes);
+    this.incidents.restore(w.incidents);
+    if (!mirror) this.ensureCar();
     if (typeof w.time === 'number') this.dn.p = w.time;
     if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); if (w.weather) this.weather.setState(w.weather); }
     this.dn.apply();
@@ -728,6 +744,18 @@ class Game {
         this.events.push(['mortar', this.builder.pack()]);
         break;
       }
+      case 'siteMortar': {
+        const mp = this.incidents.mortarPoint(), at = pid === this.myId ? this.player.pos : pl && (pl.target || pl.pos);
+        if (!mp || !at || Math.hypot(at.x - mp.x, at.z - mp.z) > 4) return;
+        this.setCement(pid, TROWEL, new THREE.Color(0x9a968c));
+        this.tell(pid, '🪣 Trowel full of mortar. Tool <b>2</b>: click where each block goes, then lay it with tool <b>4</b>', true);
+        break;
+      }
+      case 'incident': {
+        if (pid !== this.myId) return;
+        if (d.op === 'start') this.incidents.start(d.kind || null); else if (d.op === 'skip') this.incidents.cancel();
+        break;
+      }
       case 'scrape': {
         // remove tool: take a splash of mortar away, or knock a laid block loose (pick it up or crush it after)
         if (!pl || !Array.isArray(d.point)) return;
@@ -806,7 +834,7 @@ class Game {
         const m = this.machines.get(d.id); if (!m) return;
         if (m.driver >= 0 && m.driver !== pid) return;
         if (m.driver >= 0) { const dp = this.players.get(m.driver); if (dp) dp.driving = -1; }
-        if (this.prog) { const back = Math.round(machinePrice(m.spec) / 2 / 50) * 50; this.prog.earn(back, false); this.tell(pid, '💵 Sold the ' + m.spec.brand + ' ' + m.spec.model + ' for ' + fmtMoney(back), true); }
+        if (this.prog) { const back = m.family === 'car' || m.siteTruck ? 0 : Math.round(machinePrice(m.spec) / 2 / 50) * 50; this.prog.earn(back, false); this.tell(pid, '💵 Sold the ' + m.spec.brand + ' ' + m.spec.model + ' for ' + fmtMoney(back), true); }
         this.destroyMachine(m.id);
         if (this.prog) setTimeout(() => this.progSave(), 50);
         this.events.push(['mach-', d.id]);
@@ -1258,6 +1286,7 @@ class Game {
       case 'chg': this.charges.restore(e[1]); break;
       case 'press': this.press.restore(e[1]); break;
       case 'mortar': this.builder.restore(e[1]); break;
+      case 'inc': this.incidents.restore(e[1]); break;
       case 'boom': this.boomFx(new THREE.Vector3(e[1], e[2], e[3])); break;
       case 'horn': this.setHorn(e[1], e[2]); break;
       case 'party': this.party(e[1]); break;
@@ -1414,6 +1443,9 @@ class Game {
     const mine = this.charges.mine(this.myId).length;
     if (mine && this.charges.armed(this.myId)) return { text: '🧨 Get clear, the charges are about to blow!' };
     if (mine && this.tool === 'charges') return { text: `${key('E')}Detonate ${mine} charge${mine > 1 ? 's' : ''} 🧨`, label: 'BOOM', run: () => this.act('detonate', {}) };
+    // accident site: free mortar from the tub
+    const mp0 = this.incidents.mortarPoint();
+    if (mp0 && Math.hypot(p.x - mp0.x, p.z - mp0.z) < 2.4) return { text: `${key('E')}Fill your trowel with mortar (free on site)`, label: 'MORTAR', run: () => this.act('siteMortar', {}) };
     // machines
     let best = null, bd = 1e9;
     for (const m of this.machines.values()) {
@@ -1737,6 +1769,7 @@ class Game {
     this.traffic.update(dt);
     this.comboUpdate(dt);
     this.contracts.update(dt);
+    this.incidents.update(dt);
     if (this.prog) this.prog.update(dt);
     this.careerT = (this.careerT || 0) - dt; if (this.careerT <= 0) { this.careerT = 0.5; this.ui.setCareer(); }
     this.builder.update(dt);

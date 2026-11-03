@@ -592,3 +592,46 @@ export function buildPainter(m) {
     apply(mm) { for (const h of mm.steerWheels) h.rotation.y = mm.steerVis; mm.paintMat.color.setHex(paintOf(mm)[1]); } };
   m.defaults = { boom: 0, stick: 0, curl: 0 };
 }
+
+// --------------------------------------------------------------------------- site pickup (the yard's car)
+// A double-wheel-arch utility pickup: bonnet, crew cab, open bed with side rails, amber light bar. Quick on the road:
+// it is how you get to accidents outside the yard.
+export function buildPickup(m) {
+  const K = m.mats, U = new THREE.Group(); m.model.add(U); m.under = U; m.upper = U;
+  const R = 0.42, RR = 0.27, ZF = 1.55, ZR = -1.4, TX = 0.86;
+  const tg = tyreLathe(R, 0.3, RR, { lugs: 22, style: 'block' }), rw = wheelRim(RR, 0.28, { dish: 0.06, vents: 6 });
+  for (const z of [ZF, ZR]) for (const s of [-1, 1]) {
+    const hub = new THREE.Group(); hub.position.set(s * TX, R, z); U.add(hub);
+    const spin = new THREE.Group(); hub.add(spin);
+    add(spin, tg, K.rubber);
+    const rm = add(spin, rw.rim, K.grey, false), rv = add(spin, rw.vents, K.black, false);
+    if (s < 0) { rm.rotation.y = Math.PI; rv.rotation.y = Math.PI; }
+    m.wheels.push(spin); if (z > 0) m.steerWheels.push(hub);
+    add(U, fender(z, R, R + 0.08, 0.2, Math.PI - 0.2, 0.36, s * (TX + 0.06)), K.black);
+  }
+  // chassis, axles, lower body with sills
+  add(U, mergeG([rbox(0.9, 0.18, 4.6, 0.03, 0, 0.5, 0.05), pinX(0.06, 1.6, 0, R, ZF), pinX(0.07, 1.6, 0, R, ZR)]), K.under);
+  add(U, mergeG([rbox(1.86, 0.5, 4.9, 0.09, 0, 0.86, 0.05), rbox(1.9, 0.12, 2.0, 0.04, 0, 0.66, 0.1)]), K.paint);
+  // bonnet, grille, headlights, bumper
+  add(U, mergeG([rbox(1.8, 0.32, 1.3, 0.08, 0, 1.25, 1.75, -0.06)]), K.paint);
+  grille(U, 1.1, 0.3, 0, 1.0, 2.5, 0, 14);
+  for (const s of [-1, 1]) { add(U, rbox(0.34, 0.14, 0.06, 0.03, s * 0.66, 1.08, 2.49), K.black); add(U, bx(0.28, 0.1, 0.01, s * 0.66, 1.08, 2.525), K.lens, false).userData.keep = true; }
+  add(U, mergeG([rbox(1.96, 0.24, 0.26, 0.06, 0, 0.66, 2.48), rbox(1.96, 0.22, 0.24, 0.06, 0, 0.66, -2.4)]), K.dark);
+  add(U, mergeG([-1, 1].map((s) => rbox(0.16, 0.26, 0.05, 0.02, s * 0.84, 1.0, -2.42))), K.red, false);
+  // crew cab with glass, seat and wheel (the shared cab), roof light bar
+  modernCab(m, U, 0, 0.82, 0.48, { w: 1.82, d: 1.5, h: 1.45, door: 1 });
+  add(U, mergeG([rbox(1.2, 0.1, 0.22, 0.04, 0, 2.38, 0.6)]), K.black);
+  add(U, mergeG([-0.4, -0.13, 0.13, 0.4].map((x) => cy(0.06, 0.06, 0.12, 12, x, 2.46, 0.6))), K.amber, false);
+  // open bed: floor, sides, tailgate, headache rack
+  add(U, mergeG([rbox(1.78, 0.08, 2.1, 0.02, 0, 1.12, -1.3), ...[-1, 1].map((s) => rbox(0.08, 0.42, 2.1, 0.02, s * 0.86, 1.36, -1.3)), rbox(1.78, 0.42, 0.08, 0.02, 0, 1.36, -2.33)]), K.paint);
+  add(U, mergeG([...[-1, 1].map((s) => cy(0.03, 0.03, 0.7, 8, s * 0.8, 1.9, -0.28)), cy(0.03, 0.03, 1.6, 8, 0, 2.25, -0.28, 0, 0, Math.PI / 2)]), K.black);
+  for (const s of [-1, 1]) { const l = label(m.spec.brand, 0.9, 0.2, '#15171a'); l.position.set(s * 0.94, 0.95, -1.2); l.rotation.y = s * Math.PI / 2; U.add(l); }
+  m.door = anchor(U, 1.3, 0, 0.5);
+  m.attach = U; m.att = attStub('car', { grab: anchor(U, 0, 1.2, -1.3) }); m.grabPoint = m.att.grab;
+  m.colliderSets.push({ obj: U, boxes: [[0, 1.0, 0.05, 1.95, 1.1, 4.95], [0, 1.7, 0.48, 1.8, 0.9, 1.5]], chassis: true });
+  m.radius = 2.8;
+  m.bakeList.push(U);
+  m.rig = { family: 'car', drive: 'car', wheelbase: ZF - ZR, accel: 6.5, brake: 10, maxLat: 7, swing: false, limits: {}, rates: {},
+    apply(mm) { for (const h of mm.steerWheels) h.rotation.y = mm.steerVis; } };
+  m.defaults = { boom: 0, stick: 0, curl: 0 };
+}

@@ -24,6 +24,7 @@ import { Mixer } from './mixer.js';
 import { Road } from './road.js';
 import { Machine, MACHINES, BASE_MACHINES, controlsFor } from './machines.js';
 import { Contracts } from './contracts.js';
+import { Progression, machinePrice, BUILDING_PRICE, TOOLS, PROG_KEY } from './progression.js';
 import { machineInteract, releaseAll, heldWorld } from './machineLogic.js';
 import { Showroom } from './showroom.js';
 import { Slabs, SLAB, SLAB_KG } from './slabs.js';
@@ -37,6 +38,7 @@ import { Net } from './net.js';
 
 const PREFIX = 'wreckingyard.v2.';
 const $ = (id) => document.getElementById(id);
+const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('en-US');
 const frame = () => new Promise((r) => requestAnimationFrame(() => setTimeout(r, 0)));
 const clamp = THREE.MathUtils.clamp;
 const BUCKET = 50;
@@ -177,6 +179,7 @@ class Game {
     $('nameInput').value = this.myName;
     this.startTitleScene();
     const start = () => {
+      if (this.started) return; this.started = true;
       this.titleLive = false;
       this.setName($('nameInput').value);
       $('title').classList.add('hidden'); $('hud').classList.remove('hidden');
@@ -202,6 +205,10 @@ class Game {
       if (!this.running) { this.running = true; requestAnimationFrame((t) => this.loop(t)); }
     };
     $('playBtn').addEventListener('click', start, { once: true });
+    // progression: its own world and wallet
+    let pv = null; try { pv = JSON.parse(localStorage.getItem(PROG_KEY)); } catch (e) { pv = null; }
+    if (pv) $('progSub').textContent = 'continue · ' + fmtMoney(pv.money);
+    $('progBtn').addEventListener('click', () => { if (this.started) return; this.startProgression(); start(); this.progIntro(); }, { once: true });
     $('titleJoin').addEventListener('click', async () => {
       const code = $('titleCode').value.trim();
       if (code.length < 6) { $('titleMsg').textContent = 'Enter the 6-letter code from your friend'; return; }
@@ -484,6 +491,38 @@ class Game {
     return null;
   }
 
+  // ---- progression mode
+  startProgression() {
+    this.prog = new Progression(this);
+    document.body.classList.add('prog');
+    this.road.noHoles = true;
+    let w = null; try { w = JSON.parse(localStorage.getItem(PREFIX + 'slot.prog')); } catch (e) { w = null; }
+    if (w && !this.prog.fresh) { this.loadWorld(w, { forSave: true }); this.player.teleport(this.spawnPoint()); }
+    else this.newProgWorld();
+    this.road.restore([]); // never any potholes here
+    this.prog.apply(); this.prog.resync();
+    $('spawnBtn').title = 'Shop (B)'; $('spawnBtn').querySelector('span').textContent = 'Shop';
+    const save = () => this.progSave();
+    window.addEventListener('pagehide', save); document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+  }
+  progSave() { if (this.prog && !this.prog.dead) { this.saveSlot('prog', true); this.prog.save(); } }
+  newProgWorld() {
+    this.clearWorld();
+    this.dn.p = MORNING; this.dn.apply();
+    this.buildBuilding('bungalow', 0);
+    this.buildBuilding(RUBBLE, -1);
+    this.buildBuilding(BRICKS, -1);
+    this.player.teleport(this.spawnPoint());
+  }
+  progIntro() {
+    const t = this.input.touch;
+    if (this.prog.fresh) {
+      this.ui.toast('🔨 <b>Progression</b>: you start with just a hammer and ' + fmtMoney(this.prog.money) + '. Smash the bungalow, ' + (t ? 'pick blocks up' : 'pick blocks up with <b>Q</b>') + ' and ' + (t ? 'throw them' : 'throw them (<b>G</b>)') + ' into the crusher: every kg crushed pays $3', true, 10000);
+      setTimeout(() => this.ui.toast('🛒 Open the <b>Shop</b> (' + (t ? 'Spawn button' : '<b>B</b>') + ') to buy tools, machines and new buildings to knock down', true, 7000), 10200);
+      setTimeout(() => this.ui.toast('🏠 Later: press the dust into blocks and build your own house across the road. Every block pays $30 and house milestones pay big bonuses. Help (<b>H</b>) explains how', true, 8000), 17500);
+    } else this.ui.toast('🔨 Progression: welcome back! ' + fmtMoney(this.prog.money) + ' in the bank', true, 5000);
+  }
+
   // default sandbox world
   newWorld() {
     this.clearWorld();
@@ -738,8 +777,10 @@ class Game {
         const fwd = new THREE.Vector3(-Math.sin(d.yaw + Math.PI), 0, -Math.cos(d.yaw + Math.PI));
         const spot = this.findMachineSpot(near.clone().addScaledVector(fwd, 7 * Math.max(0.7, spec.scale)), spec);
         if (!spot) { this.tell(pid, '⚠️ No free space nearby. Try somewhere more open.'); return; }
+        if (this.prog && pid === this.myId && !this.prog.spend(machinePrice(spec), 'The ' + spec.brand + ' ' + spec.model)) return;
         const m = this.createMachine(spec.id, this.nextMachineId, spot, Math.atan2(near.x - spot.x, near.z - spot.z) + Math.PI);
         this.events.push(['mach+', m.serialize()]);
+        if (this.prog) this.progSave();
         this.tell(pid, `${spec.icon} ${spec.name} delivered!`, true);
         break;
       }
@@ -747,11 +788,14 @@ class Game {
         const m = this.machines.get(d.id); if (!m) return;
         if (m.driver >= 0 && m.driver !== pid) return;
         if (m.driver >= 0) { const dp = this.players.get(m.driver); if (dp) dp.driving = -1; }
+        if (this.prog) { const back = Math.round(machinePrice(m.spec) / 2 / 50) * 50; this.prog.earn(back, false); this.tell(pid, '💵 Sold the ' + m.spec.brand + ' ' + m.spec.model + ' for ' + fmtMoney(back), true); }
         this.destroyMachine(m.id);
+        if (this.prog) setTimeout(() => this.progSave(), 50);
         this.events.push(['mach-', d.id]);
         break;
       }
       case 'spawnBuilding': case 'clearPlot': {
+        if (this.prog && name === 'spawnBuilding' && !this.prog.spend(BUILDING_PRICE, 'A new building')) return;
         const old = this.plots[d.plot];
         for (const p of this.players.values()) if (old != null) this.dropCarried(p.id, (q) => q.b === old);
         if (old != null) { this.removeBuildingFull(old); this.events.push(['bld-', old]); }
@@ -873,6 +917,7 @@ class Game {
     this.ui.setHotbar();
   }
   selectTool(t) {
+    if (this.prog && !this.prog.has(t)) { const T = TOOLS[t]; this.ui.toast('🔒 The ' + T.name + ' is in the Shop (' + (this.input.touch ? 'Spawn button' : 'B') + ') for ' + fmtMoney(T.price)); this.audio.denied(); return; }
     if (t === 'build' && this.tool === 'build') { this.builder.rot ^= 1; return; } // tap again to turn the block
     if (t === 'build' && this.tool !== 'build' && !this.carriedBy(this.myId).some((p) => p.brick)) this.ui.toast('🧱 Build: carry pressed blocks (<b>Q</b> at the brick press pallet), trowel a splash of mortar on the slab across the road, then click to lay a block on it. <b>R</b> turns it.', true, 7000);
     if (t === 'trowel' && !(this.players.get(this.myId).cement.kg > 0)) { this.ui.toast('🪣 No cement on the trowel. Take some from the mixer first.'); return; }
@@ -1627,6 +1672,7 @@ class Game {
     this.traffic.update(dt);
     this.comboUpdate(dt);
     this.contracts.update(dt);
+    if (this.prog) this.prog.update(dt);
     this.careerT = (this.careerT || 0) - dt; if (this.careerT <= 0) { this.careerT = 0.5; this.ui.setCareer(); }
     this.builder.update(dt);
     if (auth) {
@@ -1648,7 +1694,7 @@ class Game {
     }
     if (auth) {
       this.autoTimer = (this.autoTimer || 60) - dt;
-      if (this.autoTimer <= 0) { this.autoTimer = 60; this.saveSlot('auto', true); }
+      if (this.autoTimer <= 0) { this.autoTimer = 60; if (this.prog) this.progSave(); else this.saveSlot('auto', true); }
     }
   }
 

@@ -274,9 +274,11 @@ function auger(m, dt, W) {
       m.roadHits = m.roadHits || new Map();
       const n = (m.roadHits.get(k) || 0) + 1; m.roadHits.set(k, n);
       if (n === 12 && W.road.nearest(tip, 0.5, false) < 0 && W.road.onRoad(tip.x, tip.z - 1) && W.road.onRoad(tip.x, tip.z + 1)) {
-        W.road.addHole(tip.x, tip.z, 0.85 + Math.random() * 0.3); W.onRoad(true);
-        W.sfx.dust(tip, 0x6a6a68, 5, 0.9);
-        W.tellDriver(m, '🌪️ Drilled a new pothole!');
+        if (W.road.addHole(tip.x, tip.z, 0.85 + Math.random() * 0.3)) {
+          W.onRoad(true);
+          W.sfx.dust(tip, 0x6a6a68, 5, 0.9);
+          W.tellDriver(m, '🌪️ Drilled a new pothole!');
+        }
       }
     }
   }

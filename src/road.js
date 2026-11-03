@@ -27,6 +27,7 @@ export class Road {
   onRoad(x, z) { return z > SITE.streetZ - 1.3 && z < SITE.streetZ + 7.3 && Math.abs(x) < 240; }
 
   addHole(x, z, r, filled = 0, color = null, dry = 1, comp = 0) {
+    if (this.noHoles) return null; // progression mode: no potholes
     const hole = new THREE.Mesh(this.geo, new THREE.MeshStandardMaterial({ map: this.holeTex, transparent: true, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -3 }));
     hole.scale.set(r * 2.3, 1, r * 2.3); hole.rotation.y = Math.random() * 6;
     hole.position.set(x, ROAD_Y, z); hole.receiveShadow = true; hole.renderOrder = 1;

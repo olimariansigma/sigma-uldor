@@ -7,6 +7,7 @@ import { ic, iconize, fillIcons } from './icons.js';
 import { MAX_CHARGES } from './fun.js';
 import { paintOf } from './mx-vehicles.js';
 import { RANKS, money } from './contracts.js';
+import { TOOLS, UPGRADES, machinePrice, forSale, BUILDING_PRICE, Progression } from './progression.js';
 
 const $ = (id) => document.getElementById(id);
 const PANELS = ['spawn', 'multi', 'save', 'mixerPanel', 'help', 'settings', 'menu', 'contracts'];
@@ -62,6 +63,7 @@ export class UI {
   toggle(id) { if ($(id).classList.contains('hidden')) this.open(id); else this.close(id); }
   syncOpen() { document.body.classList.toggle('panel-open', PANELS.some((o) => !$(o).classList.contains('hidden'))); }
   open(id) {
+    if (id === 'multi' && this.game.prog) { this.toast('🔨 Progression is a solo career. Play together in <b>Sandbox</b> mode (main menu)'); return; }
     for (const o of PANELS) if (o !== id) $(o).classList.add('hidden');
     $(id).classList.remove('hidden');
     this.syncOpen();
@@ -89,19 +91,22 @@ export class UI {
   // ------------------------------------------------------------------ spawn menu
   renderSpawn() {
     const g = this.game;
+    const prog = g.prog;
     document.querySelectorAll('#spawn .tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === this.tab));
+    document.querySelector('#spawn .panel-head h2').innerHTML = prog ? `Shop <span class="wallet">${money(prog.money)}</span>` : 'Sandbox';
     const body = $('spawnBody'); body.innerHTML = '';
     if (this.tab === 'machines') {
       const n = g.machines.size;
-      const head = document.createElement('div'); head.className = 'sect'; head.textContent = `Machines on site ${n} / 20 · tap one to inspect it in 3D`;
+      const head = document.createElement('div'); head.className = 'sect'; head.textContent = prog ? `Your machines ${n} / 20 · tap one to look at it in 3D and buy it` : `Machines on site ${n} / 20 · tap one to inspect it in 3D`;
       body.appendChild(head);
       let lastFam = null, grid = null;
-      for (const sp of BASE_MACHINES) {
+      const list = prog ? BASE_MACHINES.filter(forSale) : BASE_MACHINES;
+      for (const sp of list) {
         const famOf = (x) => x.family === 'excavator' ? 'Excavators' : x.family === 'truck' ? 'Tipper trucks' : 'Road & site machines';
         const fam = famOf(sp);
         if (fam !== lastFam) {
           lastFam = fam;
-          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${BASE_MACHINES.filter((x) => famOf(x) === fam).length})`; body.appendChild(h);
+          const h = document.createElement('div'); h.className = 'sect'; h.textContent = fam + ` (${list.filter((x) => famOf(x) === fam).length})`; body.appendChild(h);
           grid = document.createElement('div'); grid.className = 'cards'; body.appendChild(grid);
         }
         const info = machineInfo(sp);
@@ -109,15 +114,17 @@ export class UI {
         c.innerHTML = `<div class="shot"><img src="${THUMB(sp.id)}" alt="" loading="lazy" draggable="false"></div>
           <span class="chip">${info.tool}</span><span class="paint" style="background:#${new THREE.Color(sp.paint).getHexString()}"></span>
           <div class="meta"><div class="brand">${sp.brand}</div><div class="model">${sp.model}</div><div class="desc">${info.type} · ${info.tons} t</div></div>`;
+        if (prog) { const pr = machinePrice(sp); c.insertAdjacentHTML('beforeend', `<span class="price${prog.canAfford(pr) ? '' : ' poor'}">${money(pr)}</span>`); }
         c.addEventListener('click', () => this.openShowroom(sp.id));
         grid.appendChild(c);
       }
       if (n) {
-        const h2 = document.createElement('div'); h2.className = 'sect'; h2.style.marginTop = '16px'; h2.textContent = 'On site now'; body.appendChild(h2);
+        const h2 = document.createElement('div'); h2.className = 'sect'; h2.style.marginTop = '16px'; h2.textContent = prog ? 'Your machines (sell them back for half price)' : 'On site now'; body.appendChild(h2);
         for (const m of g.machines.values()) {
           const row = document.createElement('div'); row.className = 'slot';
           row.innerHTML = `<img class="thumb" src="${THUMB(m.spec.id)}" alt=""><div class="info"><b>${m.spec.brand} ${m.spec.model}</b><br>${m.driver >= 0 ? ic('user', 'inl') + 'driven by ' + g.playerName(m.driver) : 'parked'}</div>`;
-          row.appendChild(this.btn(ic('trash', 'inl') + 'Remove', 'red', () => { g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, m.driver >= 0 && m.driver !== g.myId));
+          const sell = prog ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
+          row.appendChild(this.btn(prog ? '💵 Sell ' + money(sell) : ic('trash', 'inl') + 'Remove', 'red', () => { if (prog && !confirm(`Sell the ${m.spec.brand} ${m.spec.model} for ${money(sell)}?`)) return; g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, m.driver >= 0 && m.driver !== g.myId));
           body.appendChild(row);
         }
       }
@@ -126,17 +133,42 @@ export class UI {
       const status = document.createElement('div'); status.className = 'sect';
       status.textContent = plots.map((p, i) => `${p}: ${g.plotName(i)}`).join(' · ');
       body.appendChild(status);
+      if (prog) { const p = document.createElement('div'); p.className = 'sect'; p.innerHTML = `A new building to knock down costs <b>${money(BUILDING_PRICE)}</b> (it replaces what stands on that plot). Crushing it pays it back and more.`; body.appendChild(p); }
+      const poor = prog && !prog.canAfford(BUILDING_PRICE);
       const grid = document.createElement('div'); grid.className = 'cards';
       for (const b of BUILDINGS) {
         const c = document.createElement('div'); c.className = 'mcard';
         c.innerHTML = `<div class="shot photo"><img src="thumbs/b_${b.id}.jpg" alt="" loading="lazy" draggable="false"></div><div class="meta"><div class="model">${b.name}</div><div class="desc">${b.desc}</div></div>`;
         const row = document.createElement('div'); row.className = 'row';
-        ['A', 'B', 'C'].forEach((n, i) => row.appendChild(this.btn(n, i === 1 ? 'alt' : '', () => { g.act('spawnBuilding', { def: b.id, plot: i }); this.close('spawn'); })));
+        ['A', 'B', 'C'].forEach((n, i) => row.appendChild(this.btn(n, i === 1 ? 'alt' : '', () => { if (prog && !confirm(`Buy the ${b.name} for ${money(BUILDING_PRICE)} on plot ${n}?`)) return; g.act('spawnBuilding', { def: b.id, plot: i }); this.close('spawn'); }, poor)));
         c.appendChild(row); grid.appendChild(c);
       }
       body.appendChild(grid);
       const row = document.createElement('div'); row.className = 'btn-row';
       ['A', 'B', 'C'].forEach((n, i) => row.appendChild(this.btn('Clear plot ' + n, 'red', () => g.act('clearPlot', { plot: i }))));
+      body.appendChild(row);
+    } else if (prog) {
+      const h = document.createElement('div'); h.className = 'sect'; h.textContent = 'Tools'; body.appendChild(h);
+      for (const [id, t] of Object.entries(TOOLS)) {
+        const r = document.createElement('div'); r.className = 'slot shop-row';
+        r.innerHTML = `<div class="ico big">${t.icon}</div><div class="info"><b>${t.name}</b><br><span class="dim">${t.what}</span></div>`;
+        r.appendChild(prog.has(id) ? Object.assign(document.createElement('span'), { className: 'owned', textContent: '✓ Owned' })
+          : this.btn('Buy ' + money(t.price), '', () => { prog.buyTool(id); this.renderSpawn(); }, !prog.canAfford(t.price)));
+        body.appendChild(r);
+      }
+      const h2 = document.createElement('div'); h2.className = 'sect'; h2.style.marginTop = '14px'; h2.textContent = 'Upgrades'; body.appendChild(h2);
+      for (const [id, u] of Object.entries(UPGRADES)) {
+        const l = prog.up[id], max = l >= u.max, pr = max ? 0 : u.price(l);
+        const r = document.createElement('div'); r.className = 'slot shop-row';
+        r.innerHTML = `<div class="ico big">${u.icon}</div><div class="info"><b>${u.name}</b> · level ${l + 1} / ${u.max + 1}<br><span class="dim">${u.label(l)}${max ? ' (maxed)' : ' → ' + u.label(l + 1)}</span></div>`;
+        r.appendChild(max ? Object.assign(document.createElement('span'), { className: 'owned', textContent: '★ Max' })
+          : this.btn('Upgrade ' + money(pr), 'alt', () => { prog.buyUp(id); this.renderSpawn(); }, !prog.canAfford(pr)));
+        body.appendChild(r);
+      }
+      const row = document.createElement('div'); row.className = 'btn-row';
+      row.appendChild(this.btn('🧹 Remove loose rubble', 'red', () => { if (confirm('Throw away every loose block? (they would earn money in the crusher)')) g.act('clearRubble', {}); }));
+      row.appendChild(this.btn('🫗 Empty mixer', 'red', () => g.act('mixer', { op: 'empty' })));
+      row.appendChild(this.btn('📍 Back to spawn', 'alt', () => { g.player.teleport(g.spawnPoint()); this.close('spawn'); }));
       body.appendChild(row);
     } else {
       const s = g.settings;
@@ -209,14 +241,25 @@ export class UI {
     void el.offsetWidth; el.classList.add('pop');
   }
 
+  // progression: a little "+$12" floating up from the wallet
+  moneyTick(n) {
+    const el = document.createElement('div'); el.className = 'mtick'; el.textContent = '+' + money(n);
+    const r = $('career').getBoundingClientRect();
+    el.style.left = (r.left + 12) + 'px'; el.style.top = (r.bottom + 2) + 'px';
+    document.body.appendChild(el); setTimeout(() => el.remove(), 1500);
+    this.setCareer();
+  }
+
   // ------------------------------------------------------------------ contracts / career
   setCareer() {
     const c = this.game.contracts; if (!c) return;
     const r = c.rank, next = RANKS[r + 1];
-    const key = `${Math.round(c.cash)}|${r}|${c.jobs.map((j) => j.id + ':' + Math.floor(Math.min(1, j.progress / j.target) * 40) + ':' + Math.ceil(j.bonusT / 10)).join(',')}`;
+    const prog = this.game.prog;
+    const key = `${Math.round(prog ? prog.money : c.cash)}|${r}|${c.jobs.map((j) => j.id + ':' + Math.floor(Math.min(1, j.progress / j.target) * 40) + ':' + Math.ceil(j.bonusT / 10)).join(',')}`;
     if (this.cache.career === key) return;
     this.cache.career = key;
-    $('cash').textContent = money(c.cash);
+    $('cash').textContent = money(prog ? prog.money : c.cash);
+    if (prog && !$('spawn').classList.contains('hidden')) { const w = document.querySelector('#spawn .wallet'); if (w) w.textContent = money(prog.money); }
     $('rankName').textContent = RANKS[r][1];
     $('rankBar').firstChild.style.width = (next ? Math.min(100, (c.earned - RANKS[r][0]) / (next[0] - RANKS[r][0]) * 100) : 100) + '%';
     $('jobsMini').innerHTML = c.jobs.map((j) => {
@@ -228,7 +271,8 @@ export class UI {
   renderContracts() {
     const c = this.game.contracts, body = $('contractsBody'); if (!c) return;
     const r = c.rank, next = RANKS[r + 1];
-    const head = `<div class="car-head"><div><div class="dim">Company cash</div><b class="big">${money(c.cash)}</b></div><div><div class="dim">Rank</div><b>${RANKS[r][1]}</b>${next ? `<div class="dim small">${money(next[0] - c.earned)} more to ${next[1]}</div>` : '<div class="dim small">Top rank!</div>'}</div><div><div class="dim">Jobs done</div><b>${c.done}</b></div></div>`;
+    const prog = this.game.prog;
+    const head = `<div class="car-head"><div><div class="dim">${prog ? 'Wallet' : 'Company cash'}</div><b class="big">${money(prog ? prog.money : c.cash)}</b></div><div><div class="dim">Rank</div><b>${RANKS[r][1]}</b>${next ? `<div class="dim small">${money(next[0] - c.earned)} more to ${next[1]}</div>` : '<div class="dim small">Top rank!</div>'}</div><div><div class="dim">Jobs done</div><b>${c.done}</b></div></div>`;
     body.innerHTML = head + '<div class="jobs"></div><p class="dim small">Finish a contract inside its ⏱ time for a 50% speed bonus. Your career is saved on this device and counts in any world, alone or with a crew. <kbd>J</kbd> opens this board.</p>';
     const list = body.querySelector('.jobs');
     for (const j of c.jobs) {
@@ -246,14 +290,30 @@ export class UI {
     const row = document.createElement('div'); row.className = 'btn-row'; row.style.flexDirection = 'column';
     row.appendChild(this.btn('▶ Resume', '', () => this.close('menu')));
     row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
-    row.appendChild(this.btn('🔄 New world', 'red', () => { if (confirm('Start a fresh world? (unsaved progress is lost)')) { g.act('newWorld', {}); this.close('menu'); } }, g.net.isClient));
-    row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
+    if (g.prog) row.appendChild(this.btn('🔄 Start over', 'red', () => this.progReset()));
+    else row.appendChild(this.btn('🔄 New world', 'red', () => { if (confirm('Start a fresh world? (unsaved progress is lost)')) { g.act('newWorld', {}); this.close('menu'); } }, g.net.isClient));
+    row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (g.prog) { g.progSave(); location.reload(); } else if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
     body.appendChild(row);
     if (g.net.isClient) { const n = document.createElement('div'); n.className = 'dim'; n.style.marginTop = '8px'; n.textContent = 'Only the host can start a new world.'; body.appendChild(n); }
+  }
+  progReset() {
+    const g = this.game;
+    if (!confirm('Start progression over from scratch? Your money, tools, machines and house are wiped.')) return;
+    g.prog.dead = true; Progression.reset(); g.deleteSlot('prog'); location.reload();
   }
   renderSave() {
     const g = this.game, body = $('saveBody');
     body.innerHTML = '';
+    if (g.prog) {
+      const p = g.prog;
+      body.innerHTML = `<p>Progression saves itself every minute, after each purchase and when you close the game. Pick up where you left off with <b>PROGRESSION</b> on the main menu.</p>
+        <div class="car-head"><div><div class="dim">Wallet</div><b class="big">${money(p.money)}</b></div><div><div class="dim">Earned in total</div><b>${money(p.earned)}</b></div><div><div class="dim">Crushed</div><b>${fmtKg(p.crushedKg / KG)}</b></div><div><div class="dim">Best house</div><b>${p.laidMax} blocks</b></div></div>`;
+      const row = document.createElement('div'); row.className = 'btn-row';
+      row.appendChild(this.btn('💾 Save now', '', () => { g.progSave(); this.toast('💾 Saved', true); }));
+      row.appendChild(this.btn('🔄 Start over', 'red', () => this.progReset()));
+      body.appendChild(row);
+      return;
+    }
     const info = document.createElement('p');
     info.innerHTML = g.net.isClient ? 'You can save the shared world to your device. To play a saved world, load it in solo mode or host it yourself.' : 'Saves the whole world: buildings, every loose block, machines, dust pile, mixer and road.';
     body.appendChild(info);
@@ -308,6 +368,11 @@ export class UI {
     $('trowelSw').style.background = kg > 0 ? hex(me.cement.color) : 'transparent';
     if (g.charges) { const left = MAX_CHARGES - g.charges.mine(g.myId).length; $('chargeAmt').textContent = `${left} left`; }
     if (g.demo) $('buildAmt').textContent = String(g.carriedBy(g.myId).filter((p) => p.brick).length);
+    if (g.prog) for (const id of Object.keys(TOOLS)) {
+      const locked = !g.prog.has(id), b = document.querySelector(`#hotbar [data-tool="${id}"]`);
+      b.classList.toggle('locked', locked);
+      if (locked) $({ trowel: 'trowelAmt', charges: 'chargeAmt', build: 'buildAmt' }[id]).textContent = '🔒 ' + money(TOOLS[id].price);
+    }
     const big = document.querySelector('#tbtns-foot [data-act="hammer"]');
     if (big) { const want = g.tool === 'trowel' ? 'trowel' : g.tool === 'charges' ? 'bomb' : g.tool === 'build' ? 'brick' : 'hammer'; if (big.dataset.t !== want) { big.dataset.t = want; big.innerHTML = ic(want) + `<small>${{ trowel: 'LAY', bomb: 'PLANT', hammer: 'SMASH', brick: 'BUILD' }[want]}</small>`; } }
     if (g.player && g.player.avatar) g.player.avatar.setTool(g.tool, me && me.cement.kg > 0 ? me.cement.color : null);
@@ -430,6 +495,7 @@ export class UI {
     $('srSpawn').addEventListener('click', () => {
       const g = this.game, id = sr().spec.id;
       if (g.machines.size >= 20) return;
+      if (g.prog && !g.prog.canAfford(machinePrice(sr().spec))) { g.prog.spend(machinePrice(sr().spec), 'The ' + sr().spec.brand + ' ' + sr().spec.model); return; }
       g.act('spawnMachine', { spec: id, near: g.player.pos.toArray(), yaw: g.cam.yaw + Math.PI });
       this.closeShowroom();
     });
@@ -494,6 +560,13 @@ export class UI {
     const full = g.machines.size >= 20;
     $('srSpawn').disabled = full;
     $('srNote').textContent = full ? 'Site is full (20 machines). Remove one first.' : `${g.machines.size} / 20 machines on site`;
+    if (g.prog) {
+      const pr = machinePrice(sp), sold = forSale(sp);
+      $('srSpawn').innerHTML = ic('spawn') + (sold ? 'BUY · ' + money(pr) : 'NOT FOR SALE');
+      $('srSpawn').disabled = full || !sold;
+      $('srSpawn').classList.toggle('poor', sold && !g.prog.canAfford(pr));
+      if (!full) $('srNote').textContent = !sold ? 'Road machines are not sold in progression mode (no potholes here)' : g.prog.canAfford(pr) ? `You have ${money(g.prog.money)}` : `You have ${money(g.prog.money)}: ${money(pr - g.prog.money)} more to go. Keep crushing!`;
+    }
   }
   closeShowroom() {
     this.game.showroom.close();

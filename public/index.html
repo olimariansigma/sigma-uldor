@@ -21,7 +21,8 @@
       <div id="loadtext">Starting engines…</div>
     </div>
     <div id="titleMenu" class="hidden">
-      <button id="playBtn" class="g-btn g-primary g-xl"><i data-ic="play"></i>PLAY</button>
+      <button id="playBtn" class="g-btn g-primary g-xl"><i data-ic="play"></i>SANDBOX</button>
+      <button id="progBtn" class="g-btn g-blue g-xl prog-btn"><i data-ic="hammer"></i><span>PROGRESSION<small id="progSub">start with a hammer, earn your machines</small></span></button>
       <label class="field"><span>Driver name</span><input id="nameInput" class="text-in" maxlength="16" placeholder="Your name"></label>
       <div class="join-row">
         <label class="field grow"><span>Friend's code</span><input id="titleCode" class="text-in code-in" maxlength="6" placeholder="ABC123"></label>
@@ -30,7 +31,7 @@
       <div id="titleMsg" class="title-msg"></div>
     </div>
   </div>
-  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v5.0.0</span></div>
+  <div class="title-foot"><span>Smash buildings · crush the rubble · mix cement · fix the road</span><span class="ver">v5.1.0</span></div>
 </div>
 
 <!-- HUD -->
@@ -202,6 +203,26 @@
         <li><b>Street traffic</b> bounces through every pothole you leave open. Cars stop for you, your machines and anything lying on the road, overtake when they can, and honk when they can't. Settings can switch it off.</li>
         <li><b>Weather</b> changes on its own: rain makes the ground wet and shiny, storms bring lightning and thunder. Pick a fixed weather in Settings.</li>
       </ul>
+    </div>
+    <div class="help-qa">
+      <h3>Progression mode</h3>
+      <ul>
+        <li>You start with only the <b>hammer</b> and $150. Smash the bungalow, pick blocks up (<kbd>Q</kbd>) and throw them (<kbd>G</kbd>) into the crusher hopper: <b>every kg crushed pays $3</b>.</li>
+        <li>Open the <b>Shop</b> (<kbd>B</kbd>): buy the cement trowel, the build kit and charges, upgrade your hammer, carry capacity and crusher, buy excavators and trucks (sell them back for half), and buy new buildings to knock down.</li>
+        <li><b>Every block you lay in your house pays $30</b>, and house milestones pay bonuses: 20, 50, 100, 180 and 300 blocks. Contracts pay into the same wallet. There are no potholes in this mode, and it saves itself.</li>
+      </ul>
+      <h3>Q&amp;A: how do I build a house?</h3>
+      <ol>
+        <li><b>Make dust.</b> Crush rubble: throw blocks into the crusher hopper. The dust rides the conveyor onto the pile.</li>
+        <li><b>Press blocks.</b> Walk to the brick press next to the dust pile and switch its feeder belt on at the panel (<kbd>E</kbd>), or tip dust into its hopper. Pressed blocks come out on the pallet in the dust's colour.</li>
+        <li><b>Make mortar.</b> Open the mixer (<kbd>E</kbd> at the tub): add 25 kg dust from the pile, add water, and wait for the paddles to mix cement. Then <b>Take cement on my trowel</b>.</li>
+        <li><b>Pick up blocks.</b> Hold <kbd>Q</kbd> at the press pallet to carry blocks (more with the carry upgrade).</li>
+        <li><b>Mortar down.</b> Walk to the concrete slab across the road. Tool <kbd>2</kbd> (trowel): each click puts down one splash of mortar on the slab or on top of a block.</li>
+        <li><b>Lay it.</b> Tool <kbd>4</kbd> (build): aim at the mortar and click to set a block there. <kbd>R</kbd> turns the block. On mortar it sticks; without mortar it is only stacked and will not count.</li>
+        <li><b>Go up.</b> Splash mortar on top of the blocks you laid and keep going, row by row. Leave gaps for doors and windows.</li>
+        <li><b>Use machines.</b> An excavator or the BG90 clamp can set pressed blocks onto mortar too: put them down upright and they stick.</li>
+      </ol>
+      <p class="dim small">Blocks that fall off or get knocked loose stop counting. In progression you are only paid once for each new record, so knocking your house down and rebuilding it does not pay twice.</p>
     </div>
   </div>
 </div>

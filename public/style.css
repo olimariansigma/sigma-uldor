@@ -375,3 +375,22 @@ body.touch #career #cash { font-size: 16px; }
 body.photo #career { display: none; }
 body.touch.in-machine #career { display: none; }
 body.touch .hud-btn span { display: none; }
+
+/* ---- progression mode */
+.prog-btn { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.prog-btn span { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.05; }
+.prog-btn small { font-family: var(--fb, inherit); font-size: 11px; font-weight: 700; letter-spacing: .3px; opacity: .85; text-transform: none; margin-top: 3px; }
+#spawn .wallet { margin-left: 8px; font-size: .8em; color: #7ef0a4; }
+.mcard .price { position: absolute; top: 8px; right: 8px; background: #1d6b3a; border: 1px solid #4ad07a; border-radius: 8px; padding: 3px 8px; font-size: 12px; font-weight: 800; color: #d8ffe4; }
+.mcard .price.poor { background: rgba(60, 20, 20, .85); border-color: #a04040; color: #ffb4a8; }
+.shop-row .ico.big { font-size: 26px; display: flex; align-items: center; justify-content: center; }
+.shop-row .owned { font-weight: 800; color: #7ef0a4; padding: 0 10px; white-space: nowrap; }
+#hotbar .hb.locked { filter: grayscale(1); opacity: .55; }
+#hotbar .hb.locked .amt { color: #ffd23c; }
+#srSpawn.poor { filter: saturate(.4) brightness(.8); }
+.mtick { position: fixed; z-index: 30; pointer-events: none; font-family: var(--fd); font-size: 18px; color: #7ef0a4; text-shadow: 0 2px 4px rgba(0, 0, 0, .8); animation: mtick 1.5s ease-out forwards; }
+@keyframes mtick { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-26px); } }
+body.prog #multiBtn, body.prog .dust-sub span:nth-child(3) { display: none; }
+.help-qa { grid-column: 1 / -1; }
+.help-qa ol { margin: 6px 0 0 18px; padding: 0; }
+.help-qa li { margin: 5px 0; }

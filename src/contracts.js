@@ -39,7 +39,8 @@ export class Contracts {
   pickType() {
     // the press's block count only exists on the host: a joined player gets no press contracts
     const have = new Set(this.jobs.map((j) => j.type)), client = this.g.net && this.g.net.isClient;
-    const pool = TYPES.filter(([t]) => (!have.has(t) || t === 'drive') && !(client && t === 'press'));
+    const prog = this.g.prog, owned = prog ? [...this.g.machines.values()].some((m) => m.family === 'excavator') : true;
+    const pool = TYPES.filter(([t]) => (!have.has(t) || t === 'drive') && !(client && t === 'press') && !(prog && (t === 'potholes' || t === 'paint' || (t === 'drive' && !owned))));
     let sum = pool.reduce((s, [, w]) => s + w, 0), r = Math.random() * sum;
     for (const [t, w] of pool) { r -= w; if (r <= 0) return t; }
     return pool[0][0];
@@ -63,7 +64,9 @@ export class Contracts {
       const blocks = 18 + L * 10;
       Object.assign(job, { icon: '⚙️', title: `Crush ${kgText(blocks * BRICK_KG)}`, desc: 'Feed rubble to the crusher (by hand, with a machine or through the truck intake)', target: blocks * BRICK_KG, reward: 700 + blocks * 45 });
     } else if (type === 'drive') {
-      const pool = g.machineSpecs().filter((s) => s.family === 'excavator' && s.id !== this.lastDrive);
+      // in progression: one of the excavators you own
+      const pool = g.prog ? [...new Set([...g.machines.values()].filter((m) => m.family === 'excavator').map((m) => m.spec))] : g.machineSpecs().filter((s) => s.family === 'excavator' && s.id !== this.lastDrive);
+      if (!pool.length) return null;
       const s = pool[Math.floor(Math.random() * pool.length)]; this.lastDrive = s.id;
       const n = 20 + L * 8;
       Object.assign(job, { icon: s.icon || '🚜', param: s.id, title: `${n} blocks with the ${s.brand} ${s.model}`, desc: `Break ${n} blocks loose while driving the ${s.name} (spawn it from the Spawn menu)`, target: n, reward: 900 + n * 45 });
@@ -161,7 +164,8 @@ export class Contracts {
     const rank0 = this.rank;
     for (const j of finished) {
       const bonus = j.bonusT > 0 ? Math.round(j.reward * 0.5 / 50) * 50 : 0, pay = j.reward + bonus;
-      this.cash += pay; this.earned += pay; this.done++;
+      if (g.prog) g.prog.earn(pay, false); else this.cash += pay;
+      this.earned += pay; this.done++;
       g.ui.toast(`✅ <b>Contract done:</b> ${j.title}<br>+${money(j.reward)}${bonus ? ` + ${money(bonus)} speed bonus` : ''}`, true, 6000);
       g.ui.bigPop(`<b>✅ +${money(pay)}</b><small>${j.title}${bonus ? ' · SPEED BONUS' : ''}</small>`, 'job');
       g.audio.firework(g.camera.position.clone().setY(g.camera.position.y + 6), 0.05);

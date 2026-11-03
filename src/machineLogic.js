@@ -53,7 +53,7 @@ export function machineInteract(m, dt, W) {
     m.breakShapes.forEach((b, i) => {
       const { p, q } = m.shapePose(b);
       const pv = m.prevBreak[i], v = pv ? p.distanceTo(pv) / Math.max(dt, 1e-3) : 0;
-      m.prevBreak[i] = p.clone();
+      if (pv) pv.copy(p); else m.prevBreak[i] = p.clone();
       if (b.ball && m.ballSt) {
         const bs = m.ballSt.v.length();
         const n = hitWith(b.outer, p, q, () => Math.max(0, bs - 1.0) * 1.4);

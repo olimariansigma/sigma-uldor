@@ -137,10 +137,16 @@ export class Traffic {
       // what is ahead in the band the car occupies
       let gap = 1e9, who = null;
       const half = k.W / 2 + 0.4;
-      // rx: reach along the road, rz: half width across it
-      const consider = (x, z, rx, rz, w) => { const ahead = (x - c.x) * d - k.L / 2; if (ahead < -k.L * 0.6 || ahead > 26) return; if (Math.abs(z - c.z) > half + rz) return; const gp = ahead - rx; if (gp < gap) { gap = gp; who = w; } };
-      for (const o of this.obstacles) consider(o.x, o.z, o.r, o.r, o.who);
-      for (const o of this.cars) if (o !== c) consider(o.x, o.z, o.k.L / 2, o.k.W / 2, o.dir === d ? 'car' : 'oncoming');
+      // rx: reach along the road, rz: half width across it (plain loops: this runs for every car every frame)
+      for (let i = 0, n = this.obstacles.length + this.cars.length; i < n; i++) {
+        const isObs = i < this.obstacles.length, o = isObs ? this.obstacles[i] : this.cars[i - this.obstacles.length];
+        if (o === c) continue;
+        const rx = isObs ? o.r : o.k.L / 2, rz = isObs ? o.r : o.k.W / 2;
+        const ahead = (o.x - c.x) * d - k.L / 2;
+        if (ahead < -k.L * 0.6 || ahead > 26 || Math.abs(o.z - c.z) > half + rz) continue;
+        const gp = ahead - rx;
+        if (gp < gap) { gap = gp; who = isObs ? o.who : o.dir === d ? 'car' : 'oncoming'; }
+      }
       // speed: cruise, slow down to stop ~3 m short
       const want = gap > 25 ? k.vmax : Math.max(0, Math.min(k.vmax, (gap - 3) * 0.9));
       c.speed += Math.sign(want - c.speed) * Math.min(Math.abs(want - c.speed), (want < c.speed ? 9 : 3) * dt);
@@ -168,10 +174,11 @@ export class Traffic {
       const dz = (targetZ - c.z) * Math.min(1, dt * 1.6); c.z += dz;
       if (c.x * d > END) { c.x = -END * d; c.overtake = 0; c.z = c.laneZ; c.speed = k.vmax * 0.8; this.respray(c); }
       // potholes: a wheel dropping into an unrepaired hole kicks the body (once per hole per pass)
+      const wheelsAt = c.wheelsAt || (c.wheelsAt = [[k.wb / 2, k.W / 2 - 0.16], [k.wb / 2, -k.W / 2 + 0.16], [-k.wb / 2, k.W / 2 - 0.16], [-k.wb / 2, -k.W / 2 + 0.16]]);
       for (let hi = 0; hi < g.road.holes.length; hi++) {
         const h = g.road.holes[hi];
-        if (h.filled >= h.need) continue;
-        for (const [ax, az] of [[k.wb / 2, k.W / 2 - 0.16], [k.wb / 2, -k.W / 2 + 0.16], [-k.wb / 2, k.W / 2 - 0.16], [-k.wb / 2, -k.W / 2 + 0.16]]) {
+        if (h.filled >= h.need || Math.abs(h.x - c.x) > k.L + h.r + 1) continue;
+        for (const [ax, az] of wheelsAt) {
           const wx = c.x + d * ax, wz = c.z + az * d;
           const key = hi * 8 + (ax > 0 ? 0 : 4) + (az > 0 ? 0 : 2);
           const inside = Math.hypot(wx - h.x, wz - h.z) < h.r * 0.85;

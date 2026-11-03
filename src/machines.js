@@ -217,10 +217,13 @@ export class Machine {
       }
     }
   }
+  // world pose of a collision box. Called many times a frame, so each box reuses its own vector / quaternion:
+  // use the result straight away (copy it to keep it)
   shapePose(b) {
-    const p = b.off.clone().applyMatrix4(b.obj.matrixWorld);
-    const q = b.obj.getWorldQuaternion(new THREE.Quaternion()).multiply(b.rq);
-    return { p, q };
+    if (!b._pq) b._pq = { p: new THREE.Vector3(), q: new THREE.Quaternion() };
+    b._pq.p.copy(b.off).applyMatrix4(b.obj.matrixWorld);
+    b.obj.getWorldQuaternion(b._pq.q).multiply(b.rq);
+    return b._pq;
   }
   // { hard, push }: hard = overlaps something solid (or blocks deeper than the press margin),
   // push = touching intact building blocks (they take damage on the authority side)

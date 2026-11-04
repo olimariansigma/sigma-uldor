@@ -434,10 +434,11 @@ export class UI {
   }
   setNet(html) { const el = $('netBadge'); el.classList.toggle('hidden', !html); if (html && this.cache.net !== html) { this.cache.net = html; el.innerHTML = iconize(html); } }
 
-  toast(msg, good = false, ms = 3200) {
+  toast(msg, good = false, ms = 2600) {
+    ms = Math.min(ms, 6000); // keep every notice short-lived
     const el = document.createElement('div'); el.className = 'toast' + (good ? ' good' : ''); el.innerHTML = iconize(msg);
     $('toasts').appendChild(el);
-    while ($('toasts').children.length > 4) $('toasts').firstChild.remove();
+    while ($('toasts').children.length > 3) $('toasts').firstChild.remove();
     setTimeout(() => { el.style.transition = 'opacity .4s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 450); }, ms);
   }
   popup(text, worldPos, color = null) {

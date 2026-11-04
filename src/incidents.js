@@ -177,8 +177,8 @@ export class Incidents {
     this.count++;
     this.sync();
     const K = KINDS[kind];
-    g.ui.bigPop(`<b>🚨 ${K.name}!</b><small>${this.site().name} · follow the GPS arrow</small>`, 'job');
-    g.ui.toast(`🚨 <b>${K.name}</b> at ${this.site().name}! Drive there (${g.input.touch ? 'the yard pickup' : 'the yard pickup, <b>E</b> to get in'}), smash the wreck, load it on the truck and rebuild the wall. Pays <b>${money(K.pay)}</b>`, true, 9000);
+    // short notice; no money talk outside progression
+    g.ui.toast(`🚨 <b>${K.name}</b> at ${this.site().name}: follow the GPS${g.prog ? ' · pays <b>' + money(K.pay) + '</b>' : ''}`, true, 5000);
     return true;
   }
   cancel() {
@@ -251,7 +251,7 @@ export class Incidents {
     const wreckDone = m.cleared >= Math.ceil(m.total * 0.85), wallDone = m.laid >= st.need;
     if (st.stage === 'work' && wreckDone && wallDone) { this.finish(); return; }
     if (prev !== st.stage) {
-      g.ui.toast('🚧 You made it! Smash the wreck apart (hammer, charges or a machine), load the pieces into the truck, then rebuild the hole: mortar from the tub, bricks from the tarp', true, 8000);
+      g.ui.toast('🚧 Smash the wreck, load it in the truck, rebuild the wall', true, 4500);
     }
     if (prev !== st.stage || this.lastSent !== `${st.cleared}|${st.laid}`) { this.lastSent = `${st.cleared}|${st.laid}`; this.sync(); }
   }
@@ -261,7 +261,7 @@ export class Incidents {
     if (g.prog) g.prog.earn(pay, false);
     else if (g.contracts) { g.contracts.cash += pay; g.contracts.earned += pay; g.contracts.dirty = true; g.contracts.save(); g.ui.setCareer(); }
     this.done++;
-    g.ui.bigPop(`<b>${K.icon} Accident cleared!</b><small>${K.name} at ${this.site().name} · +${money(pay)}${fast ? ' (fast work +25%)' : ''}</small>`, 'job');
+    g.ui.bigPop(`<b>${K.icon} Accident cleared!</b><small>${g.prog ? `+${money(pay)}${fast ? ' (fast work +25%)' : ''}` : this.site().name}</small>`, 'job');
     if (g.audio.bigCash) g.audio.bigCash();
     g.audio.firework(this.sitePos(st.site).setY(6), 0.05);
     this.cleanup(true);

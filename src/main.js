@@ -142,7 +142,7 @@ class Game {
     this.ui = new UI(this);
     this.contracts = new Contracts(this);
     this.incidents = new Incidents(this);
-    this.input.onPad = (id) => { document.body.classList.toggle('pad', !!id); if (id) this.ui.toast('🎮 Controller connected. <b>Start</b> menu · <b>Back</b> help (controls are listed there)', true, 5000); else this.ui.toast('🎮 Controller disconnected'); };
+    this.input.onPad = (id) => { document.body.classList.toggle('pad', !!id); if (id) this.ui.toast('🎮 Controller connected (<b>Back</b> = help)', true, 3000); else this.ui.toast('🎮 Controller disconnected'); };
     this.showroom = new Showroom(this);
     this.newWorld();
     this.mode = 'foot'; this.driving = null;
@@ -527,9 +527,9 @@ class Game {
   progIntro() {
     const t = this.input.touch;
     if (this.prog.fresh) {
-      this.ui.toast('🔨 <b>Progression</b>: you start with just a hammer and ' + fmtMoney(this.prog.money) + '. Smash the bungalow, ' + (t ? 'pick blocks up' : 'pick blocks up with <b>Q</b>') + ' and ' + (t ? 'throw them' : 'throw them (<b>G</b>)') + ' into the crusher: every kg crushed pays $3', true, 10000);
-      setTimeout(() => this.ui.toast('🛒 Open the <b>Shop</b> (' + (t ? 'Spawn button' : '<b>B</b>') + ') to buy tools, machines and new buildings to knock down', true, 7000), 10200);
-      setTimeout(() => this.ui.toast('🏠 Later: press the dust into blocks and build your own house across the road. Every block pays $30 and house milestones pay big bonuses. Help (<b>H</b>) explains how', true, 8000), 17500);
+      this.ui.toast('🔨 <b>Progression</b>: hammer + ' + fmtMoney(this.prog.money) + '. Crush blocks (' + (t ? 'pick up, throw' : '<b>Q</b> pick up, <b>G</b> throw') + ') for $3/kg', true, 6000);
+      setTimeout(() => this.ui.toast('🛒 <b>Shop</b> (' + (t ? 'Spawn button' : '<b>B</b>') + '): tools, machines, buildings', true, 4500), 6500);
+      setTimeout(() => this.ui.toast('🏠 Later: press dust into blocks and build a house ($30 per block). Help (<b>H</b>) shows how', true, 5000), 12000);
     } else this.ui.toast('🔨 Progression: welcome back! ' + fmtMoney(this.prog.money) + ' in the bank', true, 5000);
   }
 
@@ -963,9 +963,9 @@ class Game {
     this.ui.setHotbar();
   }
   selectTool(t) {
-    if (this.prog && !this.prog.has(t)) { const T = TOOLS[t]; if (!T) return; this.ui.toast('🔒 The ' + T.name + ' is in the Shop (' + (this.input.touch ? 'Spawn button' : 'B') + ') for ' + fmtMoney(T.price)); this.audio.denied(); return; }
+    if (this.prog && !this.prog.has(t)) { const T = TOOLS[t]; if (!T) return; this.ui.toast('🔒 ' + T.name + ': Shop (' + (this.input.touch ? 'Spawn' : 'B') + '), ' + fmtMoney(T.price)); this.audio.denied(); return; }
     if (t === 'build' && this.tool === 'build') { this.builder.rot ^= 1; return; } // tap again to turn the block
-    if (t === 'build' && this.tool !== 'build' && !this.carriedBy(this.myId).some((p) => p.brick)) this.ui.toast('🧱 Build: carry pressed blocks (<b>Q</b> at the brick press pallet), trowel a splash of mortar on the slab across the road, then click to lay a block on it. <b>R</b> turns it.', true, 7000);
+    if (t === 'build' && this.tool !== 'build' && !this.carriedBy(this.myId).some((p) => p.brick)) this.ui.toast('🧱 Carry pressed blocks (<b>Q</b>), mortar with the trowel, then click to lay. <b>R</b> turns', true, 5000);
     if (t === 'scrape' && this.tool !== 'scrape') this.ui.toast('🗑️ Remove: aim at a splash of mortar to scrape it off, or at a block you laid to knock it loose', true, 5000);
     if (t === 'trowel' && !(this.players.get(this.myId).cement.kg > 0)) { this.ui.toast('🪣 No cement on the trowel. Take some from the mixer first.'); return; }
     this.tool = t;
@@ -1655,7 +1655,7 @@ class Game {
       // backhoe: using the front loader turns the camera round to the front so you can see the bucket
       if (m.frontFrame && (ctl.grabToggle || ctl.rot) && !this.cam.cab) {
         this.frontCamT = 2.5;
-        if (!this.frontTold) { this.frontTold = true; this.ui.toast('🪣 Front bucket: lower it (' + (input.touch ? 'LOADER ↓' : '<b>T</b>') + '), drive into loose rubble to fill it, raise it (' + (input.touch ? 'LOADER ↑' : '<b>Y</b>') + ') and tip it (' + (input.touch ? 'FRONT' : '<b>Click</b>') + ')', true, 7000); }
+        if (!this.frontTold) { this.frontTold = true; this.ui.toast('🪣 Front bucket: lower, drive into rubble, raise, tip', true, 4500); }
       }
       if (input.pressed('cam')) { this.cam.cab = !this.cam.cab; this.cam.cabYaw = 0; this.cam.cabPitch = -0.12; }
       const honk = input.held('horn');

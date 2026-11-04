@@ -429,3 +429,8 @@ body.photo #gps { display: none; }
 .mcard .price { top: 34px; right: 8px; }
 body.panel-open #gps { display: none; }
 @media (max-width: 960px) { #keyHints { display: none; } }
+
+#busy { position: fixed; inset: 0; z-index: 90; display: none; align-items: center; justify-content: center; background: rgba(10, 11, 14, .72); color: #fff; font-family: var(--fd); font-size: 24px; letter-spacing: 1px; text-transform: uppercase; }
+#busy.on { display: flex; }
+/* toasts below the career card on small screens, never over it */
+@media (max-height: 520px) { #toasts { left: calc(50% + 90px); top: 58px; max-width: min(52vw, 400px); } }

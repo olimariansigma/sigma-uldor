@@ -195,14 +195,14 @@ class Game {
       this.ui.setMode('foot', this.input.touch);
       if (!this.input.touch && this.renderer.domElement.requestPointerLock) { try { const r = this.renderer.domElement.requestPointerLock(); if (r && r.catch) r.catch(() => {}); } catch (e) { /* needs a gesture */ } }
       // once per version: point at what is new
-      if (this.prefs.seenTips && this.prefs.news !== '5.0') {
-        this.ui.toast('📋 New in 5.0: <b>Contracts</b>! Paid jobs, cash and promotions. Press <b>J</b> or tap the cash box top left', true, 9000);
-        setTimeout(() => this.ui.toast('🏗️ The brick press got rebuilt, and a cement silo and water tank now stand by the mixer', true, 6000), 9200);
+      if (this.prefs.seenTips && this.prefs.news !== '5.4') {
+        this.ui.toast('🚨 New: <b>accidents</b>! Planes and cars crash around town. Follow the GPS in the yard pickup', true, 6000);
+        setTimeout(() => this.ui.toast('🎮 Controller support, a <b>5 REMOVE</b> tool and progression mode', true, 5000), 6200);
       }
-      this.prefs.news = '5.0'; this.savePrefs();
+      this.prefs.news = '5.4'; this.savePrefs();
       if (!this.prefs.seenTips) {
         this.ui.toast('🔨 ' + (touch ? 'Tap 🔨' : 'Click') + ' to smash blocks · ' + (touch ? '✋' : '<b>Q</b>') + ' pick up · ' + (touch ? '🧱' : '<b>G</b>') + ' throw into the crusher', false, 6000);
-        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of 36 machines or new buildings', false, 6000), 6200);
+        setTimeout(() => this.ui.toast('🏗️ Open <b>Spawn</b> to inspect and bring in any of ' + BASE_MACHINES.length + ' machines or new buildings', false, 6000), 6200);
         setTimeout(() => this.ui.toast('🌐 <b>Multiplayer</b>: host a game and share the code with friends', true, 6000), 12500);
         this.prefs.seenTips = true; this.savePrefs();
       }
@@ -659,14 +659,23 @@ class Game {
     } catch (e) { if (!quiet) this.ui.toast('⚠️ Could not save: storage full. Delete an old slot.'); }
     return st;
   }
+  // heavy world swaps freeze the page for a second: paint a "Loading…" cover first, then do the work
+  busy(label, fn) {
+    let el = document.getElementById('busy');
+    if (!el) { el = document.createElement('div'); el.id = 'busy'; document.body.appendChild(el); }
+    el.textContent = label; el.classList.add('on');
+    setTimeout(() => { try { fn(); } finally { setTimeout(() => el.classList.remove('on'), 60); } }, 60);
+  }
   loadSlot(slot) {
     if (this.net.isClient) return;
     let w; try { w = JSON.parse(localStorage.getItem(PREFIX + 'slot.' + slot)); } catch (e) { w = null; }
     if (!w) return;
-    this.loadWorld(w, { forSave: true });
-    this.player.teleport(this.spawnPoint());
-    this.ui.toast('📂 World loaded', true);
-    if (this.net.isHost) this.broadcastWorld();
+    this.busy('Loading…', () => {
+      this.loadWorld(w, { forSave: true });
+      this.player.teleport(this.spawnPoint());
+      this.ui.toast('📂 World loaded', true);
+      if (this.net.isHost) this.broadcastWorld();
+    });
   }
   deleteSlot(slot) { localStorage.removeItem(PREFIX + 'slot.' + slot); localStorage.removeItem(PREFIX + 'meta.' + slot); }
 
@@ -890,7 +899,7 @@ class Game {
       case 'layCement': this.layCement(pid, d.x, d.z); break;
       case 'pourCement': this.pourCement(pid, d.target, d.id); break;
       case 'bucketPour': this.bucketPour(pid, d.target, d.target === 'paver' ? d.id : d.hole); break;
-      case 'newWorld': if (pid === this.myId) { this.newWorld(); if (this.net.isHost) this.broadcastWorld(); } break;
+      case 'newWorld': if (pid === this.myId) this.busy('New world…', () => { this.newWorld(); if (this.net.isHost) this.broadcastWorld(); }); break;
     }
   }
 

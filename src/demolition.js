@@ -359,7 +359,7 @@ export class Demolition {
 
   // ---------------------------------------------------------------- state changes (authority)
   makeBody(p, kinematic) {
-    const desc = kinematic ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic().setLinearDamping(0.05).setAngularDamping(0.25).setCanSleep(true).setCcdEnabled(true);
+    const desc = kinematic ? RAPIER.RigidBodyDesc.kinematicPositionBased() : RAPIER.RigidBodyDesc.dynamic().setLinearDamping(0.05).setAngularDamping(0.25).setCanSleep(true); // CCD is switched on only for fast bodies (thrown, hit hard): it is costly on 1000+ blocks
     const body = this.world.createRigidBody(desc.setTranslation(p.pos.x, p.pos.y, p.pos.z).setRotation(p.quat));
     const cd = RAPIER.ColliderDesc.cuboid(p.size.x / 2 - 0.006, p.size.y / 2 - 0.006, p.size.z / 2 - 0.006)
       .setDensity(p.type.density).setFriction(0.85).setRestitution(0.05);
@@ -378,7 +378,7 @@ export class Demolition {
     this.setState(p, LOOSE);
     if (this.authority) {
       const body = p.body;
-      if (impulse) body.applyImpulse(impulse, true);
+      if (impulse) { body.applyImpulse(impulse, true); body.enableCcd(true); }
       if (collapse) {
         const m = body.mass();
         body.applyImpulse({ x: (Math.random() - 0.5) * m * 0.6, y: 0, z: (Math.random() - 0.5) * m * 0.6 }, true);

@@ -193,6 +193,10 @@ export class Incidents {
     if (wb && !wb.removed) { for (const p of g.players.values()) g.dropCarried(p.id, (q) => q.b === st.wreck); g.removeBuildingFull(st.wreck); g.events.push(['bld-', st.wreck]); }
     const m = g.machines.get(st.truck);
     if (m && m.driver < 0) { g.destroyMachine(m.id); g.events.push(['mach-', m.id]); }
+    else if (m) m.siteTruck = false; // someone is driving it: it is theirs now (can be sold like any machine)
+    // the tarp's leftover bricks go with the delivery (there are only 300 pressed blocks in the whole world)
+    const tarp = this.local(st.site, -7.0, 0, 4.2);
+    for (const p of g.demo.pieces) if (p.brick && p.state === LOOSE && Math.abs(p.pos.x - tarp.x) < 3.5 && Math.abs(p.pos.z - tarp.z) < 3) g.demo.vanish(p, false);
     if (keepWall) this.walls.push({ site: st.site, b: st.wall });
     else { const b = g.demo.buildings[st.wall]; if (b && !b.removed) { g.removeBuildingFull(st.wall); g.events.push(['bld-', st.wall]); } }
     this.state = null;

@@ -665,6 +665,8 @@ export class Demolition {
         if (p.type.tint) for (const im of p.parts) { im.setColorAt(p.idx, p.color); im.instanceColor.needsUpdate = true; }
       }
       this.writeMatrix(p); this.flagParts(p);
+      // blocks lying low were at rest when saved: restore them asleep (waking 1000+ bodies at once stalls the first seconds)
+      if (st === LOOSE && p.state === LOOSE && p.body && !p.body.isKinematic()) p.body.sleep(); // (held / carried ones come back awake and fall)
       const h = data.holders && data.holders[i];
       if (!forSave && h && (st === HELD || st === CARRIED)) {
         p.state = st; p.holder = h[0]; this.stateVer = (this.stateVer || 0) + 1;

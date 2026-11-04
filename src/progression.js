@@ -2,6 +2,7 @@
 // (B) on tools (cement trowel, build kit, demolition charges), machines and new buildings to knock down. Pressed
 // blocks laid in your own house across the road earn more, and house milestones pay a bonus. No potholes in this
 // mode. Solo only; it saves itself (its own world slot plus the wallet) and carries on where you left it.
+import { SITE } from './site.js';
 export const PROG_KEY = 'wreckingyard.progression';
 export const PER_KG = 3;                       // $ per kg crushed
 export const PER_BLOCK_LAID = 30;              // $ per new block laid in your house
@@ -82,7 +83,7 @@ export class Progression {
 
   // what you crush and lay, counted every quarter second
   counters() {
-    let laid = 0; const inc = this.g.incidents; for (const p of this.g.demo.pieces) if (p.brick && p.state === 0 && !(inc && inc.atSite(p.pos))) laid++;
+    let laid = 0; const bp = SITE.buildPlot; for (const p of this.g.demo.pieces) if (p.brick && p.state === 0 && Math.abs(p.pos.x - bp.x) < bp.w / 2 + 12 && Math.abs(p.pos.z - bp.z) < bp.d / 2 + 12) laid++; // your house: on and around the build plot only
     return { crushed: this.g.crusher.totalKg, laid };
   }
   resync() { this.snap = this.counters(); }
@@ -109,6 +110,6 @@ export class Progression {
     this.payT = (this.payT || 0) - 0.25;
     if (this.pending >= 1 && this.payT <= 0) { this.payT = 1.2; this.g.ui.moneyTick(this.pending); this.pending = 0; }
     this.saveT -= 0.25;
-    if (this.saveT <= 0) { this.saveT = 5; this.save(); }
+    if (this.saveT <= 0) { this.saveT = 20; this.g.progSave(); } // wallet and world are saved together
   }
 }

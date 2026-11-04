@@ -160,8 +160,8 @@ export class UI {
         for (const m of g.machines.values()) {
           const row = document.createElement('div'); row.className = 'slot';
           row.innerHTML = `<img class="thumb" src="${THUMB(m.spec.id)}" alt=""><div class="info"><b>${m.spec.brand} ${m.spec.model}</b><br>${m.driver >= 0 ? ic('user', 'inl') + 'driven by ' + g.playerName(m.driver) : 'parked'}</div>`;
-          const sell = prog && m.family !== 'car' && !m.siteTruck ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
-          row.appendChild(this.btn(prog ? '💵 Sell ' + money(sell) : ic('trash', 'inl') + 'Remove', 'red', () => { if (prog && !confirm(`Sell the ${m.spec.brand} ${m.spec.model} for ${money(sell)}?`)) return; g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, m.driver >= 0 && m.driver !== g.myId));
+          const sell = prog && m.family !== 'car' ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
+          row.appendChild(this.btn(prog ? '💵 Sell ' + money(sell) : ic('trash', 'inl') + 'Remove', 'red', () => { if (prog && !confirm(`Sell the ${m.spec.brand} ${m.spec.model} for ${money(sell)}?`)) return; g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, (m.driver >= 0 && m.driver !== g.myId) || !!m.siteTruck));
           body.appendChild(row);
         }
       }

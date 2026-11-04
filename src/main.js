@@ -514,7 +514,7 @@ class Game {
     const save = () => this.progSave();
     window.addEventListener('pagehide', save); document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   }
-  progSave() { if (this.prog && !this.prog.dead) { this.saveSlot('prog', true); this.prog.save(); } }
+  progSave() { if (this.prog && !this.prog.dead) { this.prog.save(); this.saveSlot('prog', true); } }
   newProgWorld() {
     this.clearWorld();
     this.dn.p = MORNING; this.dn.apply();
@@ -832,6 +832,7 @@ class Game {
       }
       case 'removeMachine': {
         const m = this.machines.get(d.id); if (!m) return;
+        if (m.siteTruck) { this.tell(pid, '🚚 The site truck leaves by itself when the accident is cleared'); return; }
         if (m.driver >= 0 && m.driver !== pid) return;
         if (m.driver >= 0) { const dp = this.players.get(m.driver); if (dp) dp.driving = -1; }
         if (this.prog) { const back = m.family === 'car' || m.siteTruck ? 0 : Math.round(machinePrice(m.spec) / 2 / 50) * 50; this.prog.earn(back, false); this.tell(pid, '💵 Sold the ' + m.spec.brand + ' ' + m.spec.model + ' for ' + fmtMoney(back), true); }
@@ -849,7 +850,7 @@ class Game {
         break;
       }
       case 'clearRubble': {
-        for (const p of demo.pieces) if (p.state === LOOSE) demo.vanish(p);
+        for (const p of demo.pieces) if (p.state === LOOSE && !p.brick) demo.vanish(p); // pressed blocks are kept
         break;
       }
       case 'breakRoad': {
@@ -1792,7 +1793,7 @@ class Game {
     }
     if (auth) {
       this.autoTimer = (this.autoTimer || 60) - dt;
-      if (this.autoTimer <= 0) { this.autoTimer = 60; if (this.prog) this.progSave(); else this.saveSlot('auto', true); }
+      if (this.autoTimer <= 0) { this.autoTimer = 60; if (!this.prog) this.saveSlot('auto', true); }
     }
   }
 

@@ -424,3 +424,8 @@ body.pad button:focus, body.pad .mcard:focus, body.pad input:focus { outline: 3p
 body.touch #gps { max-width: 34vw; top: 8px; padding: 5px 10px 5px 6px; }
 body.touch #gpsArrow { width: 28px; height: 28px; }
 body.photo #gps { display: none; }
+
+/* QA fixes: price badge under the category chip, accident GPS and key hints out of the way */
+.mcard .price { top: 34px; right: 8px; }
+body.panel-open #gps { display: none; }
+@media (max-width: 960px) { #keyHints { display: none; } }

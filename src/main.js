@@ -1418,7 +1418,7 @@ class Game {
     if (fell > 0) { c.n += fell; c.quiet = 0; } else if (c.n) c.quiet += 0.25;
     if (c.n && (c.quiet >= 1.6 || c.n > 400)) {
       const n = c.n; c.n = 0; c.quiet = 0;
-      this.contracts.onCombo(n);
+      if (this.prog) this.contracts.onCombo(n); // contracts and money exist in progression only
       if (n < 10) return;
       const best = this.prefs.bestCombo || 0, rec = n > best && n >= 15;
       if (rec) { this.prefs.bestCombo = n; this.savePrefs(); }
@@ -1573,7 +1573,7 @@ class Game {
     if (input.pressed('shop')) this.ui.toggle('spawn');
     if (input.pressed('multi')) this.ui.toggle('multi');
     if (input.pressed('help')) this.ui.toggle('help');
-    if (input.pressed('jobs')) this.ui.toggle('contracts');
+    if (input.pressed('jobs') && this.prog) this.ui.toggle('contracts');
     const machList = [...this.machines.values()];
 
     // ---- local control
@@ -1778,7 +1778,7 @@ class Game {
     this.charges.update(dt, auth);
     this.traffic.update(dt);
     this.comboUpdate(dt);
-    this.contracts.update(dt);
+    if (this.prog) this.contracts.update(dt); // no contracts / cash in sandbox
     this.incidents.update(dt);
     if (this.prog) this.prog.update(dt);
     this.careerT = (this.careerT || 0) - dt; if (this.careerT <= 0) { this.careerT = 0.5; this.ui.setCareer(); }

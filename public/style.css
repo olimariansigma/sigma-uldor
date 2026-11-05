@@ -434,3 +434,6 @@ body.panel-open #gps { display: none; }
 #busy.on { display: flex; }
 /* toasts below the career card on small screens, never over it */
 @media (max-height: 520px) { #toasts { left: calc(50% + 90px); top: 58px; max-width: min(52vw, 400px); } }
+
+/* money only exists in progression mode */
+body:not(.prog) #career { display: none; }

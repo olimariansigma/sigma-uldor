@@ -326,7 +326,7 @@ export class UI {
     const g = this.game, body = $('menuBody'); body.innerHTML = '';
     const row = document.createElement('div'); row.className = 'btn-row'; row.style.flexDirection = 'column';
     row.appendChild(this.btn('▶ Resume', '', () => this.close('menu')));
-    row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
+    if (g.prog) row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
     const inc = g.incidents;
     if (!g.net.isClient) {
       if (inc.state) row.appendChild(this.btn('🚨 Hand this accident to another crew', 'alt', () => { g.act('incident', { op: 'skip' }); this.close('menu'); }));

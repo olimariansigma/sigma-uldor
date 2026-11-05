@@ -262,11 +262,10 @@ export class Incidents {
   finish() {
     const g = this.g, st = this.state, K = KINDS[st.kind];
     const fast = st.t < 8 * 60, pay = Math.round(st.pay * (fast ? 1.25 : 1));
-    if (g.prog) g.prog.earn(pay, false);
-    else if (g.contracts) { g.contracts.cash += pay; g.contracts.earned += pay; g.contracts.dirty = true; g.contracts.save(); g.ui.setCareer(); }
+    if (g.prog) g.prog.earn(pay, false); // money exists in progression only
     this.done++;
     g.ui.bigPop(`<b>${K.icon} Accident cleared!</b><small>${g.prog ? `+${money(pay)}${fast ? ' (fast work +25%)' : ''}` : this.site().name}</small>`, 'job');
-    if (g.audio.bigCash) g.audio.bigCash();
+    if (g.prog && g.audio.bigCash) g.audio.bigCash();
     g.audio.firework(this.sitePos(st.site).setY(6), 0.05);
     this.cleanup(true);
   }

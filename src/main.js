@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { EXTERIOR } from './detail.js';
+import { EXTERIOR, hookShadowProxies } from './detail.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { setAnisotropy, setPack } from './textures.js';
 import { materials } from './materials.js';
@@ -70,7 +70,7 @@ class Game {
     const renderer = new THREE.WebGLRenderer({ antialias: q !== 'low', powerPreference: 'high-performance', preserveDrawingBuffer: this.thumbMode });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = true; hookShadowProxies(renderer);
     renderer.shadowMap.type = q === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     $('game').appendChild(renderer.domElement);
     this.renderer = renderer;
@@ -1609,7 +1609,7 @@ class Game {
   makeThumbs(w, h) {
     const r = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true });
     r.setPixelRatio(1); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.enabled = true; r.shadowMap.type = THREE.PCFSoftShadowMap; hookShadowProxies(r);
     const out = {};
     for (const sp of MACHINES) out[sp.id] = this.showroom.thumbnail(r, sp.id, w, h);
     this.showroom.close(); r.dispose();

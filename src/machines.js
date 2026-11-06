@@ -2,7 +2,7 @@
 // up groups, colliders and a "rig" that maps the five control channels (swing, boom, stick, curl, open) onto it.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { machineMaterials, weathered, bake, restPositions } from './detail.js';
+import { machineMaterials, weathered, bake, restPositions, shadowProxy } from './detail.js';
 import { buildExcavator } from './mx-excavator.js';
 import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, buildPainter, stepCrane, buildPickup } from './mx-vehicles.js';
 import { buildTruck, TRUCK_SIZES } from './mx-truck.js';
@@ -153,7 +153,7 @@ export class Machine {
     // merge static parts to keep draw calls low (every group: children never move relative to it)
     collapseStatic(this);
     const groups = []; this.model.traverse((o) => { if (o.isGroup) groups.push(o); });
-    for (const g of groups) bake(g);
+    for (const g of groups) { bake(g); shadowProxy(g); }
     for (const o of this.extraMeshes) if (o.isGroup) bake(o);
     this.buildPhysics();
     this.pose();

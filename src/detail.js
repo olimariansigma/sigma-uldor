@@ -129,9 +129,57 @@ export function bake(group) {
   }
   for (const b of buckets.values()) {
     const mesh = new THREE.Mesh(b.list.length === 1 ? b.list[0] : mergeGeometries(b.list, false), b.mat);
-    mesh.castShadow = b.cast; mesh.receiveShadow = true;
+    mesh.castShadow = b.cast; mesh.receiveShadow = true; mesh.userData.baked = true;
     group.add(mesh);
   }
+}
+
+// ------------------------------------------------------------------ shadow-only meshes
+// The shadow pass ignores colour, so a part with 12 materials costs 12 shadow draws for one silhouette. Each group
+// gets one shadow-only mesh holding the shapes of all its merged meshes (same geometry, same transform: the exact same
+// shadow) and those meshes stop casting. The proxy is hidden for the main pass and switched on only while the
+// renderer draws shadows (hookShadowProxies), which three.js does after it has collected the main draw list.
+const PROXIES = new Set();
+const proxyMats = new Map();
+const shadowSafe = (c) => c.isMesh && c.userData.baked && c.castShadow && c.visible && c.frustumCulled && c.layers.mask === 1 && !c.isInstancedMesh && !c.isSkinnedMesh &&
+  !c.geometry.morphAttributes.position && !Array.isArray(c.material) && !c.material.transparent && !c.material.displacementMap &&
+  !(c.material.alphaTest > 0) && !(c.material.clippingPlanes && c.material.clippingPlanes.length) && !c.material.wireframe && c.material.visible;
+export function shadowProxy(group) {
+  const sets = new Map();
+  for (const c of group.children) if (shadowSafe(c)) {
+    const k = c.material.side + ':' + c.material.shadowSide;
+    if (!sets.has(k)) sets.set(k, { side: c.material.side, shadowSide: c.material.shadowSide, list: [] });
+    sets.get(k).list.push(c);
+  }
+  for (const st of sets.values()) {
+    if (st.list.length < 2) continue;
+    const parts = st.list.map((c) => {
+      c.updateMatrix();
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', c.geometry.attributes.position.clone());
+      if (c.geometry.index) g.setIndex(c.geometry.index.clone());
+      return g.applyMatrix4(c.matrix);
+    });
+    const anyIdx = parts.some((g) => g.index), merged = mergeGeometries(anyIdx ? parts.map((g) => (g.index ? g : indexed(g))) : parts, false);
+    if (!merged) continue;
+    const mk = st.side + ':' + st.shadowSide;
+    if (!proxyMats.has(mk)) proxyMats.set(mk, new THREE.MeshBasicMaterial({ side: st.side, shadowSide: st.shadowSide, colorWrite: false, depthWrite: false }));
+    const proxy = new THREE.Mesh(merged, proxyMats.get(mk));
+    proxy.castShadow = true; proxy.receiveShadow = false; proxy.visible = false; proxy.raycast = () => {};
+    proxy.userData.shadowProxy = true; proxy.userData.keep = true;
+    for (const c of st.list) c.castShadow = false;
+    group.add(proxy); PROXIES.add(proxy);
+  }
+}
+function indexed(g) { const n = g.attributes.position.count, idx = new Uint32Array(n); for (let i = 0; i < n; i++) idx[i] = i; g.setIndex(new THREE.BufferAttribute(idx, 1)); return g; }
+const attached = (o) => { while (o.parent) o = o.parent; return o.isScene; };
+export function hookShadowProxies(renderer) {
+  const sm = renderer.shadowMap, orig = sm.render;
+  let n = 0;
+  sm.render = function (lights, scene, camera) {
+    if (++n % 600 === 0) for (const p of PROXIES) if (!attached(p)) { PROXIES.delete(p); } // machines that were removed
+    for (const p of PROXIES) p.visible = true;
+    try { orig.call(this, lights, scene, camera); } finally { for (const p of PROXIES) p.visible = false; }
+  };
 }
 
 // a group that never moves (and none of its parts do): fold every mesh in it, however deep, into one mesh per
@@ -153,9 +201,10 @@ export function bakeDeep(group) {
   for (const b of buckets.values()) {
     const merged = b.list.length === 1 ? b.list[0] : mergeGeometries(b.list, false);
     if (!merged) continue;
-    const mesh = new THREE.Mesh(merged, b.mat); mesh.castShadow = b.cast; mesh.receiveShadow = b.recv;
+    const mesh = new THREE.Mesh(merged, b.mat); mesh.castShadow = b.cast; mesh.receiveShadow = b.recv; mesh.userData.baked = true;
     group.add(mesh);
   }
+  shadowProxy(group);
 }
 
 // ------------------------------------------------------------------ geometry helpers
@@ -349,5 +398,5 @@ export function foldStatic(root, keep) {
   // referenced meshes must not be merged away (they move, swap materials or change geometry)
   root.traverse((o) => { if (o.isMesh && keep.has(o)) o.userData.keep = true; });
   const groups = []; root.traverse((o) => { if (!o.isMesh && o.children.length) groups.push(o); });
-  for (const g of groups) bake(g);
+  for (const g of groups) { bake(g); shadowProxy(g); }
 }

@@ -23,8 +23,9 @@ export const SITE = {
   incidents: [
     { x: 93, z: 57, name: 'Maple Close (east)' },
     { x: -84, z: 57, name: 'Birch Lane (west)' },
-    { x: 134, z: 2, name: 'East Fields' },
-    { x: -140, z: 6, name: 'West Fields' },
+    // (every site sits on the 0.3 m build grid, so blocks laid from above land exactly in the wall's gaps)
+    { x: 134.1, z: 2.1, name: 'East Fields' },
+    { x: -140.1, z: 6, name: 'West Fields' },
   ],
   carSpawn: V(21.5, 0, 19.5),
 };

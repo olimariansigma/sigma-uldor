@@ -478,6 +478,20 @@ class Game {
     m.destroy(); this.machines.delete(id);
   }
 
+  unstackMachines() {
+    const list = [...this.machines.values()];
+    for (const m of list) {
+      const clash = list.some((o) => o !== m && this.machines.has(o.id) && Math.hypot(o.pos.x - m.pos.x, o.pos.z - m.pos.z) < (o.radius * o.s + m.radius * m.s) * 0.7);
+      if (!clash) continue;
+      this.machines.delete(m.id); // not in its own way while looking
+      const spot = this.findMachineSpot(m.pos.clone(), m.spec);
+      this.machines.set(m.id, m);
+      if (!spot) continue;
+      m.root.position.x = spot.x; m.root.position.z = spot.z;
+      if (m.pose) m.pose();
+      if (m.syncBodies) m.syncBodies(true);
+    }
+  }
   findMachineSpot(near, spec) {
     const r = ({ crane: 4.6, roller: 3.0, paver: 3.0, loader: 4.2, dozer: 3.4, dumper: 2.4, truck: 5.2 }[spec.family] || (spec.under === 'pontoon' ? 4.2 : 2.8)) * spec.scale;
     const terrain = this.env.terrainCollider;
@@ -654,6 +668,8 @@ class Game {
       m.setPayload(s.payload[0], s.payload[1], s.payload[2], s.payload[3], s.payload[4]);
       if (!forSave) m.driver = s.driver;
     }
+    // machines that grew since the save was made (bigger models) can now overlap a neighbour: move them to free space
+    if (!mirror) this.unstackMachines();
     // re-attach held pieces on the authority side
     if (!mirror) for (const p of this.demo.pieces) if (p.state === HELD) {
       const m = this.machines.get(p.holder); if (!m || !p.holdLocal) continue;

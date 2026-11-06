@@ -139,7 +139,7 @@ export class Contracts {
           break;
         }
         case 'crush': j.progress += d.crushed; break;
-        case 'drive': if (driving === j.param) j.progress += d.detached; break;
+        case 'drive': if (g.prog && ![...g.machines.values()].some((m) => m.spec.id === j.param || m.spec.variantOf === j.param)) { j.void = true; break; } /* sold the excavator: the job could never finish */ if (driving === j.param) j.progress += d.detached; break;
         case 'potholes': j.progress += d.perfect; break;
         case 'press': j.progress += d.pressed; break;
         case 'lay': j.progress += d.laid; break;

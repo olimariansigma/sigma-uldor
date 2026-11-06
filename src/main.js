@@ -686,7 +686,8 @@ class Game {
     if (mirror) { if (w.prog) this.enterRemoteProg(w.prog); else if (this.prog && this.prog.remote) this.exitRemoteProg(); }
     if (!mirror) this.ensureCar();
     if (typeof w.time === 'number') this.dn.p = w.time;
-    if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); if (w.weather) this.weather.setState(w.weather); }
+    if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); }
+    if (w.weather) this.weather.setState(w.weather); // local saves too
     this.dn.apply();
   }
 
@@ -888,20 +889,22 @@ class Game {
       case 'removeMachine': {
         const m = this.machines.get(d.id); if (!m) return;
         if (m.siteTruck) { this.tell(pid, '🚚 The site truck leaves by itself when the accident is cleared'); return; }
+        if (this.prog && m.family === 'car') { this.tell(pid, '🚗 The yard pickup stays'); return; } // it is the only way to reach accidents and cannot be re-bought
         if (m.driver >= 0 && m.driver !== pid) return;
         if (m.driver >= 0) { const dp = this.players.get(m.driver); if (dp) dp.driving = -1; }
-        if (this.prog) { const back = m.family === 'car' || m.siteTruck ? 0 : Math.round(machinePrice(m.spec) / 2 / 50) * 50; this.prog.earn(back, false); this.tell(pid, '💵 Sold the ' + m.spec.brand + ' ' + m.spec.model + ' for ' + fmtMoney(back), true); }
+        if (this.prog) { const back = m.family === 'car' || m.siteTruck || m.freeTruck ? 0 : Math.round(machinePrice(m.spec) / 2 / 50) * 50; this.prog.earn(back, false); this.tell(pid, '💵 Sold the ' + m.spec.brand + ' ' + m.spec.model + ' for ' + fmtMoney(back), true); }
         this.destroyMachine(m.id);
         if (this.prog) setTimeout(() => this.progSave(), 50);
         this.events.push(['mach-', d.id]);
         break;
       }
       case 'spawnBuilding': case 'clearPlot': {
+        if (name === 'spawnBuilding' && (!BUILDINGS.some((b) => b.id === d.def) || !(d.plot >= 0 && d.plot <= 2 && Number.isInteger(d.plot)))) return; // validate before charging
         if (this.prog && name === 'spawnBuilding' && !this.prog.spend(BUILDING_PRICE, 'A new building', pid)) return;
         const old = this.plots[d.plot];
         for (const p of this.players.values()) if (old != null) this.dropCarried(p.id, (q) => q.b === old);
         if (old != null) { this.removeBuildingFull(old); this.events.push(['bld-', old]); }
-        if (name === 'spawnBuilding') { const b = this.buildBuilding(d.def, d.plot); this.events.push(['bld+', d.def, d.plot, b.id]); }
+        if (name === 'spawnBuilding') { const b = this.buildBuilding(d.def, d.plot); this.events.push(['bld+', d.def, d.plot, b.id]); if (this.prog && !this.prog.remote) setTimeout(() => this.progSave(), 50); }
         break;
       }
       case 'clearRubble': {
@@ -1031,7 +1034,7 @@ class Game {
   takeCement(pid) {
     const pl = this.players.get(pid); if (!pl) return;
     const room = TROWEL - pl.cement.kg;
-    if (room <= 1 || this.mixer.cement < 0.5) { if (this.mixer.cement < 0.5) this.tell(pid, '⚠️ No cement in the mixer yet. Put dust in and add water.'); return; }
+    if (room <= 1 || this.mixer.cement < 0.5) { if (room <= 1) this.tell(pid, '🪣 Your trowel is full'); else this.tell(pid, '⚠️ No cement in the mixer yet. Put dust in and add water.'); return; }
     const got = this.mixer.takeCement(room);
     const tot = pl.cement.kg + got.kg;
     this.setCement(pid, tot, pl.cement.kg ? pl.cement.color.clone().lerp(got.color, got.kg / tot) : got.color);

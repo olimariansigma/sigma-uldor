@@ -68,7 +68,7 @@ export class Progression {
     const t = TOOLS[id]; if (!t || this.tools[id]) return false;
     if (this.remote) { this.g.act('buyTool', { id }); return true; }
     if (!this.spend(t.price, t.name, pid)) return false;
-    this.tools[id] = true; this.dirty = true; this.save();
+    this.tools[id] = true; this.dirty = true; this.save(); setTimeout(() => this.g.progSave(), 50); // wallet and world together
     this.g.tell(pid, `${t.icon} <b>${t.name}</b> bought!`, true);
     if (pid !== this.g.myId) this.g.ui.toast(`${t.icon} ${t.name} bought by a friend`, true, 3000);
     this.g.ui.setHotbar();
@@ -86,7 +86,7 @@ export class Progression {
     const U = UPGRADES[key], l = this.up[key]; if (!U || l >= U.max) return false;
     if (this.remote) { this.g.act('buyUp', { key }); return true; }
     if (!this.spend(U.price(l), U.name + ' upgrade', pid)) return false;
-    this.up[key] = l + 1; this.apply(); this.dirty = true; this.save();
+    this.up[key] = l + 1; this.apply(); this.dirty = true; this.save(); setTimeout(() => this.g.progSave(), 50);
     this.g.tell(pid, `${U.icon} <b>${U.name}</b>: ${U.label(l + 1)}`, true);
     this.g.events.push(['set', { crusher: this.g.settings.crusher, grapple: this.g.settings.grapple }]); // the crusher belongs to everyone
     return true;

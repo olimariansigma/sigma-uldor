@@ -124,8 +124,10 @@ kbd { font-family: var(--fd); font-size: .82em; background: var(--y); color: var
 #vhImg { width: 92px; height: 58px; object-fit: contain; filter: drop-shadow(0 4px 6px rgba(0,0,0,.5)); }
 .vh-body { flex: 1; }
 .vh-title { font-family: var(--fd); font-size: 14px; letter-spacing: .5px; margin-bottom: 4px; }
-.vh-row { display: flex; justify-content: space-between; color: #cfd4da; }
-.vh-row b { color: #fff; font-family: var(--fd); font-weight: 400; letter-spacing: .5px; }
+.vh-row { display: flex; justify-content: space-between; gap: 8px; color: #cfd4da; white-space: nowrap; }
+.vh-row > :first-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.vh-body { min-width: 0; }
+.vh-row b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; color: #fff; font-family: var(--fd); font-weight: 400; letter-spacing: .5px; }
 .vh-bar { height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; margin-top: 6px; overflow: hidden; }
 #vhFill { height: 100%; width: 0; background: #7fd0ff; }
 #keyHints { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: 14px; font-size: 12px; text-align: right; line-height: 2; color: #e7eaee;
@@ -147,9 +149,9 @@ kbd { font-family: var(--fd); font-size: .82em; background: var(--y); color: var
 
 /* ---------- Panels ---------- */
 .panel { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(860px, 95vw); max-height: 90vh; display: flex; flex-direction: column;
-  background: linear-gradient(180deg, #20242a, #15171b); border-radius: 18px; z-index: 40; box-shadow: 0 30px 80px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06); border: 1px solid var(--line); overflow: hidden;
+  background: #181b20 linear-gradient(180deg, #20242a, #15171b); border-radius: 18px; z-index: 40; box-shadow: 0 30px 80px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.06); border: 1px solid var(--line); overflow: hidden;
   animation: panelIn .25s cubic-bezier(.2,1.2,.4,1); }
-@keyframes panelIn { from { transform: translate(-50%, -46%) scale(.97); opacity: 0; } }
+@keyframes panelIn { from { transform: translate(-50%, -46%) scale(.97); } } /* no opacity fade: the HUD must never show through a panel */
 .panel::before { content: ''; display: block; height: 8px; background: var(--hz); flex: none; }
 .panel-head { display: flex; align-items: center; gap: 14px; padding: 12px 16px 12px 20px; border-bottom: 1px solid var(--line); }
 .panel-head h2 { margin: 0; font-family: var(--fd); font-weight: 400; font-size: 24px; letter-spacing: 1px; flex: 1; color: var(--y); text-transform: uppercase; text-shadow: 0 2px 0 rgba(0,0,0,.4); }
@@ -419,7 +421,7 @@ body.pad button:focus, body.pad .mcard:focus, body.pad input:focus { outline: 3p
 #gpsArrow svg { width: 22px; height: 22px; fill: #fff; }
 .gps-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
 .gps-txt b { font-family: var(--fd); font-weight: 400; font-size: 14px; letter-spacing: .5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gps-txt span { font-size: 12px; color: #d8dce2; white-space: nowrap; }
+.gps-txt span { font-size: 12px; color: #d8dce2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gps-txt span b { font-family: var(--fu); font-weight: 800; font-size: 12px; color: #ffd34a; }
 body.touch #gps { max-width: 34vw; top: 8px; padding: 5px 10px 5px 6px; }
 body.touch #gpsArrow { width: 28px; height: 28px; }
@@ -437,3 +439,32 @@ body.panel-open #gps { display: none; }
 
 /* money only exists in progression mode */
 body:not(.prog) #career { display: none; }
+
+/* QA fixes: narrow / short screens */
+.close { flex: none; }
+.tabs { max-width: 100%; }
+@media (max-width: 560px) {
+  /* header wraps: title and close button on the first row (close always visible, top-right), tabs on their own row */
+  .panel-head { flex-wrap: wrap; gap: 8px 10px; }
+  .panel-head h2 { order: 0; min-width: 0; }
+  .panel-head .close { order: 1; }
+  .panel-head .tabs { order: 2; flex: 1 1 100%; overflow-x: auto; }
+  .panel-head .tab { flex: 1 0 auto; padding: 8px 10px; }
+}
+/* portrait phone: everything stacks in lanes (buttons row, accident GPS, dust card; hotbar above the move stick and the action pad) */
+@media (max-aspect-ratio: 1/1) {
+  body.touch #topLeft { top: 118px; }
+  body.touch #gps { top: 66px; left: max(12px, env(safe-area-inset-left)); transform: none; max-width: min(206px, calc(100vw - 24px)); }
+  body.touch #toasts { top: 124px; }
+  body.touch #hotbar { bottom: calc(196px + env(safe-area-inset-bottom)); }
+  body.touch #bucketHud, body.touch #carry { bottom: calc(258px + env(safe-area-inset-bottom)); }
+  body.touch #prompt { bottom: calc(300px + env(safe-area-inset-bottom)); }
+  body.touch #stickR { right: calc(28px + env(safe-area-inset-right)); bottom: calc(272px + env(safe-area-inset-bottom)); }
+  body.touch #vehicleHud { top: 270px; }
+  body.touch .tb-horn { left: auto; right: calc(24px + env(safe-area-inset-right)); top: 130px; transform: none; } /* the centre of the button row is taken */
+}
+/* short landscape phone: the accident GPS sits under the button row / horn (centre) instead of over them; toasts go below it */
+@media (max-height: 520px) and (min-aspect-ratio: 1/1) {
+  body.touch #gps { top: 66px; max-width: min(300px, 34vw); }
+  #toasts { top: 116px; }
+}

@@ -159,8 +159,8 @@ export class UI {
         for (const m of g.machines.values()) {
           const row = document.createElement('div'); row.className = 'slot';
           row.innerHTML = `<img class="thumb" src="${THUMB(m.spec.id)}" alt=""><div class="info"><b>${m.spec.brand} ${m.spec.model}</b><br>${m.driver >= 0 ? ic('user', 'inl') + 'driven by ' + g.playerName(m.driver) : 'parked'}</div>`;
-          const sell = prog && m.family !== 'car' ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
-          row.appendChild(this.btn(prog ? '💵 Sell ' + money(sell) : ic('trash', 'inl') + 'Remove', 'red', () => { if (prog && !confirm(`Sell the ${m.spec.brand} ${m.spec.model} for ${money(sell)}?`)) return; g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, (m.driver >= 0 && m.driver !== g.myId) || !!m.siteTruck));
+          const sell = prog && m.family !== 'car' && !m.freeTruck ? Math.round(machinePrice(m.spec) / 2 / 50) * 50 : 0;
+          row.appendChild(this.btn(prog ? '💵 Sell ' + money(sell) : ic('trash', 'inl') + 'Remove', 'red', () => { if (prog && !confirm(`Sell the ${m.spec.brand} ${m.spec.model} for ${money(sell)}?`)) return; g.act('removeMachine', { id: m.id }); setTimeout(() => this.renderSpawn(), 150); }, (m.driver >= 0 && m.driver !== g.myId) || !!m.siteTruck || (prog && m.family === 'car')));
           body.appendChild(row);
         }
       }
@@ -340,7 +340,7 @@ export class UI {
   progReset() {
     const g = this.game;
     if (!confirm('Start progression over from scratch? Your money, tools, machines and house are wiped.')) return;
-    g.prog.dead = true; Progression.reset(); g.deleteSlot('prog'); location.reload();
+    g.prog.dead = true; Progression.reset(); g.deleteSlot('prog'); try { const c = g.contracts; if (c) { c.cash = c.earned = c.done = 0; c.nextId = 1; c.jobs = []; c.dirty = false; } /* so a later contracts save cannot write the old career back */ delete g.prefs.career; g.savePrefs(); } catch (e) { /* ignore */ } location.reload();
   }
   renderSave() {
     const g = this.game, body = $('saveBody');

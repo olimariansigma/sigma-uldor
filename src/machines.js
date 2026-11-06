@@ -329,7 +329,7 @@ export class Machine {
     if (this.breakShapes.length) {
       const pen = this.armPenetration();
       // only the arm controls are held back; driving onto a raised slab is allowed (the tool rides over it)
-      const tol = this.att && ['scoop', 'skip', 'crusher', 'blade'].includes(this.att.behaviour) ? 0.3 : 0.1; // buckets may scrape
+      const tol = this.att && ['scoop', 'skip', 'crusher', 'blade'].includes(this.att.behaviour) ? 0.3 * this.s : 0.1 * this.s; // buckets may scrape (scaled with the machine)
       if (pen > tol && pen > pen0 + 0.002) { Object.assign(this, armPrev); this.pose(); this.chv = {}; }
     }
     let cs = this.contactState(others);

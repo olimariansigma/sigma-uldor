@@ -263,7 +263,7 @@ export class BrickPress {
     this.screenTex.needsUpdate = true;
   }
 
-  serialize() { return [Math.round(this.dust), Math.round(this.color.r * 1000) / 1000, Math.round(this.color.g * 1000) / 1000, Math.round(this.color.b * 1000) / 1000, this.feeding ? 1 : 0, this.made, Math.round(this.phase * 100) / 100]; }
+  serialize() { return [Math.round(this.dust * 100) / 100, Math.round(this.color.r * 1000) / 1000, Math.round(this.color.g * 1000) / 1000, Math.round(this.color.b * 1000) / 1000, this.feeding ? 1 : 0, this.made, Math.round(this.phase * 100) / 100]; }
   restore(d) {
     if (!d) { this.dust = 0; this.feeding = false; this.made = 0; this.phase = -1; this.refresh(); return; }
     this.dust = d[0]; this.color.setRGB(d[1], d[2], d[3]); this.feeding = !!d[4]; this.made = d[5] || 0;

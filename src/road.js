@@ -84,7 +84,7 @@ export class Road {
     h.filled += used;
     // mass-weighted colour of everything poured into this hole
     h.col.lerp(color, f0 > 0 ? used / h.filled : 1);
-    h.dry = dry;
+    h.dry = f0 > 0 ? Math.max(h.dry, dry) : dry; // a top-up must not re-heat a cured patch (dry 1 = cured; an empty hole starts at 1 but its first fill is fresh)
     this.refresh(h);
     return used;
   }

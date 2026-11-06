@@ -115,6 +115,11 @@ export class Incidents {
     const posts = new THREE.Mesh(mergeList(tape), new THREE.MeshStandardMaterial({ color: 0xff7a1a }));
     sup.add(posts);
   }
+  // bricks laid in a wall's hole are brick-pool pieces, not part of the wall building: they go with it (A1)
+  vanishLaid(i) {
+    const s = this.site(i), demo = this.g.demo, bp = demo.brickPool; if (!s || !bp) return;
+    for (let k = bp.start; k < bp.start + bp.count; k++) { const p = demo.pieces[k]; if (p.state === INTACT && Math.abs(p.pos.x - s.x) < 5.5 && Math.abs(p.pos.z - s.z) < 0.6 && p.pos.y < 3.2) demo.vanish(p, false); }
+  }
   site(i = this.state && this.state.site) { return SITE.incidents[i]; }
   sitePos(i) { const s = this.site(i); return new THREE.Vector3(s.x, 0, s.z); }
   local(i, x, y, z) { const s = this.site(i); return new THREE.Vector3(s.x + x, y, s.z + z); }
@@ -150,6 +155,7 @@ export class Incidents {
     // an old repaired wall on this site makes way for the new one
     const old = this.walls.find((w) => w.site === site);
     if (old) { g.removeBuildingFull(old.b); g.events.push(['bld-', old.b]); this.walls = this.walls.filter((w) => w !== old); }
+    this.vanishLaid(site); // the old repair's bricks must not count for the new accident (laid starts at 0)
     const seed = 1 + Math.floor(Math.random() * 9999);
     const wallDef = `__incw:${site}:${kind}:${seed}`, wreckDef = `__incx:${site}:${kind}:${seed}`;
     const wall = g.buildBuilding(wallDef, -1); g.events.push(['bld+', wallDef, -1, wall.id]);
@@ -157,7 +163,8 @@ export class Incidents {
     // a few blocks knocked out of the wall lie about; the wreck smoulders
     // the tipper truck that takes the wreck away, parked beside the crash
     let truckId = -1;
-    if (g.machines.size < 20) {
+    if (g.machines.size >= 20) g.ui.toast('No room for the site truck (20 machines): crush the wreck at the yard instead', true, 5000);
+    else {
       const tp = this.local(site, 9.5, 0, 6.5);
       const m = g.createMachine(TRUCK, g.nextMachineId, tp, Math.PI);
       m.siteTruck = true; truckId = m.id;
@@ -169,10 +176,12 @@ export class Incidents {
     // leftover bricks from an earlier delivery here make room for the new ones
     const tarp = this.local(site, -7.0, 0, 4.2);
     for (const p of g.demo.pieces) if (p.brick && p.state === LOOSE && Math.abs(p.pos.x - tarp.x) < 3 && Math.abs(p.pos.z - tarp.z) < 2.4) g.demo.vanish(p, false);
+    let spawned = 0;
     for (let i = 0; i < need + 2; i++) {
       const p = this.local(site, -8.2 + (i % 3) * 1.25, 0.31 + Math.floor(i / 9) * 0.62, 3.4 + (Math.floor(i / 3) % 3) * 0.66);
-      cb.spawn(p, new THREE.Quaternion(), col.clone().multiplyScalar(0.92 + Math.random() * 0.12));
+      if (cb.spawn(p, new THREE.Quaternion(), col.clone().multiplyScalar(0.92 + Math.random() * 0.12))) spawned++;
     }
+    if (spawned < need) g.ui.toast('Not enough free pressed blocks for this delivery: crush some old ones', true, 5000);
     this.state = { kind, site, seed, wall: wall.id, wreck: wreck.id, truck: truckId, need, stage: 'drive', cleared: 0, total: wreck.count, laid: 0, pay: KINDS[kind].pay, t: 0 };
     this.count++;
     this.sync();
@@ -193,12 +202,12 @@ export class Incidents {
     if (wb && !wb.removed) { for (const p of g.players.values()) g.dropCarried(p.id, (q) => q.b === st.wreck); g.removeBuildingFull(st.wreck); g.events.push(['bld-', st.wreck]); }
     const m = g.machines.get(st.truck);
     if (m && m.driver < 0) { g.destroyMachine(m.id); g.events.push(['mach-', m.id]); }
-    else if (m) m.siteTruck = false; // someone is driving it: it is theirs now (can be sold like any machine)
+    else if (m) { m.siteTruck = false; m.freeTruck = true; } // someone is driving it: it stays, but it was free so it sells for $0
     // the tarp's leftover bricks go with the delivery (there are only 300 pressed blocks in the whole world)
     const tarp = this.local(st.site, -7.0, 0, 4.2);
     for (const p of g.demo.pieces) if (p.brick && p.state === LOOSE && Math.abs(p.pos.x - tarp.x) < 3.5 && Math.abs(p.pos.z - tarp.z) < 3) g.demo.vanish(p, false);
     if (keepWall) this.walls.push({ site: st.site, b: st.wall });
-    else { const b = g.demo.buildings[st.wall]; if (b && !b.removed) { g.removeBuildingFull(st.wall); g.events.push(['bld-', st.wall]); } }
+    else { const b = g.demo.buildings[st.wall]; if (b && !b.removed) { g.removeBuildingFull(st.wall); g.events.push(['bld-', st.wall]); } this.vanishLaid(st.site); }
     this.state = null;
     this.nextT = NEXT_DELAY[0] + Math.random() * (NEXT_DELAY[1] - NEXT_DELAY[0]);
     this.sync();
@@ -217,7 +226,7 @@ export class Incidents {
       if (p.state === GONE) { cleared++; continue; }
       if ((p.state === LOOSE || p.state === HELD) && inv) {
         v.copy(p.pos).applyMatrix4(inv);
-        if (Math.abs(v.x) < box[0] + 0.3 && v.z > -0.6 && v.z < box[1] + 0.3 && v.y > -0.8 && v.y < box[2] + 1.0) cleared++;
+        if (Math.abs(v.x) < box[0] + 0.05 && v.z > -0.3 && v.z < box[1] + 0.1 && v.y > -0.4 && v.y < box[2] + 0.4) cleared++; // tight: only what is really on the bed
       }
     }
     // bricks laid (fixed on mortar) in the hole
@@ -253,6 +262,11 @@ export class Incidents {
     st.cleared = m.cleared; st.total = m.total; st.laid = m.laid;
     if (st.stage === 'drive' && d < 28) st.stage = 'work';
     const wreckDone = m.cleared >= Math.ceil(m.total * 0.85), wallDone = m.laid >= st.need;
+    if (wreckDone && !st.wreckClear) { // the last bits of wreck must not block the bricks: clear them out of the hole once the wreck stage is done
+      st.wreckClear = true;
+      const wb = g.demo.buildings[st.wreck], s = this.site();
+      if (wb) { for (let i = wb.start; i < wb.start + wb.count; i++) { const p = g.demo.pieces[i]; if ((p.state === INTACT || p.state === LOOSE) && Math.abs(p.pos.x - s.x) < 3 && Math.abs(p.pos.z - s.z) < 0.9) g.demo.vanish(p, false); } g.demo.dirty.add(wb.id); }
+    }
     if (st.stage === 'work' && wreckDone && wallDone) { this.finish(); return; }
     if (prev !== st.stage) {
       g.ui.toast('🚧 Smash the wreck, load it in the truck, rebuild the wall', true, 4500);
@@ -298,13 +312,13 @@ export class Incidents {
       this.gpsKey = key;
       document.getElementById('gpsTitle').textContent = `${K.icon} ${K.name} · ${s.name}`;
       document.getElementById('gpsSub').innerHTML = st.stage === 'drive' ? `${Math.round(dist)} m · drive there`
-        : `Wreck in truck <b>${st.cleared}/${Math.ceil(st.total * 0.85)}</b> · Wall <b>${Math.min(st.laid, st.need)}/${st.need}</b>${dist > 40 ? ` · ${Math.round(dist)} m` : ''}`;
+        : `Wreck in truck <b>${Math.min(st.cleared, Math.ceil(st.total * 0.85))}/${Math.ceil(st.total * 0.85)}</b> · Wall <b>${Math.min(st.laid, st.need)}/${st.need}</b>${dist > 40 ? ` · ${Math.round(dist)} m` : ''}`;
     }
     gps.classList.toggle('near', dist < 30);
   }
 
   // ------------------------------------------------------------------ save / sync
-  serialize() { return { state: this.state, nextT: Math.round(this.nextT), walls: this.walls, count: this.count, done: this.done }; }
+  serialize() { return { state: this.state, nextT: Math.round(this.nextT), walls: this.walls, count: this.count, done: this.done, free: [...this.g.machines.values()].filter((m) => m.freeTruck).map((m) => m.id) }; }
   restore(d) {
     const was = this.state;
     this.state = d && d.state ? { ...d.state } : null;
@@ -312,6 +326,7 @@ export class Incidents {
     this.nextT = d && typeof d.nextT === 'number' ? d.nextT : FIRST_DELAY;
     this.walls = (d && d.walls) || []; this.count = (d && d.count) || 0; this.done = (d && d.done) || 0;
     if (this.state) { const m = this.g.machines.get(this.state.truck); if (m) m.siteTruck = true; }
+    for (const id of (d && d.free) || []) { const m = this.g.machines.get(id); if (m) m.freeTruck = true; } // kept site trucks still sell for $0 after a reload
     this.gpsKey = null;
   }
   clear() { this.state = null; this.walls = []; this.nextT = FIRST_DELAY; this.gpsKey = null; }

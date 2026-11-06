@@ -49,7 +49,10 @@
       "artifactName": "WreckingYard-${version}-Windows.exe"
     },
     "compression": "maximum",
-    "afterPack": "scripts/afterPack.cjs"
+    "afterPack": "scripts/afterPack.cjs",
+    "electronLanguages": [
+      "en-US"
+    ]
   },
   "dependencies": {
     "peerjs": "^1.5.5"

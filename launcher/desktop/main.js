@@ -14,6 +14,13 @@ const SAFE = /^[0-9A-Za-z.-]{1,32}$/;
 
 app.commandLine.appendSwitch('ignore-gpu-blocklist');
 app.commandLine.appendSwitch('enable-gpu-rasterization');
+// speed, with nothing lost: laptops with two GPUs run the game on the fast one; the game never gets throttled when
+// another window is in front; textures upload without an extra copy
+app.commandLine.appendSwitch('force_high_performance_gpu');
+app.commandLine.appendSwitch('enable-zero-copy');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
 
 const versionsDir = () => path.join(app.getPath('userData'), 'versions');
 const versionDir = (v) => { if (!SAFE.test(v)) throw new Error('bad version name'); return path.join(versionsDir(), v); };
@@ -67,7 +74,7 @@ function play(version) {
   const win = new BrowserWindow({
     width: 1600, height: 900, minWidth: 960, minHeight: 540, backgroundColor: '#111111',
     title: `Wrecking Yard ${version}`, show: false, icon: path.join(__dirname, 'icon.png'),
-    webPreferences: { contextIsolation: true, backgroundThrottling: false },
+    webPreferences: { contextIsolation: true, backgroundThrottling: false, spellcheck: false, v8CacheOptions: 'bypassHeatCheckAndEagerCompile' },
   });
   win.loadFile(index);
   win.once('ready-to-show', () => { win.maximize(); win.show(); if (launcher) launcher.hide(); });
@@ -83,7 +90,7 @@ function createLauncher() {
   launcher = new BrowserWindow({
     width: 1120, height: 780, minWidth: 720, minHeight: 560, backgroundColor: '#0f1114', title: 'Wrecking Yard Launcher', show: false,
     icon: path.join(__dirname, 'icon.png'),
-    webPreferences: { contextIsolation: true, preload: path.join(__dirname, 'preload.js') },
+    webPreferences: { contextIsolation: true, spellcheck: false, preload: path.join(__dirname, 'preload.js') },
   });
   launcher.loadFile(path.join(__dirname, 'ui', 'index.html'));
   launcher.once('ready-to-show', () => launcher.show());

@@ -51,6 +51,9 @@
     },
     "portable": {
       "artifactName": "WreckingYard-Launcher-Windows.exe"
-    }
+    },
+    "electronLanguages": [
+      "en-US"
+    ]
   }
 }

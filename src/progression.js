@@ -32,36 +32,45 @@ export const forSale = (sp) => !NOT_SOLD.has(sp.variantOf || sp.id);
 export const money = (n) => '$' + Math.round(n).toLocaleString('en-US');
 
 export class Progression {
-  constructor(game) {
-    this.g = game;
-    let s = null; try { s = JSON.parse(localStorage.getItem(PROG_KEY)); } catch (e) { s = null; }
+  constructor(game, remote = false) {
+    this.g = game; this.remote = remote; this.dirty = true;
+    let s = null; if (!remote) { try { s = JSON.parse(localStorage.getItem(PROG_KEY)); } catch (e) { s = null; } }
     this.fresh = !s;
     s = s || {};
     this.money = s.money ?? 150; this.tools = s.tools || {}; this.laidMax = s.laidMax || 0; this.milestone = s.milestone || 0;
     this.earned = s.earned || 0; this.crushedKg = s.crushedKg || 0;
-    if (this.tools.trowel) { delete this.tools.trowel; this.money += 400; } // the trowel is free now: refund it
+    if (this.tools.trowel && !remote) { delete this.tools.trowel; this.money += 400; } // the trowel is free now: refund it
     this.up = Object.assign({ hammer: 0, carry: 0, crusher: 0 }, s.up || {});
     this.snap = null; this.t = 0; this.saveT = 0;
   }
+  // the shared career as the host sends it to everyone who joined
+  pack() { return { money: Math.round(this.money), tools: this.tools, up: this.up, laidMax: this.laidMax, milestone: this.milestone, earned: Math.round(this.earned), crushedKg: Math.round(this.crushedKg) }; }
+  unpack(s) {
+    this.money = s.money; this.tools = s.tools || {}; this.up = Object.assign({ hammer: 0, carry: 0, crusher: 0 }, s.up || {});
+    this.laidMax = s.laidMax || 0; this.milestone = s.milestone || 0; this.earned = s.earned || 0; this.crushedKg = s.crushedKg || 0;
+  }
   save() {
-    if (this.dead) return;
+    if (this.dead || this.remote) return;
     try { localStorage.setItem(PROG_KEY, JSON.stringify({ money: Math.round(this.money), tools: this.tools, laidMax: this.laidMax, milestone: this.milestone, earned: Math.round(this.earned), crushedKg: Math.round(this.crushedKg), up: this.up })); } catch (e) { /* storage full */ }
   }
   static reset() { try { localStorage.removeItem(PROG_KEY); } catch (e) { /* ignore */ } }
 
   has(tool) { return tool === 'hammer' || tool === 'trowel' || tool === 'scrape' || !!this.tools[tool]; }
   canAfford(n) { return this.money >= n; }
-  spend(n, what) {
-    if (this.money < n) { this.g.ui.toast(`💸 Not enough money: ${what} costs ${money(n)}, you have ${money(this.money)}. Crush more blocks!`); this.g.audio.denied(); return false; }
-    this.money -= n; this.save(); this.g.ui.setCareer(); if (this.g.audio.cash) this.g.audio.cash();
+  spend(n, what, pid = this.g.myId) {
+    if (this.money < n) { this.g.tell(pid, `💸 Not enough money: ${what} costs ${money(n)}, you have ${money(this.money)}`); if (pid === this.g.myId) this.g.audio.denied(); return false; }
+    if (this.remote) return true; // only checks: the host takes the money
+    this.money -= n; this.dirty = true; this.save(); this.g.ui.setCareer(); if (pid === this.g.myId && this.g.audio.cash) this.g.audio.cash();
     return true;
   }
-  earn(n, quiet = true) { this.money += n; this.earned += n; if (!quiet) this.g.ui.setCareer(); }
-  buyTool(id) {
+  earn(n, quiet = true) { if (this.remote) return; this.money += n; this.earned += n; this.dirty = true; if (!quiet) this.g.ui.setCareer(); }
+  buyTool(id, pid = this.g.myId) {
     const t = TOOLS[id]; if (!t || this.tools[id]) return false;
-    if (!this.spend(t.price, t.name)) return false;
-    this.tools[id] = true; this.save();
-    this.g.ui.toast(`${t.icon} <b>${t.name}</b> bought! ${t.what}.`, true, 6000);
+    if (this.remote) { this.g.act('buyTool', { id }); return true; }
+    if (!this.spend(t.price, t.name, pid)) return false;
+    this.tools[id] = true; this.dirty = true; this.save();
+    this.g.tell(pid, `${t.icon} <b>${t.name}</b> bought!`, true);
+    if (pid !== this.g.myId) this.g.ui.toast(`${t.icon} ${t.name} bought by a friend`, true, 3000);
     this.g.ui.setHotbar();
     return true;
   }
@@ -73,11 +82,13 @@ export class Progression {
     g.crusher.rate = g.settings.crusher;
     if (g.player && g.player.avatar) g.player.avatar.setHammer(u.hammer);
   }
-  buyUp(key) {
+  buyUp(key, pid = this.g.myId) {
     const U = UPGRADES[key], l = this.up[key]; if (!U || l >= U.max) return false;
-    if (!this.spend(U.price(l), U.name + ' upgrade')) return false;
-    this.up[key] = l + 1; this.apply(); this.save();
-    this.g.ui.toast(`${U.icon} <b>${U.name}</b>: ${U.label(l + 1)}`, true, 4000);
+    if (this.remote) { this.g.act('buyUp', { key }); return true; }
+    if (!this.spend(U.price(l), U.name + ' upgrade', pid)) return false;
+    this.up[key] = l + 1; this.apply(); this.dirty = true; this.save();
+    this.g.tell(pid, `${U.icon} <b>${U.name}</b>: ${U.label(l + 1)}`, true);
+    this.g.events.push(['set', { crusher: this.g.settings.crusher, grapple: this.g.settings.grapple }]); // the crusher belongs to everyone
     return true;
   }
 
@@ -88,8 +99,10 @@ export class Progression {
   }
   resync() { this.snap = this.counters(); }
   update(dt) {
+    if (this.remote) return;
     this.t -= dt; if (this.t > 0) return;
     this.t = 0.25;
+    if (this.dirty && this.g.net.isHost) { this.dirty = false; this.g.events.push(['prog', this.pack()]); }
     const c = this.counters(), s = this.snap;
     if (!s || c.crushed < s.crushed - 1) { this.snap = c; return; }
     const kg = (c.crushed - s.crushed) * 4 / 459;
@@ -100,7 +113,7 @@ export class Progression {
       while (this.milestone < MILESTONES.length && this.laidMax >= MILESTONES[this.milestone][0]) {
         const [blocks, bonus, name] = MILESTONES[this.milestone++];
         this.earn(bonus);
-        this.g.ui.bigPop(`<b>🏠 ${name}!</b><small>${blocks} blocks laid · +${money(bonus)} bonus</small>`, 'job');
+        this.g.netPop(`<b>🏠 ${name}!</b><small>${blocks} blocks laid · +${money(bonus)} bonus</small>`, 'job');
         this.g.audio.firework(this.g.camera.position.clone().setY(this.g.camera.position.y + 6), 0.05);
         if (this.g.audio.bigCash) this.g.audio.bigCash();
       }
@@ -108,7 +121,7 @@ export class Progression {
     this.snap = c;
     // a little "+$" now and then so you see the money come in
     this.payT = (this.payT || 0) - 0.25;
-    if (this.pending >= 1 && this.payT <= 0) { this.payT = 1.2; this.g.ui.moneyTick(this.pending); this.pending = 0; }
+    if (this.pending >= 1 && this.payT <= 0) { this.payT = 1.2; this.g.ui.moneyTick(this.pending); this.g.events.push(['mt', Math.round(this.pending)]); this.pending = 0; }
     this.saveT -= 0.25;
     if (this.saveT <= 0) { this.saveT = 20; this.g.progSave(); } // wallet and world are saved together
   }

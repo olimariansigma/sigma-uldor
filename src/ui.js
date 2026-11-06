@@ -63,7 +63,6 @@ export class UI {
   toggle(id) { if ($(id).classList.contains('hidden')) this.open(id); else this.close(id); }
   syncOpen() { document.body.classList.toggle('panel-open', PANELS.some((o) => !$(o).classList.contains('hidden'))); }
   open(id) {
-    if (id === 'multi' && this.game.prog) { this.toast('🔨 Progression is a solo career. Play together in <b>Sandbox</b> mode (main menu)'); return; }
     for (const o of PANELS) if (o !== id) $(o).classList.add('hidden');
     $(id).classList.remove('hidden');
     this.syncOpen();
@@ -326,15 +325,15 @@ export class UI {
     const g = this.game, body = $('menuBody'); body.innerHTML = '';
     const row = document.createElement('div'); row.className = 'btn-row'; row.style.flexDirection = 'column';
     row.appendChild(this.btn('▶ Resume', '', () => this.close('menu')));
-    if (g.prog) row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
+    if (g.prog && !g.prog.remote) row.appendChild(this.btn('📋 Contracts', 'alt', () => this.open('contracts')));
     const inc = g.incidents;
     if (!g.net.isClient) {
       if (inc.state) row.appendChild(this.btn('🚨 Hand this accident to another crew', 'alt', () => { g.act('incident', { op: 'skip' }); this.close('menu'); }));
       else row.appendChild(this.btn(`🚨 Report an accident now (next in ${Math.floor(inc.nextT / 60)}:${String(Math.floor(inc.nextT % 60)).padStart(2, '0')})`, 'alt', () => { g.act('incident', { op: 'start' }); this.close('menu'); }));
     }
-    if (g.prog) row.appendChild(this.btn('🔄 Start over', 'red', () => this.progReset()));
+    if (g.prog && !g.prog.remote) row.appendChild(this.btn('🔄 Start over', 'red', () => this.progReset()));
     else row.appendChild(this.btn('🔄 New world', 'red', () => { if (confirm('Start a fresh world? (unsaved progress is lost)')) { g.act('newWorld', {}); this.close('menu'); } }, g.net.isClient));
-    row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (g.prog) { g.progSave(); location.reload(); } else if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
+    row.appendChild(this.btn('🏠 Main menu', 'alt', () => { if (g.prog && !g.prog.remote) { g.progSave(); location.reload(); } else if (confirm('Go back to the main menu? (unsaved progress is lost, save first)')) location.reload(); }));
     body.appendChild(row);
     if (g.net.isClient) { const n = document.createElement('div'); n.className = 'dim'; n.style.marginTop = '8px'; n.textContent = 'Only the host can start a new world.'; body.appendChild(n); }
   }
@@ -346,7 +345,7 @@ export class UI {
   renderSave() {
     const g = this.game, body = $('saveBody');
     body.innerHTML = '';
-    if (g.prog) {
+    if (g.prog && !g.prog.remote) {
       const p = g.prog;
       body.innerHTML = `<p>Progression saves itself every minute, after each purchase and when you close the game. Pick up where you left off with <b>PROGRESSION</b> on the main menu.</p>
         <div class="car-head"><div><div class="dim">Wallet</div><b class="big">${money(p.money)}</b></div><div><div class="dim">Earned in total</div><b>${money(p.earned)}</b></div><div><div class="dim">Crushed</div><b>${fmtKg(p.crushedKg / KG)}</b></div><div><div class="dim">Best house</div><b>${p.laidMax} blocks</b></div></div>`;

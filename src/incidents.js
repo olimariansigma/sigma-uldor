@@ -264,7 +264,7 @@ export class Incidents {
     const fast = st.t < 8 * 60, pay = Math.round(st.pay * (fast ? 1.25 : 1));
     if (g.prog) g.prog.earn(pay, false); // money exists in progression only
     this.done++;
-    g.ui.bigPop(`<b>${K.icon} Accident cleared!</b><small>${g.prog ? `+${money(pay)}${fast ? ' (fast work +25%)' : ''}` : this.site().name}</small>`, 'job');
+    g.netPop(`<b>${K.icon} Accident cleared!</b><small>${g.prog ? `+${money(pay)}${fast ? ' (fast work +25%)' : ''}` : this.site().name}</small>`, 'job');
     if (g.prog && g.audio.bigCash) g.audio.bigCash();
     g.audio.firework(this.sitePos(st.site).setY(6), 0.05);
     this.cleanup(true);
@@ -306,7 +306,9 @@ export class Incidents {
   // ------------------------------------------------------------------ save / sync
   serialize() { return { state: this.state, nextT: Math.round(this.nextT), walls: this.walls, count: this.count, done: this.done }; }
   restore(d) {
+    const was = this.state;
     this.state = d && d.state ? { ...d.state } : null;
+    if (!was && this.state && !this.g.authority) { const K = KINDS[this.state.kind]; this.g.ui.toast(`🚨 <b>${K.name}</b> at ${this.site().name}: follow the GPS${this.g.prog ? ' · pays <b>' + money(K.pay) + '</b>' : ''}`, true, 5000); }
     this.nextT = d && typeof d.nextT === 'number' ? d.nextT : FIRST_DELAY;
     this.walls = (d && d.walls) || []; this.count = (d && d.count) || 0; this.done = (d && d.done) || 0;
     if (this.state) { const m = this.g.machines.get(this.state.truck); if (m) m.siteTruck = true; }

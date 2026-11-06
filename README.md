@@ -149,3 +149,9 @@ sites outside the yard. Drive the yard pickup there following the GPS arrow and 
 and load it onto the tipper truck parked on site, then rebuild the hole with the delivered bricks and the free
 mortar from the tub. Plane $6,000, car $3,500, +25% within 8 minutes. The menu can report one right away or hand
 the current one over.
+
+## Progression co-op
+
+Host a progression game from the Online panel (`M`) and friends join with the code from their title screen. The
+host owns the career (wallet, tools, upgrades, save, contracts); friends mirror it and anyone can buy from the Shop,
+the host's wallet pays. Crushing and house-building by anyone pays into the shared wallet.

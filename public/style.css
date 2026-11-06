@@ -402,7 +402,7 @@ body.touch .hud-btn span { display: none; }
 #srSpawn.poor { filter: saturate(.4) brightness(.8); }
 .mtick { position: fixed; z-index: 30; pointer-events: none; font-family: var(--fd); font-size: 18px; color: #7ef0a4; text-shadow: 0 2px 4px rgba(0, 0, 0, .8); animation: mtick 1.5s ease-out forwards; }
 @keyframes mtick { 0% { opacity: 0; transform: translateY(6px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-26px); } }
-body.prog #multiBtn, body.prog .dust-sub span:nth-child(3) { display: none; }
+body.prog .dust-sub span:nth-child(3) { display: none; }
 .help-qa { grid-column: 1 / -1; }
 .help-qa ol { margin: 6px 0 0 18px; padding: 0; }
 .help-qa li { margin: 5px 0; }

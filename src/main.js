@@ -514,7 +514,33 @@ class Game {
     const save = () => this.progSave();
     window.addEventListener('pagehide', save); document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
   }
-  progSave() { if (this.prog && !this.prog.dead) { this.prog.save(); this.saveSlot('prog', true); } }
+  // a friend joined a progression host: same shop, shared wallet (the host charges, we only mirror)
+  enterRemoteProg(state) {
+    if (this.prog && !this.prog.remote) return;
+    const first = !this.prog;
+    if (first) {
+      this.prog = new Progression(this, true);
+      document.body.classList.add('prog');
+      this.road.noHoles = true;
+      $('spawnBtn').title = 'Shop (B)'; $('spawnBtn').querySelector('span').textContent = 'Shop';
+    }
+    this.prog.unpack(state); this.prog.apply();
+    this.ui.setCareer(); this.ui.setHotbar();
+    if (first) this.ui.toast('🔨 Progression co-op: the money and the tools are shared with the host', true, 5000);
+  }
+  exitRemoteProg() {
+    if (!this.prog || !this.prog.remote) return;
+    this.prog = null;
+    document.body.classList.remove('prog');
+    this.road.noHoles = false;
+    $('spawnBtn').title = 'Spawn (B)'; $('spawnBtn').querySelector('span').textContent = 'Spawn';
+    this.settings.hammer = this.prefs.hammer; this.settings.carry = this.prefs.carry;
+    this.player.avatar.setHammer(this.settings.hammer);
+    this.ui.setHotbar();
+  }
+  // a popup every player sees (host: shows it and tells the others)
+  netPop(html, cls) { this.ui.bigPop(html, cls); if (this.net.isHost) this.events.push(['bpop', html, cls]); }
+  progSave() { if (this.prog && !this.prog.dead && !this.prog.remote) { this.prog.save(); this.saveSlot('prog', true); } }
   newProgWorld() {
     this.clearWorld();
     this.dn.p = MORNING; this.dn.apply();
@@ -599,6 +625,7 @@ class Game {
       press: this.press.serialize(),
       splashes: this.builder.pack(),
       incidents: this.incidents.serialize(),
+      prog: !forSave && this.prog && !this.prog.remote ? this.prog.pack() : undefined,
     };
   }
 
@@ -640,6 +667,7 @@ class Game {
     this.press.restore(w.press);
     this.builder.restore(w.splashes);
     this.incidents.restore(w.incidents);
+    if (mirror) { if (w.prog) this.enterRemoteProg(w.prog); else if (this.prog && this.prog.remote) this.exitRemoteProg(); }
     if (!mirror) this.ensureCar();
     if (typeof w.time === 'number') this.dn.p = w.time;
     if (mirror) { this.hostCycle = typeof w.cycle === 'number' ? w.cycle : 0; this.charges.restore(w.charges); if (w.weather) this.weather.setState(w.weather); }
@@ -753,6 +781,8 @@ class Game {
         this.events.push(['mortar', this.builder.pack()]);
         break;
       }
+      case 'buyTool': if (this.prog && !this.prog.remote) this.prog.buyTool(d.id, pid); break;
+      case 'buyUp': if (this.prog && !this.prog.remote) this.prog.buyUp(d.key, pid); break;
       case 'siteMortar': {
         const mp = this.incidents.mortarPoint(), at = pid === this.myId ? this.player.pos : pl && (pl.target || pl.pos);
         if (!mp || !at || Math.hypot(at.x - mp.x, at.z - mp.z) > 4) return;
@@ -832,7 +862,7 @@ class Game {
         const fwd = new THREE.Vector3(-Math.sin(d.yaw + Math.PI), 0, -Math.cos(d.yaw + Math.PI));
         const spot = this.findMachineSpot(near.clone().addScaledVector(fwd, 7 * Math.max(0.7, spec.scale)), spec);
         if (!spot) { this.tell(pid, '⚠️ No free space nearby. Try somewhere more open.'); return; }
-        if (this.prog && pid === this.myId && !this.prog.spend(machinePrice(spec), 'The ' + spec.brand + ' ' + spec.model)) return;
+        if (this.prog && !this.prog.spend(machinePrice(spec), 'The ' + spec.brand + ' ' + spec.model, pid)) return;
         const m = this.createMachine(spec.id, this.nextMachineId, spot, Math.atan2(near.x - spot.x, near.z - spot.z) + Math.PI);
         this.events.push(['mach+', m.serialize()]);
         if (this.prog) this.progSave();
@@ -851,7 +881,7 @@ class Game {
         break;
       }
       case 'spawnBuilding': case 'clearPlot': {
-        if (this.prog && name === 'spawnBuilding' && !this.prog.spend(BUILDING_PRICE, 'A new building')) return;
+        if (this.prog && name === 'spawnBuilding' && !this.prog.spend(BUILDING_PRICE, 'A new building', pid)) return;
         const old = this.plots[d.plot];
         for (const p of this.players.values()) if (old != null) this.dropCarried(p.id, (q) => q.b === old);
         if (old != null) { this.removeBuildingFull(old); this.events.push(['bld-', old]); }
@@ -1110,6 +1140,7 @@ class Game {
       const w = this.serializeWorld(true);
       for (const id of [...this.players.keys()]) if (id !== this.myId) this.removePlayerEntry(id);
       this.rekeyLocal(0);
+      this.exitRemoteProg();
       this.loadWorld(w, { forSave: true });
       this.ui.refreshOpen();
     });
@@ -1132,6 +1163,7 @@ class Game {
     } catch (e) { this.ui.netMsg = '❌ ' + (e.message || e.type || 'Could not host'); this.ui.renderMulti(); }
   }
   async joinGame(code, fromTitle = false) {
+    if (this.prog && !this.prog.remote) { this.ui.toast('🔨 You are in your own progression career. Go back to the main menu to join a friend'); return; }
     if (this.net.online) this.leaveGame();
     if (!fromTitle) { this.ui.netMsg = 'Connecting…'; this.ui.renderMulti(); }
     try {
@@ -1155,6 +1187,7 @@ class Game {
       const w = this.serializeWorld(true);
       for (const id of [...this.players.keys()]) if (id !== this.myId) this.removePlayerEntry(id);
       this.rekeyLocal(0);
+      this.exitRemoteProg();
       this.loadWorld(w, { forSave: true });
     }
     this.ui.renderMulti();
@@ -1297,6 +1330,9 @@ class Game {
       case 'press': this.press.restore(e[1]); break;
       case 'mortar': this.builder.restore(e[1]); break;
       case 'inc': this.incidents.restore(e[1]); break;
+      case 'prog': if (this.prog && this.prog.remote) { this.prog.unpack(e[1]); this.prog.apply(); this.ui.setCareer(); this.ui.setHotbar(); this.ui.refreshOpen(); } break;
+      case 'bpop': this.ui.bigPop(e[1], e[2]); break;
+      case 'mt': this.ui.moneyTick(e[1]); break;
       case 'boom': this.boomFx(new THREE.Vector3(e[1], e[2], e[3])); break;
       case 'horn': this.setHorn(e[1], e[2]); break;
       case 'party': this.party(e[1]); break;
@@ -1418,7 +1454,7 @@ class Game {
     if (fell > 0) { c.n += fell; c.quiet = 0; } else if (c.n) c.quiet += 0.25;
     if (c.n && (c.quiet >= 1.6 || c.n > 400)) {
       const n = c.n; c.n = 0; c.quiet = 0;
-      if (this.prog) this.contracts.onCombo(n); // contracts and money exist in progression only
+      if (this.prog && !this.prog.remote) this.contracts.onCombo(n); // contracts and money exist in progression only
       if (n < 10) return;
       const best = this.prefs.bestCombo || 0, rec = n > best && n >= 15;
       if (rec) { this.prefs.bestCombo = n; this.savePrefs(); }
@@ -1573,7 +1609,7 @@ class Game {
     if (input.pressed('shop')) this.ui.toggle('spawn');
     if (input.pressed('multi')) this.ui.toggle('multi');
     if (input.pressed('help')) this.ui.toggle('help');
-    if (input.pressed('jobs') && this.prog) this.ui.toggle('contracts');
+    if (input.pressed('jobs') && this.prog && !this.prog.remote) this.ui.toggle('contracts');
     const machList = [...this.machines.values()];
 
     // ---- local control
@@ -1778,7 +1814,7 @@ class Game {
     this.charges.update(dt, auth);
     this.traffic.update(dt);
     this.comboUpdate(dt);
-    if (this.prog) this.contracts.update(dt); // no contracts / cash in sandbox
+    if (this.prog && !this.prog.remote) this.contracts.update(dt); // no contracts / cash in sandbox
     this.incidents.update(dt);
     if (this.prog) this.prog.update(dt);
     this.careerT = (this.careerT || 0) - dt; if (this.careerT <= 0) { this.careerT = 0.5; this.ui.setCareer(); }

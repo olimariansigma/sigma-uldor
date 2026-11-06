@@ -176,6 +176,7 @@ export function shadowProxy(group) {
 // motion and shading are unchanged, but a machine costs ~15 draws instead of ~80. The original parts stay in the
 // scene graph (invisible) so everything that reads their transforms, ray casts or physics keeps working.
 const BATCHES = new Set();
+const EMPTY_GEO = new THREE.BufferGeometry(); EMPTY_GEO.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
 const _s = new THREE.Vector3(), _c = new THREE.Vector3(), _q = new THREE.Quaternion(), _bb = new THREE.Box3(), _sp = new THREE.Sphere();
 function uniformChain(c, root, scaled) {
   c.matrixWorld.decompose(_c, _q, _s); // (mirrored parts are fine: their triangles get reversed below)
@@ -201,7 +202,7 @@ export function batchSkinned(root, scene, scaled, named) {
   }
   const used = [];
   for (const list of buckets.values()) if (list.length > 1) used.push(...list);
-  if (used.length < 2) return null;
+  if (used.length < 2 || used.length > 255) return null; // bone index is stored in one byte
   const boneOf = new Map(used.map((c, i) => [c, i]));
   const skel = new THREE.Skeleton(used, used.map(() => new THREE.Matrix4()));
   const radius = used.map((c) => { if (!c.geometry.boundingSphere) c.geometry.computeBoundingSphere(); return c.geometry.boundingSphere; });
@@ -230,9 +231,9 @@ export function batchSkinned(root, scene, scaled, named) {
         const ix = g.index.array.slice(); for (let k = 0; k < ix.length; k += 3) { const t = ix[k + 1]; ix[k + 1] = ix[k + 2]; ix[k + 2] = t; }
         g.setIndex(new THREE.BufferAttribute(ix, 1));
       }
-      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
-      for (let k = 0; k < n; k++) { si[k * 4] = bi; sw[k * 4] = 1; }
-      g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+      const si = new Uint8Array(n * 4), sw = new Uint8Array(n * 4);
+      for (let k = 0; k < n; k++) { si[k * 4] = bi; sw[k * 4] = 255; }
+      g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4, true));
       return g;
     });
     const anyIdx = parts.some((g) => g.index);
@@ -249,7 +250,8 @@ export function batchSkinned(root, scene, scaled, named) {
   if (!meshes.length) return null;
   // all built: only now swap them in (an error above leaves the machine exactly as it was)
   // the parts stay in the graph (transforms, visibility) but on no layer: no camera or shadow pass draws them again
-  for (const sk of meshes) { scene.add(sk); for (const c of sk.userData.parts) c.layers.disableAll(); }
+  // (their vertex data now lives in the batch: drop the copy, nothing draws or reads it again)
+  for (const sk of meshes) { scene.add(sk); for (const c of sk.userData.parts) { c.layers.disableAll(); c.geometry = EMPTY_GEO; } delete sk.userData.parts; }
   const rec = { used, radius, meshes, root };
   BATCHES.add(rec); rec.dispose = () => { BATCHES.delete(rec); for (const sk of meshes) { sk.removeFromParent(); sk.geometry.dispose(); } skel.dispose(); };
   updateBatch(rec);

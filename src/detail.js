@@ -170,10 +170,111 @@ export function shadowProxy(group) {
     group.add(proxy); PROXIES.add(proxy);
   }
 }
+// ------------------------------------------------------------------ one draw per material for a whole machine
+// Every merged part of a machine (boom, stick, bucket, cab, frame... each moving on its own) joins one skinned mesh
+// per material, the part itself acting as the bone: each vertex follows exactly the matrix its part has, so shapes,
+// motion and shading are unchanged, but a machine costs ~15 draws instead of ~80. The original parts stay in the
+// scene graph (invisible) so everything that reads their transforms, ray casts or physics keeps working.
+const BATCHES = new Set();
+const _s = new THREE.Vector3(), _c = new THREE.Vector3(), _q = new THREE.Quaternion(), _bb = new THREE.Box3(), _sp = new THREE.Sphere();
+function uniformChain(c, root, scaled) {
+  c.matrixWorld.decompose(_c, _q, _s); // (mirrored parts are fine: their triangles get reversed below)
+  const sx = Math.abs(_s.x), sy = Math.abs(_s.y), sz = Math.abs(_s.z);
+  if (Math.abs(sx - sy) > 1e-4 * sx || Math.abs(sy - sz) > 1e-4 * sx) return false; // skinned normals need uniform scale
+  for (let p = c; p && p !== root.parent; p = p.parent) if (scaled.has(p)) return false; // a part that stretches at runtime
+  return true;
+}
+export function batchSkinned(root, scene, scaled, named) {
+  root.updateMatrixWorld(true);
+  const cands = [];
+  root.traverse((c) => {
+    if (!c.isMesh || named.has(c) || c.userData.shadowProxy || c.userData.batch || !c.visible || c.layers.mask !== 1 || c.isInstancedMesh || c.isSkinnedMesh || Array.isArray(c.material) || c.material.transparent) return;
+    if (c.geometry.morphAttributes.position || !c.geometry.attributes.normal) return;
+    for (let p = c.parent; p; p = p.parent) if (!p.visible) return;
+    if (uniformChain(c, root, scaled)) cands.push(c);
+  });
+  const buckets = new Map();
+  for (const c of cands) {
+    const k = c.material.uuid + (c.castShadow ? 's' : 'n') + (c.receiveShadow ? 'r' : 'n');
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(c);
+  }
+  const used = [];
+  for (const list of buckets.values()) if (list.length > 1) used.push(...list);
+  if (used.length < 2) return null;
+  const boneOf = new Map(used.map((c, i) => [c, i]));
+  const skel = new THREE.Skeleton(used, used.map(() => new THREE.Matrix4()));
+  const radius = used.map((c) => { if (!c.geometry.boundingSphere) c.geometry.computeBoundingSphere(); return c.geometry.boundingSphere; });
+  skel.update = function () {
+    const arr = this.boneMatrices;
+    for (let i = 0; i < used.length; i++) {
+      let vis = true; for (let p = used[i]; p; p = p.parent) if (!p.visible) { vis = false; break; }
+      if (vis) used[i].matrixWorld.toArray(arr, i * 16); else arr.fill(0, i * 16, i * 16 + 16); // a hidden part collapses to a point
+    }
+    if (this.boneTexture !== null) this.boneTexture.needsUpdate = true;
+  };
+  const meshes = [];
+  for (const list of buckets.values()) {
+    if (list.length < 2) continue;
+    const names = ['position', 'normal', 'uv', 'aRest'].filter((n) => list.every((c) => c.geometry.attributes[n]));
+    if (list[0].material.userData.weather && !names.includes('aRest')) continue; // weathering needs every part's rest position
+    const mt = list[0].material;
+    if (mt.vertexColors || ((mt.map || mt.normalMap || mt.roughnessMap || mt.metalnessMap || mt.alphaMap || mt.emissiveMap || mt.aoMap || mt.bumpMap) && !names.includes('uv'))) continue;
+    if (mt.aoMap || mt.lightMap) continue; // second uv set: not carried over
+    const parts = list.map((c) => {
+      const src = c.geometry, g = new THREE.BufferGeometry(), n = src.attributes.position.count, bi = boneOf.get(c);
+      for (const a of names) g.setAttribute(a, src.attributes[a]);
+      if (src.index) g.setIndex(src.index);
+      if (c.matrixWorld.determinant() < 0) { // a mirrored part: three flips its face winding per object; here it has to be in the data
+        if (!g.index) indexed(g);
+        const ix = g.index.array.slice(); for (let k = 0; k < ix.length; k += 3) { const t = ix[k + 1]; ix[k + 1] = ix[k + 2]; ix[k + 2] = t; }
+        g.setIndex(new THREE.BufferAttribute(ix, 1));
+      }
+      const si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+      for (let k = 0; k < n; k++) { si[k * 4] = bi; sw[k * 4] = 1; }
+      g.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+      return g;
+    });
+    const anyIdx = parts.some((g) => g.index);
+    const merged = mergeGeometries(anyIdx ? parts.map((g) => (g.index ? g : indexed(g))) : parts, false);
+    if (!merged) continue;
+    const sk = new THREE.SkinnedMesh(merged, list[0].material);
+    sk.bindMode = THREE.DetachedBindMode; sk.bind(skel, new THREE.Matrix4());
+    sk.castShadow = list[0].castShadow; sk.receiveShadow = list[0].receiveShadow;
+    sk.raycast = () => {}; sk.userData.keep = true; sk.userData.batch = true;
+    sk.boundingSphere = new THREE.Sphere();
+    sk.matrixAutoUpdate = false; sk.updateMatrix();
+    meshes.push(sk); sk.userData.parts = list;
+  }
+  if (!meshes.length) return null;
+  // all built: only now swap them in (an error above leaves the machine exactly as it was)
+  // the parts stay in the graph (transforms, visibility) but on no layer: no camera or shadow pass draws them again
+  for (const sk of meshes) { scene.add(sk); for (const c of sk.userData.parts) c.layers.disableAll(); }
+  const rec = { used, radius, meshes, root };
+  BATCHES.add(rec); rec.dispose = () => { BATCHES.delete(rec); for (const sk of meshes) { sk.removeFromParent(); sk.geometry.dispose(); } skel.dispose(); };
+  updateBatch(rec);
+  return rec;
+}
+// culling bounds follow the parts every frame (the arm can reach far from where it was bound)
+function updateBatch(rec) {
+  _bb.makeEmpty();
+  for (let i = 0; i < rec.used.length; i++) {
+    const o = rec.used[i], s = rec.radius[i];
+    _c.copy(s.center).applyMatrix4(o.matrixWorld);
+    const r = s.radius * o.matrixWorld.getMaxScaleOnAxis();
+    _bb.expandByPoint(_s.set(_c.x - r, _c.y - r, _c.z - r)); _bb.expandByPoint(_s.set(_c.x + r, _c.y + r, _c.z + r));
+  }
+  _bb.getBoundingSphere(_sp); _sp.radius += 0.5; // a frame of motion margin
+  for (const sk of rec.meshes) sk.boundingSphere.copy(_sp);
+}
+function updateBatches() { for (const rec of BATCHES) updateBatch(rec); }
+
 function indexed(g) { const n = g.attributes.position.count, idx = new Uint32Array(n); for (let i = 0; i < n; i++) idx[i] = i; g.setIndex(new THREE.BufferAttribute(idx, 1)); return g; }
 const attached = (o) => { while (o.parent) o = o.parent; return o.isScene; };
 export function hookShadowProxies(renderer) {
   const sm = renderer.shadowMap, orig = sm.render;
+  const rr = renderer.render;
+  renderer.render = function (scene, camera) { updateBatches(); return rr.call(this, scene, camera); };
   let n = 0;
   sm.render = function (lights, scene, camera) {
     if (++n % 600 === 0) for (const p of PROXIES) if (!attached(p)) { PROXIES.delete(p); } // machines that were removed

@@ -2,7 +2,7 @@
 // up groups, colliders and a "rig" that maps the five control channels (swing, boom, stick, curl, open) onto it.
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
-import { machineMaterials, weathered, bake, restPositions, shadowProxy } from './detail.js';
+import { machineMaterials, weathered, bake, restPositions, shadowProxy, batchSkinned } from './detail.js';
 import { buildExcavator } from './mx-excavator.js';
 import { buildRoller, buildPaver, buildLoader, buildDozer, buildDumper, buildCrane, buildPainter, stepCrane, buildPickup } from './mx-vehicles.js';
 import { buildTruck, TRUCK_SIZES } from './mx-truck.js';
@@ -93,7 +93,9 @@ function collapseStatic(m) {
   // pose the machine through its whole range and watch which local matrices change
   const nodes = []; m.model.traverse((o) => nodes.push(o));
   const snap = () => nodes.map((o) => o.position.x + o.position.y * 3.1 + o.position.z * 7.3 + o.quaternion.x * 11 + o.quaternion.y * 13 + o.quaternion.z * 17 + o.scale.x * 19 + o.scale.y * 23 + o.scale.z * 29);
-  const base = snap(), moved = new Set();
+  const base = snap(), moved = new Set(), scaled = new Set();
+  const scl = () => nodes.map((o) => o.scale.x + o.scale.y * 3.1 + o.scale.z * 7.3);
+  const baseS = scl();
   const local = nodes.map((o) => [o.position.clone(), o.quaternion.clone(), o.scale.clone()]);
   const L = (m.rig && m.rig.limits) || {}, saved = { swing: m.swing, boom: m.boom, stickA: m.stickA, curl: m.curl, open: m.open, rot: m.rot, steerVis: m.steerVis, speed: m.speed };
   const pick = (r, t) => (r ? r[0] + (r[1] - r[0]) * t : t - 0.5);
@@ -104,12 +106,14 @@ function collapseStatic(m) {
       m.open = t; m.steerVis = (t - 0.5) * 0.8; m.speed = t * 2;
       if (m.rig && m.rig.apply) m.rig.apply(m);
       const s = snap(); for (let i = 0; i < nodes.length; i++) if (Math.abs(s[i] - base[i]) > 1e-7) moved.add(nodes[i]);
+      const ss = scl(); for (let i = 0; i < nodes.length; i++) if (Math.abs(ss[i] - baseS[i]) > 1e-7) scaled.add(nodes[i]);
     }
   } catch (e) { ok = false; }
   // put everything back exactly as it was built
   Object.assign(m, saved);
   nodes.forEach((o, i) => { o.position.copy(local[i][0]); o.quaternion.copy(local[i][1]); o.scale.copy(local[i][2]); });
-  if (!ok) return; // unusual rig: leave the model as it is
+  if (!ok) return null; // unusual rig: leave the model as it is
+  const named = new Set(keep); // what the code holds a handle on
   for (const o of moved) keep.add(o);
   // a node is dynamic if it, or anything inside it, is kept (moving children need their own group)
   const dynamic = new Set();
@@ -127,6 +131,9 @@ function collapseStatic(m) {
     }
   };
   fold(m.model);
+  // ram eyes and clevises only ever move rigidly (barrels and rods stretch: those stay separate)
+  for (const c of m.cylinders || []) { named.delete(c.eye); if (c.clevis) named.delete(c.clevis); }
+  return { scaled, named };
 }
 
 export class Machine {
@@ -151,9 +158,9 @@ export class Machine {
     if (['breaker', 'skip', 'crusher'].includes(spec.attach) || STARTS_OFF.has(spec.attach) || spec.under === 'backhoe' || spec.family !== EX) { this.open = 0; this.openTarget = 0; }
     // fold sub-groups that never move (cab, seats, mirrors, lamps, rails...) into the moving part they sit on, then
     // merge static parts to keep draw calls low (every group: children never move relative to it)
-    collapseStatic(this);
+    const refs = collapseStatic(this);
     const groups = []; this.model.traverse((o) => { if (o.isGroup) groups.push(o); });
-    for (const g of groups) { bake(g); shadowProxy(g); }
+    for (const g of groups) bake(g);
     for (const o of this.extraMeshes) if (o.isGroup) bake(o);
     this.buildPhysics();
     this.pose();
@@ -164,6 +171,10 @@ export class Machine {
     }
     this.levelClamp();
     restPositions(this.root, this.extraMeshes);
+    // one skinned draw per material for all the merged parts (not in the showroom: it measures the visible meshes)
+    this.batch = null;
+    if (refs && !ctx.preview) try { this.batch = batchSkinned(this.root, ctx.scene, refs.scaled, refs.named); } catch (e) { this.batch = null; }
+    for (const g of groups) shadowProxy(g); // whatever was left out still gets one shadow draw per part
     this.syncBodies(true);
     this.prevProbe = this.probes.map((p) => p.obj.getWorldPosition(new THREE.Vector3()));
     this.lastGp = this.grabPoint.getWorldPosition(new THREE.Vector3());
@@ -254,6 +265,7 @@ export class Machine {
     if (!this.ctx.preview) for (const { body } of this.bodies) this.ctx.physics.world.removeRigidBody(body);
     this.ctx.scene.remove(this.root);
     for (const o of this.extraMeshes) this.ctx.scene.remove(o);
+    if (this.batch) { this.batch.dispose(); this.batch = null; }
     this.root.traverse((o) => { if (o.geometry) o.geometry.dispose(); });
   }
   syncBodies(teleport = false) {

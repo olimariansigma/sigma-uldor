@@ -71,6 +71,9 @@ class Game {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.shadowMap.enabled = true; hookShadowProxies(renderer);
+    // reading every shader's compile log makes the browser wait for each compile to finish (a hitch whenever new
+    // materials appear); only worth it while debugging
+    renderer.debug.checkShaderErrors = /[?&]debug\b/.test(location.search);
     renderer.shadowMap.type = q === 'low' ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     $('game').appendChild(renderer.domElement);
     this.renderer = renderer;

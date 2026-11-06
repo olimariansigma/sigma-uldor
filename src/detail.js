@@ -313,3 +313,41 @@ export function stripeDecal(w, h, colA = '#15171a', colB = null, angle = 0) {
 }
 
 export { V, add };
+
+// Draw-call saver for things that are mostly static (the crusher plant, the brick press, the mixer, the intake line):
+// every Object3D the owner keeps a reference to may animate, so it (and its meshes) stays as it is; every other
+// sub-group is folded into its parent and each group's static meshes are merged per material. Looks identical.
+export function refsOf(owner, skip = []) {
+  const keep = new Set(), seen = new Set();
+  const add = (v, depth) => {
+    if (!v || typeof v !== 'object' || depth > 4 || seen.has(v)) return;
+    seen.add(v);
+    if (v.isObject3D) { keep.add(v); return; }
+    if (v.isMaterial || v.isBufferGeometry || v.isTexture || v.isVector3 || v.isColor || v.isQuaternion || v.isMatrix4) return;
+    if (Array.isArray(v)) { for (const x of v) add(x, depth + 1); return; }
+    if (Object.getPrototypeOf(v) === Object.prototype) for (const k in v) add(v[k], depth + 1);
+  };
+  for (const k of Object.keys(owner)) if (!skip.includes(k)) add(owner[k], 0);
+  return keep;
+}
+export function foldStatic(root, keep) {
+  keep.add(root);
+  const dynamic = new Set();
+  const mark = (o) => { let d = keep.has(o) || o.isSkinnedMesh || o.isInstancedMesh || o.isLight || o.isCamera || o.isPoints || o.isLine || (o.isMesh && o.layers.mask !== 1); for (const c of o.children) if (mark(c)) d = true; if (d) dynamic.add(o); return d; };
+  mark(root);
+  root.updateMatrixWorld(true);
+  const fold = (g) => {
+    for (const c of [...g.children]) {
+      if (dynamic.has(c)) { if (!c.isMesh) fold(c); continue; }
+      if (c.isMesh) continue;
+      const meshes = []; c.traverse((o) => { if (o.isMesh) meshes.push(o); });
+      for (const mesh of meshes) g.attach(mesh);
+      g.remove(c);
+    }
+  };
+  fold(root);
+  // referenced meshes must not be merged away (they move, swap materials or change geometry)
+  root.traverse((o) => { if (o.isMesh && keep.has(o)) o.userData.keep = true; });
+  const groups = []; root.traverse((o) => { if (!o.isMesh && o.children.length) groups.push(o); });
+  for (const g of groups) bake(g);
+}

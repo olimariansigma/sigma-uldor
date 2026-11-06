@@ -7,7 +7,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
 import { tube } from './crusher.js';
-import { mergeG, rbox, bx, cy, tubeAB, hose, bolts, boltCircle, grille, weathered, restPositions, V } from './detail.js';
+import { mergeG, rbox, bx, cy, tubeAB, hose, bolts, boltCircle, grille, weathered, restPositions, V, refsOf, foldStatic } from './detail.js';
 import { sidePlate } from './attachments.js';
 
 export const BRICK_KG = 459;            // one block's worth of dust (what crushing a block gives back)
@@ -162,6 +162,7 @@ export class BrickPress {
     this.col(a.x + d.x / 2, a.y + d.y / 2, 0, len, 0.4, 0.7, -ang);
     // drive motor at the head drum
     this.add(merge([box(0.3, 0.3, 0.3, 2.1, 3.4, 0.5)]), paint);
+    foldStatic(this.root, refsOf(this, ['scene', 'physics', 'M', 'demo', 'world', 'game', 'g']));
     this.root.updateMatrixWorld(true); restPositions(this.root);
   }
 

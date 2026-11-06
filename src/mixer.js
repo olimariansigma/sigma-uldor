@@ -5,7 +5,7 @@ import RAPIER from '@dimforge/rapier3d-compat';
 import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
 import { tube, fmtKg, fmtL } from './crusher.js';
-import { mergeG, rbox, bx, cy, tubeAB, hose, boltCircle, label, weathered, restPositions, V } from './detail.js';
+import { mergeG, rbox, bx, cy, tubeAB, hose, boltCircle, label, weathered, restPositions, V, refsOf, foldStatic } from './detail.js';
 
 const R_TUB = 1.3, FLOOR = 1.42, DEPTH = 0.95;
 const WATER = new THREE.Color(0x4a7d8c);
@@ -187,6 +187,7 @@ export class Mixer {
     this.add(mergeG([rbox(1.06, 1.08, 0.98, 0.08, WX, 0.78, WZ), cy(0.12, 0.12, 0.08, 14, WX, 1.36, WZ)]), new THREE.MeshPhysicalMaterial({ color: 0xe8ecef, roughness: 0.35, transmission: 0, clearcoat: 0.3 }));
     this.add(mergeG([cy(0.06, 0.06, 0.16, 12, WX, 0.3, WZ + 0.58, Math.PI / 2), hose([V(WX, 0.3, WZ + 0.66), V(WX - 0.1, 1.2, -2.6), V(-1.42, FLOOR + DEPTH + 0.2, -1.6)], 0.045, 28)]), M.blackPaint);
     this.col(SX, 1.7, SZ, 2.0, 3.4, 2.0); this.col(SX, 6.2, SZ, 2.2, 6.0, 2.2); this.col(WX, 0.7, WZ, 1.2, 1.4, 1.1);
+    foldStatic(this.root, refsOf(this, ['scene', 'physics', 'M', 'demo', 'world', 'game', 'g']));
     this.root.updateMatrixWorld(true); restPositions(this.root);
   }
 

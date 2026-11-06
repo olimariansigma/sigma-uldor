@@ -5,6 +5,7 @@ import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
 import { LOOSE } from './demolition.js';
 import { buildTrackUnit } from './tracks.js';
+import { refsOf, foldStatic } from './detail.js';
 
 const deg = THREE.MathUtils.degToRad;
 
@@ -26,6 +27,7 @@ export class Crusher {
     this.feedTarget = new THREE.Vector3(0, 3.0, -4.6).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY).add(pos);
     this.platformPoint = new THREE.Vector3(-2.2, 2.5, -4.4).applyAxisAngle(new THREE.Vector3(0, 1, 0), rotY).add(pos);
     this.build();
+    foldStatic(this.root, refsOf(this, ['scene', 'physics', 'M', 'demo', 'world', 'game', 'g'])); // ~200 meshes -> a few dozen draw calls, same look
     this.buildPhysics();
   }
 

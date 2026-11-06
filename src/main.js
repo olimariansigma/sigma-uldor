@@ -1094,7 +1094,7 @@ class Game {
 
   // ======================================================================= driving
   enterLocal(m) {
-    this.mode = 'machine'; this.driving = m;
+    this.mode = 'machine'; this.driving = m; this.frontCamT = 0;
     this.player.setEnabled(false);
     this.cam.exYaw = m.yaw + m.swing + Math.PI; this.cam.exDist = m.camDistance(); this.cam.cab = false;
     this.ui.setMode('machine', this.input.touch, m);
@@ -1437,7 +1437,7 @@ class Game {
       } else {
         cam.layers.enable(EXTERIOR);
         c.exYaw -= look.x; c.exPitch = clamp(c.exPitch - look.y, -1.3, 0.35);
-        if (this.frontCamT > 0) {
+        if (this.frontCamT > 0 && m.frontMouth) {
           // ease round to a front-quarter view of the loader bucket (manual looking cancels it)
           this.frontCamT = Math.abs(look.x) + Math.abs(look.y) > 0.002 ? 0 : this.frontCamT - dt;
           const fm = m.frontMouth.getWorldPosition(this._fm || (this._fm = new THREE.Vector3()));

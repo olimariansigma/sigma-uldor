@@ -74,6 +74,61 @@ export { TRUCK_SIZES };
 
 const BUILDERS = { excavator: buildExcavator, roller: buildRoller, paver: buildPaver, loader: buildLoader, dozer: buildDozer, dumper: buildDumper, crane: buildCrane, truck: buildTruck, painter: buildPainter, car: buildPickup };
 
+// Which parts of a machine move? Everything the machine keeps a reference to (arm groups, wheels, tool parts, anchors,
+// collider owners, spinning drums/augers...), plus anything that shifts when every control is pushed around (rig.apply
+// closures may move local groups). All other sub-groups are frozen relative to their parent,
+// so their meshes can join the parent's merged meshes: identical look, far fewer draw calls.
+function collapseStatic(m) {
+  const keep = new Set([m.root, m.model]);
+  const seen = new Set();
+  const addRef = (v, depth) => {
+    if (!v || typeof v !== 'object' || depth > 4 || seen.has(v)) return;
+    seen.add(v);
+    if (v.isObject3D) { keep.add(v); return; }
+    if (v.isMaterial || v.isBufferGeometry || v.isTexture || v.isVector3 || v.isColor) return;
+    if (Array.isArray(v)) { for (const x of v) addRef(x, depth + 1); return; }
+    if (Object.getPrototypeOf(v) === Object.prototype) for (const k in v) addRef(v[k], depth + 1);
+  };
+  for (const k of Object.keys(m)) if (!['ctx', 'M', 'mats', 'spec', 'root', 'model'].includes(k)) addRef(m[k], 0);
+  // pose the machine through its whole range and watch which local matrices change
+  const nodes = []; m.model.traverse((o) => nodes.push(o));
+  const snap = () => nodes.map((o) => o.position.x + o.position.y * 3.1 + o.position.z * 7.3 + o.quaternion.x * 11 + o.quaternion.y * 13 + o.quaternion.z * 17 + o.scale.x * 19 + o.scale.y * 23 + o.scale.z * 29);
+  const base = snap(), moved = new Set();
+  const local = nodes.map((o) => [o.position.clone(), o.quaternion.clone(), o.scale.clone()]);
+  const L = (m.rig && m.rig.limits) || {}, saved = { swing: m.swing, boom: m.boom, stickA: m.stickA, curl: m.curl, open: m.open, rot: m.rot, steerVis: m.steerVis, speed: m.speed };
+  const pick = (r, t) => (r ? r[0] + (r[1] - r[0]) * t : t - 0.5);
+  let ok = true;
+  try {
+    for (const t of [0.13, 0.87, 0.5]) {
+      m.swing = pick(L.swing, t); m.boom = pick(L.boom, t); m.stickA = pick(L.stick, t); m.curl = pick(L.curl, t); m.rot = pick(L.rot, t);
+      m.open = t; m.steerVis = (t - 0.5) * 0.8; m.speed = t * 2;
+      if (m.rig && m.rig.apply) m.rig.apply(m);
+      const s = snap(); for (let i = 0; i < nodes.length; i++) if (Math.abs(s[i] - base[i]) > 1e-7) moved.add(nodes[i]);
+    }
+  } catch (e) { ok = false; }
+  // put everything back exactly as it was built
+  Object.assign(m, saved);
+  nodes.forEach((o, i) => { o.position.copy(local[i][0]); o.quaternion.copy(local[i][1]); o.scale.copy(local[i][2]); });
+  if (!ok) return; // unusual rig: leave the model as it is
+  for (const o of moved) keep.add(o);
+  // a node is dynamic if it, or anything inside it, is kept (moving children need their own group)
+  const dynamic = new Set();
+  const mark = (o) => { let d = keep.has(o) || o.isSkinnedMesh || o.isInstancedMesh || o.isLight || o.isCamera || (o.isMesh && o.layers.mask !== 1); for (const c of o.children) if (mark(c)) d = true; if (d) dynamic.add(o); return d; };
+  mark(m.model);
+  m.model.updateMatrixWorld(true);
+  const fold = (g) => {
+    for (const c of [...g.children]) {
+      if (dynamic.has(c)) { if (c.isGroup || c.type === 'Object3D') fold(c); continue; }
+      if (c.isMesh) continue; // already a direct child: bake() merges it
+      // a frozen sub-tree: hand its meshes to g (same world transform), drop the empty frame
+      const meshes = []; c.traverse((o) => { if (o.isMesh) meshes.push(o); });
+      for (const mesh of meshes) g.attach(mesh);
+      g.remove(c);
+    }
+  };
+  fold(m.model);
+}
+
 export class Machine {
   constructor(ctx, spec, id, pos, yaw) {
     this.ctx = ctx; this.spec = spec; this.id = id; this.M = ctx.M; this.family = spec.family;
@@ -94,7 +149,9 @@ export class Machine {
     const d = this.defaults || {};
     this.boom = d.boom ?? 0; this.stickA = d.stick ?? 0; this.curl = d.curl ?? 0;
     if (['breaker', 'skip', 'crusher'].includes(spec.attach) || STARTS_OFF.has(spec.attach) || spec.under === 'backhoe' || spec.family !== EX) { this.open = 0; this.openTarget = 0; }
+    // fold sub-groups that never move (cab, seats, mirrors, lamps, rails...) into the moving part they sit on, then
     // merge static parts to keep draw calls low (every group: children never move relative to it)
+    collapseStatic(this);
     const groups = []; this.model.traverse((o) => { if (o.isGroup) groups.push(o); });
     for (const g of groups) bake(g);
     for (const o of this.extraMeshes) if (o.isGroup) bake(o);

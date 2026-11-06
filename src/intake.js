@@ -8,6 +8,7 @@ import * as T from './textures.js';
 import { box, cyl, merge } from './pieces.js';
 import { LOOSE } from './demolition.js';
 import { tube } from './crusher.js';
+import { refsOf, foldStatic } from './detail.js';
 
 const V = (x, y, z) => new THREE.Vector3(x, y, z);
 const BELT_Y = 0.34;            // ground belt surface
@@ -71,6 +72,7 @@ export class IntakeLine {
     this.dir = HEAD.clone().sub(TAIL); this.liftLen = this.dir.length(); this.dir.normalize();
     this.ang = Math.atan2(this.dir.y, this.dir.z); this.nrm = V(0, this.dir.z, -this.dir.y);
     this.build();
+    foldStatic(this.root, refsOf(this, ['scene', 'physics', 'M', 'demo', 'world', 'game', 'g']));
     this.buildPhysics();
     this.root.updateMatrixWorld(true);
     // world-space box around the belt + funnel for a cheap first test
